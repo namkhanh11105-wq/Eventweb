@@ -2,16 +2,25 @@ import { useEffect, useState } from 'react';
 import { CheckCircle2, AlertCircle, X } from 'lucide-react';
 import { AuthScreen } from './components/AuthScreen';
 import { UserLayout } from './components/UserLayout';
+import { OrganizerLayout } from './components/OrganizerLayout';
 import { AdminLayout } from './components/AdminLayout';
 import {
   logoutAccount,
   subscribeAuthUser,
   subscribeEvents,
   subscribeFeedbacks,
+  subscribePublicContact,
   subscribeRegistrations,
   subscribeUsers,
 } from './services/dataService';
-import type { AppUser, EventItem, FeedbackItem, RegistrationItem } from './types';
+import { DEFAULT_PUBLIC_CONTACT } from './utils/formatters';
+import type {
+  AppUser,
+  EventItem,
+  FeedbackItem,
+  PublicContactInfo,
+  RegistrationItem,
+} from './types';
 
 interface ToastState {
   id: number;
@@ -19,17 +28,23 @@ interface ToastState {
   type: 'success' | 'error';
 }
 
+interface AuthViewState {
+  mode: 'login' | 'register';
+  role: 'user' | 'organizer';
+}
+
 export default function App() {
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
   const [authReady, setAuthReady] = useState(false);
-  const [guestMode, setGuestMode] = useState(false);
-  const [portalView, setPortalView] = useState<'admin' | 'user'>('user');
+  const [authView, setAuthView] = useState<AuthViewState | null>(null);
+  const [portalView, setPortalView] = useState<'admin' | 'organizer' | 'public'>('public');
 
   const [events, setEvents] = useState<EventItem[]>([]);
   const [eventsLoading, setEventsLoading] = useState(true);
   const [registrations, setRegistrations] = useState<RegistrationItem[]>([]);
   const [users, setUsers] = useState<AppUser[]>([]);
   const [feedbacks, setFeedbacks] = useState<FeedbackItem[]>([]);
+  const [publicContact, setPublicContact] = useState<PublicContactInfo>(DEFAULT_PUBLIC_CONTACT);
   const [permissionWarning, setPermissionWarning] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
 
@@ -42,19 +57,28 @@ export default function App() {
   }
 
   useEffect(() => {
+    const unsubContact = subscribePublicContact(setPublicContact);
+    return () => unsubContact();
+  }, []);
+
+  useEffect(() => {
     const unsubAuth = subscribeAuthUser((user) => {
       setCurrentUser(user);
       setAuthReady(true);
       setPermissionWarning(null);
       if (user) {
-        setGuestMode(false);
-        setPortalView(user.role === 'admin' ? 'admin' : 'user');
+        setAuthView(null);
+        setPortalView(
+          user.role === 'admin'
+            ? 'admin'
+            : user.role === 'organizer'
+            ? 'organizer'
+            : 'public'
+        );
       } else {
-        setEvents([]);
-        setEventsLoading(false);
+        setPortalView('public');
         setRegistrations([]);
         setUsers([]);
-        setFeedbacks([]);
       }
     });
     return () => unsubAuth();
@@ -62,12 +86,14 @@ export default function App() {
 
   useEffect(() => {
     if (!authReady) return;
-    if (!currentUser && !guestMode) return;
 
     setEventsLoading(true);
 
     const handlePermissionError = (msg: string) => {
-      setPermissionWarning(msg);
+      // Only show permission warning banner when user is signed in
+      if (currentUser) {
+        setPermissionWarning(msg);
+      }
       setEventsLoading(false);
     };
 
@@ -75,6 +101,7 @@ export default function App() {
       setEvents(items);
       setEventsLoading(false);
     }, handlePermissionError);
+
     const unsubFeedbacks = subscribeFeedbacks(setFeedbacks);
 
     let unsubRegs: (() => void) | undefined;
@@ -102,13 +129,13 @@ export default function App() {
       unsubRegs?.();
       unsubUsers?.();
     };
-  }, [authReady, currentUser, guestMode]);
+  }, [authReady, currentUser]);
 
   async function handleLogout() {
     try {
       await logoutAccount();
-      setGuestMode(false);
-      setPortalView('user');
+      setAuthView(null);
+      setPortalView('public');
       setPermissionWarning(null);
       showToast('Đã đăng xuất khỏi hệ thống.');
     } catch (err) {
@@ -124,10 +151,16 @@ export default function App() {
             Đang khởi tạo hệ thống EventFlow...
           </div>
         </div>
-      ) : !currentUser && !guestMode ? (
+      ) : authView !== null && !currentUser ? (
         <AuthScreen
-          onSuccess={(msg) => showToast(msg, 'success')}
-          onBrowseGuest={() => setGuestMode(true)}
+          initialMode={authView.mode}
+          initialRegisterRole={authView.role}
+          publicContact={publicContact}
+          onSuccess={(msg) => {
+            setAuthView(null);
+            showToast(msg, 'success');
+          }}
+          onBackPublic={() => setAuthView(null)}
         />
       ) : currentUser?.role === 'admin' && portalView === 'admin' ? (
         <AdminLayout
@@ -135,8 +168,21 @@ export default function App() {
           events={events}
           registrations={registrations}
           users={users}
+          publicContact={publicContact}
           permissionWarning={permissionWarning}
-          onSwitchToUser={() => setPortalView('user')}
+          onSwitchToUser={() => setPortalView('public')}
+          onLogout={handleLogout}
+          onNotify={showToast}
+        />
+      ) : currentUser?.role === 'organizer' && portalView === 'organizer' ? (
+        <OrganizerLayout
+          currentUser={currentUser}
+          events={events}
+          registrations={registrations}
+          feedbacks={feedbacks}
+          publicContact={publicContact}
+          permissionWarning={permissionWarning}
+          onViewPublicLanding={() => setPortalView('public')}
           onLogout={handleLogout}
           onNotify={showToast}
         />
@@ -147,11 +193,15 @@ export default function App() {
           eventsLoading={eventsLoading}
           registrations={registrations}
           feedbacks={feedbacks}
+          publicContact={publicContact}
           permissionWarning={permissionWarning}
           onSwitchToAdmin={
             currentUser?.role === 'admin' ? () => setPortalView('admin') : undefined
           }
-          onOpenAuth={() => setGuestMode(false)}
+          onSwitchToOrganizer={
+            currentUser?.role === 'organizer' ? () => setPortalView('organizer') : undefined
+          }
+          onOpenAuth={(mode = 'login', role = 'user') => setAuthView({ mode, role })}
           onLogout={handleLogout}
           onNotify={showToast}
         />
@@ -160,8 +210,9 @@ export default function App() {
       {/* Toast notification */}
       {toast && (
         <div
+          key={toast.id}
           role="status"
-          className={`fixed bottom-5 right-5 z-50 max-w-sm flex items-start gap-3 px-4 py-3 rounded-xl border shadow-lg bg-white ${
+          className={`fixed bottom-5 right-5 z-50 max-w-sm flex items-start gap-3 px-4 py-3 rounded-xl border shadow-lg bg-white animate-ef-toast-in ${
             toast.type === 'error' ? 'border-rose-200' : 'border-indigo-200'
           }`}
         >

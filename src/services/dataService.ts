@@ -22,13 +22,18 @@ import {
 } from 'firebase/firestore';
 import { auth, db, handleFirestoreError, isFirebaseConfigured, OperationType } from '../firebase';
 import { buildSeedData } from '../data/seedData';
-import { generateTicketCode } from '../utils/formatters';
+import { DEFAULT_PUBLIC_CONTACT, generateTicketCode } from '../utils/formatters';
 import type {
   AppUser,
   EventFormInput,
+  EventGuest,
   EventItem,
+  EventServiceRequest,
   EventStatus,
   FeedbackItem,
+  OrganizerEventRequestInput,
+  PlanningStatus,
+  PublicContactInfo,
   RegistrationInput,
   RegistrationItem,
   RegistrationStatus,
@@ -44,9 +49,17 @@ function requireFirebase() {
   return { auth, db };
 }
 
-function determineRole(email: string, existingUsersCount: number): UserRole {
-  if (existingUsersCount === 0 || email.toLowerCase().includes('admin')) {
+function determineRole(
+  email: string,
+  existingUsersCount: number,
+  requestedRole?: 'user' | 'organizer'
+): UserRole {
+  const lower = email.toLowerCase();
+  if (existingUsersCount === 0 || lower.includes('admin')) {
     return 'admin';
+  }
+  if (requestedRole === 'organizer' || lower.startsWith('organizer@')) {
+    return 'organizer';
   }
   return 'user';
 }
@@ -64,16 +77,26 @@ function normalizeEventDoc(id: string, raw: Record<string, unknown>): EventItem 
     registeredCount: Number(raw.registeredCount ?? 0),
     checkedInCount: Number(raw.checkedInCount ?? 0),
     status: (raw.status as EventStatus) || 'upcoming',
+    planningStatus: (raw.planningStatus as PlanningStatus) || 'confirmed',
+    isPublic: raw.isPublic !== false,
     category: String(raw.category ?? 'Hội nghị công nghệ'),
-    price: Number(raw.price ?? 0),
-    vipPrice: raw.vipPrice ? Number(raw.vipPrice) : undefined,
     organizer: String(raw.organizer ?? 'EventFlow Enterprise'),
     organizerVerified: raw.organizerVerified !== false,
     featured: Boolean(raw.featured),
+    clientUserId: raw.clientUserId ? String(raw.clientUserId) : undefined,
+    clientName: raw.clientName ? String(raw.clientName) : undefined,
+    clientEmail: raw.clientEmail ? String(raw.clientEmail) : undefined,
+    clientPhone: raw.clientPhone ? String(raw.clientPhone) : undefined,
+    requestedServices: Array.isArray(raw.requestedServices)
+      ? (raw.requestedServices as EventServiceRequest[])
+      : [],
+    invitedGuests: Array.isArray(raw.invitedGuests)
+      ? (raw.invitedGuests as EventGuest[])
+      : [],
     speakers: Array.isArray(raw.speakers) ? (raw.speakers as EventItem['speakers']) : [],
     agenda: Array.isArray(raw.agenda) ? (raw.agenda as EventItem['agenda']) : [],
     faqs: Array.isArray(raw.faqs) ? (raw.faqs as EventItem['faqs']) : [],
-    rules: String(raw.rules ?? 'Vui lòng mang theo mã QR vé điện tử khi tham dự.'),
+    rules: String(raw.rules ?? 'Vui lòng mang theo mã QR xác nhận khi tham dự.'),
     createdAt: String(raw.createdAt ?? new Date().toISOString()),
   };
 }
@@ -89,8 +112,6 @@ function normalizeRegistrationDoc(id: string, raw: Record<string, unknown>): Reg
     guestPhone: String(raw.guestPhone ?? ''),
     note: String(raw.note ?? ''),
     ticketCode: String(raw.ticketCode ?? `EF-${id.slice(-6).toUpperCase()}`),
-    ticketTier: (raw.ticketTier as RegistrationItem['ticketTier']) || 'standard',
-    ticketPrice: Number(raw.ticketPrice ?? 0),
     status: (raw.status as RegistrationStatus) || 'confirmed',
     registeredAt: String(raw.registeredAt ?? new Date().toISOString()),
     checkedInAt: (raw.checkedInAt as string | null | undefined) ?? null,
@@ -138,19 +159,24 @@ export function subscribeAuthUser(callback: (user: AppUser | null) => void): () 
       return;
     }
     const email = fbUser.email || '';
+    const fallbackRole = determineRole(email, 1);
     const fallbackProfile: AppUser = {
       uid: fbUser.uid,
       fullName: fbUser.displayName || email.split('@')[0] || 'Thành viên',
       email,
       phone: '',
-      role: email.toLowerCase().includes('admin') ? 'admin' : 'user',
+      role: fallbackRole,
       createdAt: new Date().toISOString(),
     };
     try {
       const userRef = doc(firestore, 'users', fbUser.uid);
       const snap = await getDoc(userRef);
       if (snap.exists()) {
-        callback(snap.data() as AppUser);
+        const data = snap.data() as AppUser;
+        callback({
+          ...data,
+          role: data.role || fallbackRole,
+        });
       } else {
         const existingCount = await safeGetExistingUsersCount();
         const role = determineRole(email, existingCount);
@@ -173,11 +199,14 @@ export async function registerAccount(params: {
   email: string;
   phone: string;
   password: string;
+  role?: 'user' | 'organizer';
+  organization?: string;
 }): Promise<AppUser> {
   const { auth: firebaseAuth, db: firestore } = requireFirebase();
   const email = params.email.trim().toLowerCase();
   const fullName = params.fullName.trim();
   const phone = params.phone.trim();
+  const organization = params.organization?.trim() || '';
 
   if (!fullName || !email || params.password.length < 6) {
     throw new Error('Vui lòng nhập đầy đủ họ tên, email và mật khẩu từ 6 ký tự.');
@@ -186,13 +215,14 @@ export async function registerAccount(params: {
   try {
     const cred = await createUserWithEmailAndPassword(firebaseAuth, email, params.password);
     const existingCount = await safeGetExistingUsersCount();
-    const role = determineRole(email, existingCount);
+    const role = determineRole(email, existingCount, params.role);
     const profile: AppUser = {
       uid: cred.user.uid,
       fullName,
       email,
       phone,
       role,
+      ...(organization ? { organization } : {}),
       createdAt: new Date().toISOString(),
     };
     try {
@@ -215,12 +245,13 @@ export async function loginAccount(emailInput: string, password: string): Promis
 
   try {
     const cred = await signInWithEmailAndPassword(firebaseAuth, email, password);
+    const fallbackRole = determineRole(email, 1);
     const fallbackProfile: AppUser = {
       uid: cred.user.uid,
       fullName: email.split('@')[0],
       email,
       phone: '',
-      role: email.toLowerCase().includes('admin') ? 'admin' : 'user',
+      role: fallbackRole,
       createdAt: new Date().toISOString(),
     };
     try {
@@ -247,22 +278,62 @@ export async function loginAccount(emailInput: string, password: string): Promis
 
 export async function loginAsDemo(role: UserRole): Promise<AppUser> {
   const { auth: firebaseAuth, db: firestore } = requireFirebase();
-  const demoEmail = role === 'admin' ? 'admin@eventflow.vn' : 'user@eventflow.vn';
-  const demoPassword = role === 'admin' ? 'DemoAdmin@2026' : 'DemoUser@2026';
-  const demoName = role === 'admin' ? 'Nguyễn Minh Quản Trị' : 'Trần Thu Hà';
-  const demoPhone = role === 'admin' ? '0900000001' : '0901234567';
+  const demoConfig: Record<
+    UserRole,
+    { email: string; password: string; fullName: string; phone: string; organization: string }
+  > = {
+    admin: {
+      email: 'admin@eventflow.vn',
+      password: 'DemoAdmin@2026',
+      fullName: 'Nguyễn Minh Quản Trị',
+      phone: '0900000001',
+      organization: 'EventFlow Enterprise',
+    },
+    organizer: {
+      email: 'organizer@eventflow.vn',
+      password: 'DemoOrganizer@2026',
+      fullName: 'Hoàng Minh Khôi',
+      phone: '0908889999',
+      organization: 'TechNova Solutions',
+    },
+    user: {
+      email: 'user@eventflow.vn',
+      password: 'DemoUser@2026',
+      fullName: 'Trần Thu Hà',
+      phone: '0901234567',
+      organization: 'Product Studio',
+    },
+  };
+
+  const cfg = demoConfig[role];
 
   try {
-    return await loginAccount(demoEmail, demoPassword);
+    const cred = await signInWithEmailAndPassword(firebaseAuth, cfg.email, cfg.password);
+    const profile: AppUser = {
+      uid: cred.user.uid,
+      fullName: cfg.fullName,
+      email: cfg.email,
+      phone: cfg.phone,
+      role,
+      organization: cfg.organization,
+      createdAt: new Date().toISOString(),
+    };
+    try {
+      await setDoc(doc(firestore, 'users', cred.user.uid), profile, { merge: true });
+    } catch {
+      // Ignore if rules block profile write
+    }
+    return profile;
   } catch {
     try {
-      const cred = await createUserWithEmailAndPassword(firebaseAuth, demoEmail, demoPassword);
+      const cred = await createUserWithEmailAndPassword(firebaseAuth, cfg.email, cfg.password);
       const profile: AppUser = {
         uid: cred.user.uid,
-        fullName: demoName,
-        email: demoEmail,
-        phone: demoPhone,
+        fullName: cfg.fullName,
+        email: cfg.email,
+        phone: cfg.phone,
         role,
+        organization: cfg.organization,
         createdAt: new Date().toISOString(),
       };
       try {
@@ -280,6 +351,55 @@ export async function loginAsDemo(role: UserRole): Promise<AppUser> {
 export async function logoutAccount(): Promise<void> {
   const { auth: firebaseAuth } = requireFirebase();
   await signOut(firebaseAuth);
+}
+
+export function subscribePublicContact(
+  callback: (contact: PublicContactInfo) => void
+): () => void {
+  const { db: firestore } = requireFirebase();
+  const ref = doc(firestore, 'site_settings', 'public_contact');
+  return onSnapshot(
+    ref,
+    (snap) => {
+      if (snap.exists()) {
+        const raw = snap.data() as Partial<PublicContactInfo>;
+        callback({
+          ...DEFAULT_PUBLIC_CONTACT,
+          ...raw,
+        });
+      } else {
+        callback(DEFAULT_PUBLIC_CONTACT);
+      }
+    },
+    () => {
+      // Gracefully keep default contact if unauthenticated rules block site_settings
+      callback(DEFAULT_PUBLIC_CONTACT);
+    }
+  );
+}
+
+export async function updatePublicContact(
+  input: Omit<PublicContactInfo, 'updatedAt'>
+): Promise<PublicContactInfo> {
+  const { db: firestore } = requireFirebase();
+  const payload: PublicContactInfo = {
+    organizationName: input.organizationName.trim() || DEFAULT_PUBLIC_CONTACT.organizationName,
+    adminName: input.adminName.trim() || DEFAULT_PUBLIC_CONTACT.adminName,
+    phone: input.phone.trim() || DEFAULT_PUBLIC_CONTACT.phone,
+    hotline: input.hotline.trim() || DEFAULT_PUBLIC_CONTACT.hotline,
+    email: input.email.trim() || DEFAULT_PUBLIC_CONTACT.email,
+    officeAddress: input.officeAddress.trim() || DEFAULT_PUBLIC_CONTACT.officeAddress,
+    workingHours: input.workingHours.trim() || DEFAULT_PUBLIC_CONTACT.workingHours,
+    updatedAt: new Date().toISOString(),
+  };
+
+  try {
+    await setDoc(doc(firestore, 'site_settings', 'public_contact'), payload, { merge: true });
+    return payload;
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, 'site_settings/public_contact');
+    throw err;
+  }
 }
 
 export function subscribeEvents(
@@ -382,7 +502,7 @@ export async function seedSampleData(): Promise<{
   feedbacksCount: number;
 }> {
   const { db: firestore } = requireFirebase();
-  const { users, events, registrations, feedbacks } = buildSeedData();
+  const { users, events, registrations, feedbacks, publicContact } = buildSeedData();
 
   try {
     const batch = writeBatch(firestore);
@@ -399,6 +519,15 @@ export async function seedSampleData(): Promise<{
       batch.set(doc(firestore, 'feedbacks', fb.id), fb);
     }
     await batch.commit();
+
+    try {
+      await setDoc(doc(firestore, 'site_settings', 'public_contact'), publicContact, {
+        merge: true,
+      });
+    } catch {
+      // Ignore if Firestore rules restrict site_settings separately
+    }
+
     return {
       usersCount: users.length,
       eventsCount: events.length,
@@ -426,16 +555,70 @@ export async function createEvent(input: EventFormInput): Promise<EventItem> {
     registeredCount: 0,
     checkedInCount: 0,
     status: input.status,
+    planningStatus: input.planningStatus || 'confirmed',
+    isPublic: input.isPublic !== false,
     category: input.category,
-    price: Number(input.price) || 0,
-    ...(input.vipPrice && input.vipPrice > 0 ? { vipPrice: Number(input.vipPrice) } : {}),
     organizer: input.organizer.trim() || 'EventFlow Enterprise',
     organizerVerified: input.organizerVerified !== false,
     featured: Boolean(input.featured),
+    ...(input.clientUserId ? { clientUserId: input.clientUserId } : {}),
+    ...(input.clientName ? { clientName: input.clientName } : {}),
+    ...(input.clientEmail ? { clientEmail: input.clientEmail } : {}),
+    ...(input.clientPhone ? { clientPhone: input.clientPhone } : {}),
+    requestedServices: input.requestedServices || [],
+    invitedGuests: input.invitedGuests || [],
     speakers: input.speakers.filter((s) => s.name.trim()),
     agenda: input.agenda.filter((a) => a.time.trim() || a.title.trim()),
     faqs: input.faqs.filter((f) => f.question.trim() && f.answer.trim()),
     rules: input.rules.trim(),
+    createdAt: new Date().toISOString(),
+  };
+
+  try {
+    await setDoc(doc(firestore, 'events', newId), eventDoc);
+    return eventDoc;
+  } catch (err) {
+    handleFirestoreError(err, OperationType.CREATE, `events/${newId}`);
+    throw err;
+  }
+}
+
+export async function createOrganizerEventRequest(
+  input: OrganizerEventRequestInput
+): Promise<EventItem> {
+  const { db: firestore } = requireFirebase();
+  const newId = `evt-req-${Date.now()}`;
+  const eventDoc: EventItem = {
+    id: newId,
+    title: input.title.trim(),
+    description: input.description.trim(),
+    bannerUrl: input.bannerUrl.trim(),
+    location: input.location.trim(),
+    startTime: new Date(input.startTime).toISOString(),
+    endTime: new Date(input.endTime).toISOString(),
+    maxSlots: Number(input.maxSlots) || 60,
+    registeredCount: 0,
+    checkedInCount: 0,
+    status: 'upcoming',
+    planningStatus: 'pending_review',
+    isPublic: false,
+    category: input.category,
+    organizer: input.organizerName.trim() || input.clientName,
+    organizerVerified: false,
+    featured: false,
+    clientUserId: input.clientUserId,
+    clientName: input.clientName,
+    clientEmail: input.clientEmail,
+    clientPhone: input.clientPhone,
+    requestedServices: input.requestedServices,
+    invitedGuests: [],
+    speakers: [],
+    agenda: [
+      { time: '08:30 - 09:00', title: 'Đón khách & Check-in QR' },
+      { time: '09:00 - 11:30', title: 'Chương trình chính thức' },
+    ],
+    faqs: [],
+    rules: 'Vui lòng mang theo mã QR xác nhận khi tham dự sự kiện.',
     createdAt: new Date().toISOString(),
   };
 
@@ -458,12 +641,18 @@ export async function duplicateEvent(source: EventItem): Promise<EventItem> {
     endTime: source.endTime,
     maxSlots: source.maxSlots,
     status: 'upcoming',
+    planningStatus: 'planning',
+    isPublic: false,
     category: source.category,
-    price: source.price,
-    vipPrice: source.vipPrice,
     organizer: source.organizer,
     organizerVerified: source.organizerVerified,
     featured: false,
+    requestedServices: source.requestedServices.map((s) => ({
+      ...s,
+      id: `srv-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      status: 'pending',
+    })),
+    invitedGuests: [],
     speakers: source.speakers,
     agenda: source.agenda,
     faqs: source.faqs || [],
@@ -482,16 +671,18 @@ export async function updateEvent(id: string, input: Partial<EventFormInput>): P
     ...(input.endTime !== undefined ? { endTime: new Date(input.endTime).toISOString() } : {}),
     ...(input.maxSlots !== undefined ? { maxSlots: Number(input.maxSlots) } : {}),
     ...(input.status !== undefined ? { status: input.status } : {}),
+    ...(input.planningStatus !== undefined ? { planningStatus: input.planningStatus } : {}),
+    ...(input.isPublic !== undefined ? { isPublic: input.isPublic } : {}),
     ...(input.category !== undefined ? { category: input.category } : {}),
-    ...(input.price !== undefined ? { price: Number(input.price) || 0 } : {}),
-    ...(input.vipPrice !== undefined
-      ? { vipPrice: input.vipPrice > 0 ? Number(input.vipPrice) : 0 }
-      : {}),
     ...(input.organizer !== undefined ? { organizer: input.organizer.trim() } : {}),
     ...(input.organizerVerified !== undefined
       ? { organizerVerified: input.organizerVerified }
       : {}),
     ...(input.featured !== undefined ? { featured: input.featured } : {}),
+    ...(input.requestedServices !== undefined
+      ? { requestedServices: input.requestedServices }
+      : {}),
+    ...(input.invitedGuests !== undefined ? { invitedGuests: input.invitedGuests } : {}),
     ...(input.speakers !== undefined
       ? { speakers: input.speakers.filter((s) => s.name.trim()) }
       : {}),
@@ -508,6 +699,30 @@ export async function updateEvent(id: string, input: Partial<EventFormInput>): P
     await updateDoc(doc(firestore, 'events', id), updates);
   } catch (err) {
     handleFirestoreError(err, OperationType.UPDATE, `events/${id}`);
+  }
+}
+
+export async function updateEventServices(
+  eventId: string,
+  requestedServices: EventServiceRequest[]
+): Promise<void> {
+  const { db: firestore } = requireFirebase();
+  try {
+    await updateDoc(doc(firestore, 'events', eventId), { requestedServices });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.UPDATE, `events/${eventId}`);
+  }
+}
+
+export async function updateEventInvitedGuests(
+  eventId: string,
+  invitedGuests: EventGuest[]
+): Promise<void> {
+  const { db: firestore } = requireFirebase();
+  try {
+    await updateDoc(doc(firestore, 'events', eventId), { invitedGuests });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.UPDATE, `events/${eventId}`);
   }
 }
 
@@ -534,8 +749,6 @@ export async function createRegistration(input: RegistrationInput): Promise<Regi
     guestPhone: input.guestPhone.trim(),
     note: input.note.trim(),
     ticketCode,
-    ticketTier: input.ticketTier,
-    ticketPrice: input.ticketPrice,
     status: 'confirmed',
     registeredAt: new Date().toISOString(),
     checkedInAt: null,
@@ -551,7 +764,7 @@ export async function createRegistration(input: RegistrationInput): Promise<Regi
     });
     if (alreadyRegistered) {
       throw new Error(
-        'Bạn đã đăng ký sự kiện này trước đó rồi. Vui lòng kiểm tra mục Sự kiện của tôi.'
+        'Bạn đã đăng ký sự kiện này trước đó rồi. Vui lòng kiểm tra mục Sự kiện đã đăng ký.'
       );
     }
 
@@ -660,13 +873,13 @@ export async function checkInByTicketCode(
     (r) => r.ticketCode.toUpperCase() === code || r.id.toUpperCase() === code
   );
   if (!found) {
-    throw new Error(`Không tìm thấy vé có mã "${code}" trong hệ thống.`);
+    throw new Error(`Không tìm thấy mã xác nhận "${code}" trong sự kiện này.`);
   }
   if (found.status === 'cancelled') {
-    throw new Error(`Vé ${found.ticketCode} (${found.guestName}) đã bị hủy trước đó.`);
+    throw new Error(`Mã ${found.ticketCode} (${found.guestName}) đã bị hủy trước đó.`);
   }
   if (found.status === 'attended') {
-    throw new Error(`Vé ${found.ticketCode} (${found.guestName}) đã được check-in rồi.`);
+    throw new Error(`Mã ${found.ticketCode} (${found.guestName}) đã được check-in rồi.`);
   }
 
   await updateRegistrationStatus(found, 'attended');

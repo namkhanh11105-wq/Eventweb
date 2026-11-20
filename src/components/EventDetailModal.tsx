@@ -21,9 +21,9 @@ import {
 } from 'lucide-react';
 import { createRegistration, submitFeedback } from '../services/dataService';
 import { EventBanner } from './EventBanner';
+import { AnimatedProgressBar } from './MotionPrimitives';
 import {
   EVENT_STATUS_META,
-  formatCurrencyVN,
   formatDateTimeVN,
   formatShortDateVN,
 } from '../utils/formatters';
@@ -32,7 +32,6 @@ import type {
   EventItem,
   FeedbackItem,
   RegistrationItem,
-  TicketTier,
 } from '../types';
 
 interface EventDetailModalProps {
@@ -64,7 +63,6 @@ export function EventDetailModal({
   const [guestEmail, setGuestEmail] = useState(currentUser?.email || '');
   const [guestPhone, setGuestPhone] = useState(currentUser?.phone || '');
   const [note, setNote] = useState('');
-  const [ticketTier, setTicketTier] = useState<TicketTier>('standard');
   const [submitting, setSubmitting] = useState(false);
 
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(0);
@@ -95,10 +93,6 @@ export function EventDetailModal({
     event.status !== 'paused' &&
     remaining > 0;
 
-  const hasVip = Boolean(event.vipPrice && event.vipPrice > 0);
-  const selectedPrice =
-    ticketTier === 'vip' && event.vipPrice ? event.vipPrice : event.price;
-
   const canLeaveFeedback =
     Boolean(currentUser) &&
     (existingRegistration?.status === 'attended' ||
@@ -124,10 +118,10 @@ export function EventDetailModal({
     }
   }
 
-  async function handleBook(e: FormEvent) {
+  async function handleRegister(e: FormEvent) {
     e.preventDefault();
     if (!currentUser) {
-      onNotify('Vui lòng đăng nhập để đặt vé tham dự sự kiện.', 'error');
+      onNotify('Vui lòng đăng nhập tài khoản để đăng ký tham gia sự kiện.', 'error');
       onRequireAuth();
       return;
     }
@@ -146,10 +140,8 @@ export function EventDetailModal({
         guestEmail,
         guestPhone,
         note,
-        ticketTier,
-        ticketPrice: selectedPrice,
       });
-      onNotify(`Đặt vé thành công! Mã vé E-Ticket của bạn: ${reg.ticketCode}.`);
+      onNotify(`Đăng ký tham gia thành công! Mã xác nhận của bạn: ${reg.ticketCode}.`);
       onClose();
       onViewMyTickets();
     } catch (err) {
@@ -189,12 +181,12 @@ export function EventDetailModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6"
+      className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-ef-fade-in"
       role="dialog"
       aria-modal="true"
       aria-labelledby="event-detail-title"
     >
-      <div className="bg-white border border-slate-200 rounded-2xl max-w-5xl w-full max-h-[92vh] overflow-y-auto shadow-2xl">
+      <div className="bg-white border border-slate-200 rounded-2xl max-w-5xl w-full max-h-[92vh] overflow-y-auto shadow-2xl animate-ef-modal-in">
         {/* Hero Cover Banner */}
         <div className="relative aspect-[16/7] w-full bg-slate-100 overflow-hidden">
           <EventBanner
@@ -270,11 +262,10 @@ export function EventDetailModal({
           </div>
         </div>
 
-        {/* Two-column body with Sticky Booking Card */}
+        {/* Two-column body with Sticky Registration Card */}
         <div className="p-6 sm:p-8 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           {/* Left Content Column */}
           <div className="lg:col-span-7 space-y-8">
-            {/* Verified Organizer + Time/Location Strip */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-xl bg-slate-50 border border-slate-200">
               <div className="flex items-start gap-3">
                 <Calendar className="w-4 h-4 text-indigo-600 mt-0.5 shrink-0" />
@@ -309,7 +300,6 @@ export function EventDetailModal({
               </div>
             </div>
 
-            {/* Verified Organizer Card */}
             <div className="flex items-center justify-between gap-4 p-4 rounded-xl border border-slate-200 bg-white">
               <div className="flex items-center gap-3 min-w-0">
                 <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center shrink-0">
@@ -325,13 +315,12 @@ export function EventDetailModal({
                     )}
                   </div>
                   <p className="text-xs text-slate-500">
-                    Đơn vị tổ chức được xác thực trên hệ thống EventFlow Enterprise
+                    Đơn vị tổ chức được xác thực &amp; điều phối bởi EventFlow
                   </p>
                 </div>
               </div>
             </div>
 
-            {/* Description */}
             <section>
               <h3 className="text-base font-bold text-slate-900">Giới thiệu sự kiện</h3>
               <p className="mt-2.5 text-sm text-slate-600 leading-relaxed whitespace-pre-line">
@@ -339,7 +328,6 @@ export function EventDetailModal({
               </p>
             </section>
 
-            {/* Speakers */}
             {event.speakers && event.speakers.length > 0 && (
               <section>
                 <h3 className="text-base font-bold text-slate-900">
@@ -369,7 +357,6 @@ export function EventDetailModal({
               </section>
             )}
 
-            {/* Agenda Timeline */}
             {event.agenda && event.agenda.length > 0 && (
               <section>
                 <h3 className="text-base font-bold text-slate-900">
@@ -398,7 +385,6 @@ export function EventDetailModal({
               </section>
             )}
 
-            {/* FAQ Accordion */}
             {event.faqs && event.faqs.length > 0 && (
               <section>
                 <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
@@ -419,13 +405,13 @@ export function EventDetailModal({
                             {faq.question}
                           </span>
                           <ChevronDown
-                            className={`w-4 h-4 text-slate-400 shrink-0 transition-transform ${
+                            className={`w-4 h-4 text-slate-400 shrink-0 transition-transform duration-200 ${
                               isOpen ? 'rotate-180' : ''
                             }`}
                           />
                         </button>
                         {isOpen && (
-                          <div className="px-4 pb-3.5 text-sm text-slate-600 leading-relaxed">
+                          <div className="px-4 pb-3.5 text-sm text-slate-600 leading-relaxed animate-ef-fade-in">
                             {faq.answer}
                           </div>
                         )}
@@ -436,7 +422,6 @@ export function EventDetailModal({
               </section>
             )}
 
-            {/* Participation Rules */}
             {event.rules && (
               <section className="p-4 rounded-xl bg-slate-50 border border-slate-200">
                 <div className="flex items-center gap-2 text-sm font-bold text-slate-900">
@@ -449,7 +434,6 @@ export function EventDetailModal({
               </section>
             )}
 
-            {/* Reviews & Feedback */}
             <section className="pt-4 border-t border-slate-200 space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
@@ -551,13 +535,13 @@ export function EventDetailModal({
             </section>
           </div>
 
-          {/* Right Sticky Booking Column */}
+          {/* Right Sticky Registration Column */}
           <aside className="lg:col-span-5 lg:sticky lg:top-6 bg-white border border-slate-200 rounded-2xl p-6 space-y-5">
             <div className="flex items-baseline justify-between gap-3">
               <div>
-                <div className="text-xs font-medium text-slate-500">Chi phí tham dự</div>
-                <div className="mt-0.5 text-2xl font-bold text-slate-900 tabular-nums">
-                  {formatCurrencyVN(selectedPrice)}
+                <div className="text-xs font-medium text-slate-500">Hình thức tham gia</div>
+                <div className="mt-0.5 text-xl font-bold text-slate-900">
+                  Đăng ký giữ chỗ trực tuyến
                 </div>
               </div>
               <div className="text-right">
@@ -565,30 +549,26 @@ export function EventDetailModal({
                   Còn {remaining}/{event.maxSlots} chỗ
                 </div>
                 <div className="text-[11px] text-slate-500 tabular-nums">
-                  {event.registeredCount} lượt đã giữ chỗ
+                  {event.registeredCount} người đã đăng ký
                 </div>
               </div>
             </div>
 
-            <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-              <div
-                className={`h-full rounded-full transition-all ${
-                  fillPercent >= 90 ? 'bg-amber-500' : 'bg-indigo-600'
-                }`}
-                style={{ width: `${fillPercent}%` }}
-              />
-            </div>
+            <AnimatedProgressBar
+              percent={fillPercent}
+              barClassName={fillPercent >= 90 ? 'bg-amber-500' : 'bg-indigo-600'}
+              trackClassName="w-full h-2 bg-slate-100 rounded-full overflow-hidden"
+            />
 
             {existingRegistration && existingRegistration.status !== 'cancelled' ? (
               <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 space-y-3">
                 <div className="flex items-center gap-2 text-sm font-bold text-emerald-800">
                   <CheckCircle2 className="w-4 h-4 shrink-0" />
-                  <span>Bạn đã giữ chỗ cho sự kiện này</span>
+                  <span>Bạn đã đăng ký tham gia sự kiện này</span>
                 </div>
                 <p className="text-xs text-emerald-700 leading-relaxed">
-                  Mã vé điện tử:{' '}
-                  <strong className="font-mono">{existingRegistration.ticketCode}</strong> · Hạng{' '}
-                  {existingRegistration.ticketTier === 'vip' ? 'VIP' : 'Tiêu chuẩn'}.
+                  Mã xác nhận check-in:{' '}
+                  <strong className="font-mono">{existingRegistration.ticketCode}</strong>.
                 </p>
                 <button
                   type="button"
@@ -599,7 +579,7 @@ export function EventDetailModal({
                   className="w-full inline-flex items-center justify-center gap-2 py-2.5 px-4 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg cursor-pointer"
                 >
                   <Ticket className="w-4 h-4" />
-                  <span>Mở Vé điện tử &amp; Mã QR</span>
+                  <span>Xem mã QR &amp; Trạng thái tham gia</span>
                 </button>
               </div>
             ) : !canBook ? (
@@ -612,47 +592,26 @@ export function EventDetailModal({
                   ? 'Cổng đăng ký hiện đang tạm đóng để rà soát danh sách.'
                   : 'Sự kiện đã hết chỗ trống.'}
               </div>
+            ) : !currentUser ? (
+              <div className="p-5 rounded-xl bg-indigo-50/70 border border-indigo-200 space-y-3">
+                <p className="text-sm font-semibold text-slate-900">
+                  Đăng nhập để đăng ký tham gia sự kiện
+                </p>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Bạn cần đăng nhập hoặc tạo tài khoản Người tham gia để hệ thống lưu thông tin
+                  đăng ký và cấp mã QR check-in riêng.
+                </p>
+                <button
+                  type="button"
+                  onClick={onRequireAuth}
+                  className="w-full inline-flex items-center justify-center gap-2 py-2.5 px-4 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors cursor-pointer"
+                >
+                  <Users className="w-4 h-4" />
+                  <span>Đăng nhập / Đăng ký để tham gia</span>
+                </button>
+              </div>
             ) : (
-              <form onSubmit={handleBook} className="space-y-4">
-                {hasVip && (
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-2">
-                      Chọn hạng vé
-                    </label>
-                    <div className="grid grid-cols-2 gap-2.5">
-                      <button
-                        type="button"
-                        onClick={() => setTicketTier('standard')}
-                        className={`p-3 rounded-xl border text-left cursor-pointer transition-colors ${
-                          ticketTier === 'standard'
-                            ? 'border-indigo-600 bg-indigo-50/70'
-                            : 'border-slate-200 hover:border-slate-300'
-                        }`}
-                      >
-                        <div className="text-xs font-semibold text-slate-900">Tiêu chuẩn</div>
-                        <div className="mt-0.5 text-sm font-bold text-indigo-700 tabular-nums">
-                          {formatCurrencyVN(event.price)}
-                        </div>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setTicketTier('vip')}
-                        className={`p-3 rounded-xl border text-left cursor-pointer transition-colors ${
-                          ticketTier === 'vip'
-                            ? 'border-indigo-600 bg-indigo-50/70'
-                            : 'border-slate-200 hover:border-slate-300'
-                        }`}
-                      >
-                        <div className="text-xs font-semibold text-slate-900">Vé VIP</div>
-                        <div className="mt-0.5 text-sm font-bold text-indigo-700 tabular-nums">
-                          {formatCurrencyVN(event.vipPrice)}
-                        </div>
-                      </button>
-                    </div>
-                  </div>
-                )}
-
+              <form onSubmit={handleRegister} className="space-y-4">
                 <div>
                   <label className="block text-xs font-medium text-slate-700 mb-1">
                     Họ và tên người tham dự
@@ -670,7 +629,7 @@ export function EventDetailModal({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-medium text-slate-700 mb-1">
-                      Email nhận vé QR
+                      Email nhận thông tin
                     </label>
                     <input
                       type="email"
@@ -696,13 +655,13 @@ export function EventDetailModal({
 
                 <div>
                   <label className="block text-xs font-medium text-slate-700 mb-1">
-                    Ghi chú / Thông tin xuất hóa đơn / Câu hỏi
+                    Ghi chú / Câu hỏi cho Ban tổ chức
                   </label>
                   <textarea
                     rows={2}
                     value={note}
                     onChange={(e) => setNote(e.target.value)}
-                    placeholder="Thông tin công ty hoặc câu hỏi gửi diễn giả..."
+                    placeholder="Đơn vị công tác hoặc câu hỏi gửi diễn giả..."
                     className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-600"
                   />
                 </div>
@@ -715,8 +674,8 @@ export function EventDetailModal({
                   <Users className="w-4 h-4" />
                   <span>
                     {submitting
-                      ? 'Đang giữ chỗ trên Firestore...'
-                      : `Xác nhận đặt vé · ${formatCurrencyVN(selectedPrice)}`}
+                      ? 'Đang ghi nhận lên Firestore...'
+                      : 'Xác nhận đăng ký tham gia'}
                   </span>
                 </button>
               </form>

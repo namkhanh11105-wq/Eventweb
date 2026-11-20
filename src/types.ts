@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'user';
+export type UserRole = 'admin' | 'organizer' | 'user';
 
 export interface AppUser {
   uid: string;
@@ -6,6 +6,7 @@ export interface AppUser {
   email: string;
   phone: string;
   role: UserRole;
+  organization?: string;
   createdAt: string;
 }
 
@@ -17,6 +18,40 @@ export type EventCategory =
   | 'Seminar';
 
 export type EventStatus = 'ongoing' | 'upcoming' | 'paused' | 'completed' | 'cancelled';
+
+export type PlanningStatus = 'pending_review' | 'planning' | 'confirmed' | 'rejected';
+
+export type ServiceRequestStatus =
+  | 'pending'
+  | 'approved'
+  | 'in_progress'
+  | 'completed'
+  | 'rejected';
+
+export interface EventServiceRequest {
+  id: string;
+  serviceKey: string;
+  serviceName: string;
+  quantityOrScope?: string;
+  clientNote?: string;
+  adminNote?: string;
+  status: ServiceRequestStatus;
+}
+
+export type GuestCategory = 'VIP' | 'Đại biểu' | 'Diễn giả' | 'Khách mời';
+export type GuestRsvpStatus = 'invited' | 'confirmed' | 'checked_in' | 'declined';
+
+export interface EventGuest {
+  id: string;
+  fullName: string;
+  title?: string;
+  organization?: string;
+  email?: string;
+  phone?: string;
+  guestType: GuestCategory;
+  rsvpStatus: GuestRsvpStatus;
+  note?: string;
+}
 
 export interface AgendaItem {
   time: string;
@@ -47,20 +82,24 @@ export interface EventItem {
   registeredCount: number;
   checkedInCount?: number;
   status: EventStatus;
+  planningStatus: PlanningStatus;
+  isPublic: boolean;
   category: EventCategory | string;
-  price: number;
-  vipPrice?: number;
   organizer: string;
   organizerVerified?: boolean;
   featured?: boolean;
+  clientUserId?: string;
+  clientName?: string;
+  clientEmail?: string;
+  clientPhone?: string;
+  requestedServices: EventServiceRequest[];
+  invitedGuests: EventGuest[];
   speakers: SpeakerInfo[];
   agenda: AgendaItem[];
   faqs?: FaqItem[];
   rules: string;
   createdAt: string;
 }
-
-export type TicketTier = 'standard' | 'vip';
 
 export type RegistrationStatus = 'pending' | 'confirmed' | 'attended' | 'cancelled';
 
@@ -74,8 +113,6 @@ export interface RegistrationItem {
   guestPhone: string;
   note: string;
   ticketCode: string;
-  ticketTier: TicketTier;
-  ticketPrice: number;
   status: RegistrationStatus;
   registeredAt: string;
   checkedInAt?: string | null;
@@ -92,6 +129,17 @@ export interface FeedbackItem {
   createdAt: string;
 }
 
+export interface PublicContactInfo {
+  organizationName: string;
+  adminName: string;
+  phone: string;
+  hotline: string;
+  email: string;
+  officeAddress: string;
+  workingHours: string;
+  updatedAt: string;
+}
+
 export interface EventFormInput {
   title: string;
   description: string;
@@ -101,16 +149,39 @@ export interface EventFormInput {
   endTime: string;
   maxSlots: number;
   status: EventStatus;
+  planningStatus?: PlanningStatus;
+  isPublic?: boolean;
   category: EventCategory | string;
-  price: number;
-  vipPrice?: number;
   organizer: string;
   organizerVerified?: boolean;
   featured?: boolean;
+  clientUserId?: string;
+  clientName?: string;
+  clientEmail?: string;
+  clientPhone?: string;
+  requestedServices?: EventServiceRequest[];
+  invitedGuests?: EventGuest[];
   speakers: SpeakerInfo[];
   agenda: AgendaItem[];
   faqs: FaqItem[];
   rules: string;
+}
+
+export interface OrganizerEventRequestInput {
+  title: string;
+  category: EventCategory | string;
+  startTime: string;
+  endTime: string;
+  location: string;
+  maxSlots: number;
+  description: string;
+  bannerUrl: string;
+  organizerName: string;
+  clientUserId: string;
+  clientName: string;
+  clientEmail: string;
+  clientPhone: string;
+  requestedServices: EventServiceRequest[];
 }
 
 export interface RegistrationInput {
@@ -121,6 +192,4 @@ export interface RegistrationInput {
   guestEmail: string;
   guestPhone: string;
   note: string;
-  ticketTier: TicketTier;
-  ticketPrice: number;
 }
