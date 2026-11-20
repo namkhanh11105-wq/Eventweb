@@ -1,4 +1,5 @@
 import { useMemo, useState, type FormEvent } from 'react';
+import { QRCodeSVG } from 'qrcode.react';
 import {
   Calendar,
   CheckCircle2,
@@ -8,24 +9,37 @@ import {
   Menu,
   Search,
   ShieldCheck,
+  Star,
   Ticket,
   Users,
   X,
 } from 'lucide-react';
-import { createRegistration, updateRegistrationStatus } from '../services/dataService';
+import { submitFeedback, updateRegistrationStatus } from '../services/dataService';
 import { EventBanner } from './EventBanner';
+import { EventDetailModal } from './EventDetailModal';
 import {
+  EVENT_CATEGORIES,
   EVENT_STATUS_META,
+  formatCurrencyVN,
   formatDateTimeVN,
   formatShortDateVN,
   REGISTRATION_STATUS_META,
 } from '../utils/formatters';
-import type { AppUser, EventItem, EventStatus, RegistrationItem } from '../types';
+import type {
+  AppUser,
+  EventCategory,
+  EventItem,
+  EventStatus,
+  FeedbackItem,
+  RegistrationItem,
+} from '../types';
 
 interface UserLayoutProps {
   currentUser: AppUser | null;
   events: EventItem[];
   registrations: RegistrationItem[];
+  feedbacks: FeedbackItem[];
+  permissionWarning?: string | null;
   onSwitchToAdmin?: () => void;
   onOpenAuth: () => void;
   onLogout: () => void;
@@ -36,6 +50,8 @@ export function UserLayout({
   currentUser,
   events,
   registrations,
+  feedbacks,
+  permissionWarning,
   onSwitchToAdmin,
   onOpenAuth,
   onLogout,
@@ -43,28 +59,15 @@ export function UserLayout({
 }: UserLayoutProps) {
   const [activeTab, setActiveTab] = useState<'discover' | 'tickets'>('discover');
   const [statusFilter, setStatusFilter] = useState<'all' | EventStatus>('all');
+  const [categoryFilter, setCategoryFilter] = useState<'all' | EventCategory>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const [selectedEvent, setSelectedEvent] = useState<EventItem | null>(null);
-  const [guestName, setGuestName] = useState(currentUser?.fullName || '');
-  const [guestEmail, setGuestEmail] = useState(currentUser?.email || '');
-  const [guestPhone, setGuestPhone] = useState(currentUser?.phone || '');
-  const [note, setNote] = useState('');
-  const [registering, setRegistering] = useState(false);
-
-  const filteredEvents = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    return events.filter((ev) => {
-      if (statusFilter !== 'all' && ev.status !== statusFilter) return false;
-      if (!q) return true;
-      return (
-        ev.title.toLowerCase().includes(q) ||
-        ev.location.toLowerCase().includes(q) ||
-        ev.description.toLowerCase().includes(q)
-      );
-    });
-  }, [events, statusFilter, searchQuery]);
+  const [feedbackReg, setFeedbackReg] = useState<RegistrationItem | null>(null);
+  const [ratingValue, setRatingValue] = useState(5);
+  const [ratingComment, setRatingComment] = useState('');
+  const [sendingFeedback, setSendingFeedback] = useState(false);
 
   const myRegistrations = useMemo(() => {
     if (!currentUser) return [];
@@ -75,58 +78,64 @@ export function UserLayout({
     );
   }, [registrations, currentUser]);
 
-  function openEventModal(ev: EventItem) {
-    setSelectedEvent(ev);
-    setGuestName(currentUser?.fullName || '');
-    setGuestEmail(currentUser?.email || '');
-    setGuestPhone(currentUser?.phone || '');
-    setNote('');
-  }
-
-  async function handleRegister(e: FormEvent) {
-    e.preventDefault();
-    if (!selectedEvent) return;
-    if (!currentUser) {
-      onNotify('Vui lòng đăng nhập trước khi đăng ký tham dự sự kiện.', 'error');
-      onOpenAuth();
-      return;
+  const activeRegistrationMap = useMemo(() => {
+    const map = new Map<string, RegistrationItem>();
+    for (const r of myRegistrations) {
+      if (r.status !== 'cancelled') {
+        map.set(r.eventId, r);
+      }
     }
+    return map;
+  }, [myRegistrations]);
 
-    const remaining = selectedEvent.maxSlots - selectedEvent.registeredCount;
-    if (remaining <= 0) {
-      onNotify('Sự kiện đã đủ số lượng người tham dự.', 'error');
-      return;
-    }
-
-    setRegistering(true);
-    try {
-      await createRegistration({
-        eventId: selectedEvent.id,
-        eventTitle: selectedEvent.title,
-        userId: currentUser.uid,
-        guestName,
-        guestEmail,
-        guestPhone,
-        note,
-      });
-      onNotify(`Đăng ký thành công sự kiện "${selectedEvent.title}".`);
-      setSelectedEvent(null);
-    } catch (err) {
-      onNotify(
-        err instanceof Error ? err.message : 'Không thể hoàn tất đăng ký.',
-        'error'
+  const filteredEvents = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return events.filter((ev) => {
+      if (statusFilter !== 'all' && ev.status !== statusFilter) return false;
+      if (categoryFilter !== 'all' && ev.category !== categoryFilter) return false;
+      if (!q) return true;
+      return (
+        ev.title.toLowerCase().includes(q) ||
+        ev.location.toLowerCase().includes(q) ||
+        ev.category.toLowerCase().includes(q) ||
+        ev.organizer.toLowerCase().includes(q)
       );
-    } finally {
-      setRegistering(false);
-    }
-  }
+    });
+  }, [events, statusFilter, categoryFilter, searchQuery]);
 
   async function handleCancelTicket(reg: RegistrationItem) {
     try {
       await updateRegistrationStatus(reg, 'cancelled');
-      onNotify('Đã hủy lượt đăng ký của bạn.');
+      onNotify(`Đã hủy vé ${reg.ticketCode} và hoàn lại chỗ trống.`);
     } catch (err) {
       onNotify(err instanceof Error ? err.message : 'Không thể hủy vé.', 'error');
+    }
+  }
+
+  async function handleSubmitTicketFeedback(e: FormEvent) {
+    e.preventDefault();
+    if (!currentUser || !feedbackReg || !ratingComment.trim()) return;
+    setSendingFeedback(true);
+    try {
+      await submitFeedback({
+        eventId: feedbackReg.eventId,
+        eventTitle: feedbackReg.eventTitle,
+        userId: currentUser.uid,
+        userName: currentUser.fullName,
+        rating: ratingValue,
+        comment: ratingComment,
+      });
+      onNotify('Đã gửi đánh giá của bạn cho sự kiện.');
+      setFeedbackReg(null);
+      setRatingComment('');
+      setRatingValue(5);
+    } catch (err) {
+      onNotify(
+        err instanceof Error ? err.message : 'Không thể gửi đánh giá.',
+        'error'
+      );
+    } finally {
+      setSendingFeedback(false);
     }
   }
 
@@ -135,7 +144,6 @@ export function UserLayout({
       {/* Top Navbar: Strict 3-zone contract */}
       <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-sm border-b border-slate-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-8">
-          {/* Zone 1: Wordmark */}
           <button
             type="button"
             onClick={() => setActiveTab('discover')}
@@ -144,7 +152,6 @@ export function UserLayout({
             EventFlow
           </button>
 
-          {/* Zone 2: Concise single-line nav links */}
           <nav className="hidden md:flex items-center gap-6 text-sm font-medium">
             <button
               type="button"
@@ -166,7 +173,7 @@ export function UserLayout({
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              Vé của tôi ({myRegistrations.length})
+              Sự kiện của tôi ({myRegistrations.length})
             </button>
             {currentUser?.role === 'admin' && onSwitchToAdmin && (
               <button
@@ -179,7 +186,6 @@ export function UserLayout({
             )}
           </nav>
 
-          {/* Zone 3: Single primary action / account */}
           <div className="hidden md:flex items-center gap-3 shrink-0">
             {currentUser ? (
               <div className="flex items-center gap-3">
@@ -207,7 +213,6 @@ export function UserLayout({
             )}
           </div>
 
-          {/* Mobile menu toggle */}
           <button
             type="button"
             aria-label="Mở menu điều hướng"
@@ -218,7 +223,6 @@ export function UserLayout({
           </button>
         </div>
 
-        {/* Mobile Drawer */}
         {mobileMenuOpen && (
           <div className="md:hidden border-t border-slate-200 bg-white px-4 py-4 space-y-2">
             <button
@@ -239,7 +243,7 @@ export function UserLayout({
               }}
               className="w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-100"
             >
-              Vé của tôi ({myRegistrations.length})
+              Sự kiện của tôi ({myRegistrations.length})
             </button>
             {currentUser?.role === 'admin' && onSwitchToAdmin && (
               <button
@@ -277,70 +281,106 @@ export function UserLayout({
       </header>
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {permissionWarning && (
+          <div
+            role="alert"
+            className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+          >
+            <span className="font-semibold">Không thể tải dữ liệu từ Firestore: </span>
+            <span>
+              {currentUser
+                ? 'Vui lòng kiểm tra Firestore Security Rules trên Firebase Console.'
+                : 'Vui lòng đăng nhập để xem và đăng ký sự kiện.'}
+            </span>
+          </div>
+        )}
+
         {activeTab === 'discover' ? (
           <div className="space-y-8">
-            {/* Clean Hero Header */}
-            <section className="bg-white border border-slate-200 rounded-2xl p-6 sm:p-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-              <div className="max-w-2xl">
-                <p className="text-xs font-semibold text-indigo-600 tracking-wide">
-                  Cổng thông tin sự kiện
+            {/* SaaS / Luma-style Hero Banner with Integrated Search */}
+            <section className="relative overflow-hidden rounded-2xl bg-indigo-950 text-white p-6 sm:p-10 lg:p-12">
+              <div className="max-w-3xl">
+                <p className="text-xs font-semibold text-indigo-300 tracking-wide">
+                  Nền tảng đặt vé &amp; điều phối sự kiện trực tuyến
                 </p>
-                <h1 className="mt-2 text-2xl sm:text-4xl font-bold text-slate-900 tracking-tight text-balance">
-                  Khám phá hội thảo, workshop và kết nối cộng đồng chuyên môn
+                <h1 className="mt-2.5 text-2xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-balance leading-tight">
+                  Tìm kiếm hội thảo, workshop và trải nghiệm cộng đồng đáng nhớ
                 </h1>
-                <p className="mt-3 text-sm sm:text-base text-slate-600 leading-relaxed">
-                  Đăng ký chỗ ngồi trực tuyến chỉ trong một bước, theo dõi lịch trình và quản lý vé
-                  tham dự cá nhân mọi lúc.
+                <p className="mt-3 text-sm sm:text-base text-indigo-200/90 leading-relaxed max-w-2xl">
+                  Giữ chỗ tức thì theo thời gian thực, nhận vé điện tử kèm mã QR Check-in và theo
+                  dõi lịch trình chi tiết ngay trên một màn hình.
                 </p>
+
+                {/* Hero Integrated Search Bar */}
+                <div className="mt-6 flex flex-col sm:flex-row gap-3">
+                  <div className="relative flex-1">
+                    <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="search"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Tìm tên sự kiện, địa điểm, ban tổ chức..."
+                      className="w-full pl-10 pr-4 py-3 text-sm bg-white text-slate-900 placeholder:text-slate-400 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                    />
+                  </div>
+                  <select
+                    aria-label="Lọc theo trạng thái sự kiện"
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value as 'all' | EventStatus)}
+                    className="px-4 py-3 text-sm font-medium bg-indigo-900/80 border border-indigo-700 text-white rounded-xl focus:outline-none cursor-pointer"
+                  >
+                    <option value="all">Tất cả trạng thái</option>
+                    <option value="ongoing">Đang mở đăng ký</option>
+                    <option value="upcoming">Sắp diễn ra</option>
+                    <option value="completed">Đã kết thúc</option>
+                  </select>
+                </div>
               </div>
 
               {currentUser?.role === 'admin' && onSwitchToAdmin && (
                 <button
                   type="button"
                   onClick={onSwitchToAdmin}
-                  className="inline-flex items-center justify-center gap-2 px-5 py-3 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors shrink-0 cursor-pointer whitespace-nowrap"
+                  className="mt-6 lg:mt-0 lg:absolute lg:top-8 lg:right-8 inline-flex items-center gap-2 px-4 py-2.5 text-xs font-semibold text-indigo-950 bg-white hover:bg-indigo-50 rounded-xl transition-colors cursor-pointer whitespace-nowrap"
                 >
-                  <ShieldCheck className="w-4 h-4" />
-                  <span>Vào Dashboard Quản trị</span>
+                  <ShieldCheck className="w-4 h-4 text-indigo-600" />
+                  <span>Mở Admin Dashboard</span>
                 </button>
               )}
             </section>
 
-            {/* Filter & Search Bar */}
-            <section className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div className="flex items-center gap-1 p-1 bg-slate-200/70 rounded-lg overflow-x-auto">
-                {(
-                  [
-                    { key: 'all', label: 'Tất cả' },
-                    { key: 'upcoming', label: 'Sắp diễn ra' },
-                    { key: 'ongoing', label: 'Đang diễn ra' },
-                    { key: 'completed', label: 'Đã kết thúc' },
-                  ] as const
-                ).map((tab) => (
+            {/* Category & Status Segmented Filter Toolbar */}
+            <section className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+                <button
+                  type="button"
+                  onClick={() => setCategoryFilter('all')}
+                  className={`px-3.5 py-2 text-xs font-semibold rounded-lg border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                    categoryFilter === 'all'
+                      ? 'bg-indigo-600 text-white border-indigo-600'
+                      : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  Tất cả danh mục
+                </button>
+                {EVENT_CATEGORIES.map((cat) => (
                   <button
-                    key={tab.key}
+                    key={cat}
                     type="button"
-                    onClick={() => setStatusFilter(tab.key)}
-                    className={`px-3.5 py-1.5 text-xs font-semibold rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                      statusFilter === tab.key
-                        ? 'bg-white text-slate-900 shadow-xs'
-                        : 'text-slate-600 hover:text-slate-900'
+                    onClick={() => setCategoryFilter(cat)}
+                    className={`px-3.5 py-2 text-xs font-semibold rounded-lg border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                      categoryFilter === cat
+                        ? 'bg-indigo-600 text-white border-indigo-600'
+                        : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
                     }`}
                   >
-                    {tab.label}
+                    {cat}
                   </button>
                 ))}
               </div>
 
-              <div className="relative w-full md:w-80">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="search"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Tìm theo tên sự kiện, địa điểm..."
-                  className="w-full pl-10 pr-4 py-2 text-sm bg-white border border-slate-200 rounded-lg text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600"
-                />
+              <div className="text-xs font-medium text-slate-500 tabular-nums">
+                Tìm thấy {filteredEvents.length} sự kiện
               </div>
             </section>
 
@@ -349,12 +389,12 @@ export function UserLayout({
               <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center">
                 <Calendar className="w-10 h-10 text-slate-300 mx-auto" />
                 <h2 className="mt-4 text-base font-semibold text-slate-900">
-                  Chưa có sự kiện nào phù hợp
+                  Chưa có sự kiện phù hợp bộ lọc
                 </h2>
                 <p className="mt-1.5 text-sm text-slate-500 max-w-md mx-auto">
                   {events.length === 0
-                    ? 'Hệ thống hiện chưa có dữ liệu sự kiện. Hãy đăng nhập với tài khoản Demo Admin và bấm "Tạo dữ liệu mẫu (Seed Data)" để trải nghiệm ngay.'
-                    : 'Hãy thử đổi bộ lọc trạng thái hoặc từ khóa tìm kiếm khác.'}
+                    ? 'Hệ thống chưa có dữ liệu sự kiện. Vui lòng đăng nhập Demo Admin và bấm "Tạo dữ liệu mẫu (Seed Data)".'
+                    : 'Hãy thử đặt lại danh mục, trạng thái hoặc từ khóa tìm kiếm khác.'}
                 </p>
                 {currentUser?.role === 'admin' && onSwitchToAdmin && events.length === 0 && (
                   <button
@@ -375,38 +415,55 @@ export function UserLayout({
                     100,
                     Math.round((ev.registeredCount / Math.max(1, ev.maxSlots)) * 100)
                   );
+                  const myReg = activeRegistrationMap.get(ev.id);
+
                   return (
                     <article
                       key={ev.id}
-                      className="bg-white border border-slate-200 rounded-xl overflow-hidden flex flex-col justify-between hover:border-indigo-300 transition-colors"
+                      onClick={() => setSelectedEvent(ev)}
+                      className="group bg-white border border-slate-200 rounded-2xl overflow-hidden flex flex-col justify-between hover:border-indigo-300 hover:shadow-md transition-all cursor-pointer"
                     >
                       <div>
-                        <div className="aspect-video w-full overflow-hidden bg-slate-100">
+                        <div className="relative aspect-video w-full overflow-hidden bg-slate-100">
                           <EventBanner
                             src={ev.bannerUrl}
                             alt={ev.title}
-                            className="w-full h-full"
+                            className="w-full h-full group-hover:scale-[1.02] transition-transform duration-300"
                           />
+                          <div className="absolute top-3 left-3">
+                            <span className="inline-block px-2.5 py-1 text-[11px] font-semibold bg-white/95 text-slate-900 rounded-md shadow-xs">
+                              {ev.category}
+                            </span>
+                          </div>
+                          {myReg && (
+                            <div className="absolute top-3 right-3">
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold bg-emerald-600 text-white rounded-md shadow-xs">
+                                <CheckCircle2 className="w-3 h-3" />
+                                Đã đăng ký
+                              </span>
+                            </div>
+                          )}
                         </div>
 
                         <div className="p-5">
-                          <div className="flex items-center gap-2 text-xs text-slate-500 tabular-nums">
-                            <span className={`font-semibold ${statusMeta.textClass}`}>
-                              {statusMeta.label}
+                          <div className="flex items-center justify-between gap-2 text-xs">
+                            <div className="flex items-center gap-1.5 tabular-nums text-slate-500">
+                              <span className={`font-semibold ${statusMeta.textClass}`}>
+                                {statusMeta.label}
+                              </span>
+                              <span aria-hidden="true">·</span>
+                              <span>{formatShortDateVN(ev.startTime)}</span>
+                            </div>
+                            <span className="font-bold text-indigo-700 tabular-nums">
+                              {formatCurrencyVN(ev.price)}
                             </span>
-                            <span aria-hidden="true">·</span>
-                            <span>{formatShortDateVN(ev.startTime)}</span>
                           </div>
 
-                          <h3 className="mt-2 text-lg font-bold text-slate-900 leading-snug line-clamp-2">
+                          <h3 className="mt-2.5 text-lg font-bold text-slate-900 leading-snug line-clamp-2 group-hover:text-indigo-700 transition-colors">
                             {ev.title}
                           </h3>
 
-                          <p className="mt-2 text-sm text-slate-600 line-clamp-2 leading-relaxed">
-                            {ev.description}
-                          </p>
-
-                          <div className="mt-4 space-y-1.5 text-xs text-slate-500">
+                          <div className="mt-3.5 space-y-1.5 text-xs text-slate-500">
                             <div className="flex items-center gap-2">
                               <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                               <span className="truncate">{ev.location}</span>
@@ -414,27 +471,26 @@ export function UserLayout({
                             <div className="flex items-center gap-2 tabular-nums">
                               <Users className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                               <span>
-                                Đã đăng ký {ev.registeredCount}/{ev.maxSlots} chỗ (còn {remaining})
+                                Còn {remaining}/{ev.maxSlots} chỗ ({fillPercent}% đã đặt)
                               </span>
                             </div>
                           </div>
                         </div>
                       </div>
 
-                      <div className="px-5 pb-5 pt-2">
+                      <div className="px-5 pb-5 pt-1">
                         <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden mb-4">
                           <div
-                            className="h-full bg-indigo-600 rounded-full"
+                            className={`h-full rounded-full ${
+                              fillPercent >= 90 ? 'bg-amber-500' : 'bg-indigo-600'
+                            }`}
                             style={{ width: `${fillPercent}%` }}
                           />
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => openEventModal(ev)}
-                          className="w-full py-2.5 px-4 text-sm font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors cursor-pointer whitespace-nowrap"
-                        >
-                          Xem chi tiết &amp; Đăng ký
-                        </button>
+                        <div className="flex items-center justify-between text-xs font-semibold text-indigo-700">
+                          <span>{myReg ? 'Xem chi tiết & Vé của bạn' : 'Xem lịch trình & Đặt vé'}</span>
+                          <span>→</span>
+                        </div>
                       </div>
                     </article>
                   );
@@ -443,12 +499,14 @@ export function UserLayout({
             )}
           </div>
         ) : (
-          /* My Tickets View */
+          /* My Events & E-Tickets View */
           <section className="space-y-6">
             <div>
-              <h1 className="text-2xl font-bold text-slate-900">Vé tham dự của tôi</h1>
+              <h1 className="text-2xl font-bold text-slate-900">
+                Sự kiện của tôi &amp; Vé điện tử (E-Ticket)
+              </h1>
               <p className="mt-1 text-sm text-slate-500">
-                Danh sách các sự kiện bạn đã đăng ký trên hệ thống.
+                Xuất trình mã QR bên dưới tại quầy lễ tân để Ban tổ chức quét Check-in nhanh chóng.
               </p>
             </div>
 
@@ -456,7 +514,7 @@ export function UserLayout({
               <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center">
                 <Ticket className="w-10 h-10 text-slate-300 mx-auto" />
                 <p className="mt-3 text-sm text-slate-600">
-                  Hãy đăng nhập để xem danh sách vé sự kiện của bạn.
+                  Hãy đăng nhập để xem vé điện tử và mã QR check-in của bạn.
                 </p>
                 <button
                   type="button"
@@ -470,10 +528,10 @@ export function UserLayout({
               <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center">
                 <Ticket className="w-10 h-10 text-slate-300 mx-auto" />
                 <h2 className="mt-3 text-base font-semibold text-slate-900">
-                  Bạn chưa đăng ký sự kiện nào
+                  Bạn chưa có vé sự kiện nào
                 </h2>
                 <p className="mt-1 text-sm text-slate-500">
-                  Quay lại mục Khám phá sự kiện để chọn chương trình phù hợp.
+                  Khám phá các sự kiện đang mở đăng ký để nhận vé điện tử miễn phí hoặc ưu đãi.
                 </p>
                 <button
                   type="button"
@@ -484,194 +542,220 @@ export function UserLayout({
                 </button>
               </div>
             ) : (
-              <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-600">
-                        <th className="py-3.5 px-4">Sự kiện</th>
-                        <th className="py-3.5 px-4">Người tham dự</th>
-                        <th className="py-3.5 px-4">Thời gian đăng ký</th>
-                        <th className="py-3.5 px-4">Trạng thái</th>
-                        <th className="py-3.5 px-4 text-right">Thao tác</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 text-sm">
-                      {myRegistrations.map((reg) => {
-                        const statusMeta = REGISTRATION_STATUS_META[reg.status];
-                        return (
-                          <tr key={reg.id} className="hover:bg-slate-50/80">
-                            <td className="py-3.5 px-4 font-semibold text-slate-900">
-                              {reg.eventTitle}
-                            </td>
-                            <td className="py-3.5 px-4 text-slate-600">
-                              {reg.guestName} · {reg.guestPhone}
-                            </td>
-                            <td className="py-3.5 px-4 text-slate-500 tabular-nums">
-                              {formatDateTimeVN(reg.registeredAt)}
-                            </td>
-                            <td className="py-3.5 px-4">
-                              <span className={`font-semibold ${statusMeta.textClass}`}>
-                                {statusMeta.label}
-                              </span>
-                            </td>
-                            <td className="py-3.5 px-4 text-right">
-                              {reg.status !== 'cancelled' && reg.status !== 'attended' ? (
-                                <button
-                                  type="button"
-                                  onClick={() => handleCancelTicket(reg)}
-                                  className="text-xs font-semibold text-rose-600 hover:text-rose-700 cursor-pointer"
-                                >
-                                  Hủy đăng ký
-                                </button>
-                              ) : (
-                                <span className="text-xs text-slate-400">—</span>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {myRegistrations.map((reg) => {
+                  const statusMeta = REGISTRATION_STATUS_META[reg.status];
+                  const linkedEvent = events.find((e) => e.id === reg.eventId);
+                  const canCancel =
+                    reg.status !== 'cancelled' &&
+                    reg.status !== 'attended' &&
+                    linkedEvent?.status !== 'completed';
+                  const canRate =
+                    reg.status === 'attended' ||
+                    (linkedEvent?.status === 'completed' && reg.status !== 'cancelled');
+                  const qrPayload = JSON.stringify({
+                    ticketCode: reg.ticketCode,
+                    eventId: reg.eventId,
+                    guest: reg.guestName,
+                  });
+
+                  return (
+                    <article
+                      key={reg.id}
+                      className="bg-white border border-slate-200 rounded-2xl overflow-hidden flex flex-col sm:flex-row"
+                    >
+                      {/* Left E-Ticket Info */}
+                      <div className="flex-1 p-5 sm:p-6 flex flex-col justify-between gap-4">
+                        <div>
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span
+                              className={`text-xs font-semibold ${statusMeta.textClass}`}
+                            >
+                              {statusMeta.label}
+                            </span>
+                            <span className="text-xs font-semibold text-indigo-700 tabular-nums">
+                              {reg.ticketTier === 'vip' ? 'Hạng VIP' : 'Tiêu chuẩn'} ·{' '}
+                              {formatCurrencyVN(reg.ticketPrice)}
+                            </span>
+                          </div>
+
+                          <h3 className="mt-2 text-lg font-bold text-slate-900 leading-snug">
+                            {reg.eventTitle}
+                          </h3>
+
+                          <div className="mt-3 space-y-1 text-xs text-slate-600">
+                            <div>
+                              Khách tham dự:{' '}
+                              <strong className="text-slate-900">{reg.guestName}</strong> (
+                              {reg.guestPhone})
+                            </div>
+                            {linkedEvent && (
+                              <div className="tabular-nums">
+                                Thời gian: {formatDateTimeVN(linkedEvent.startTime)}
+                              </div>
+                            )}
+                            {linkedEvent && (
+                              <div className="truncate">Địa điểm: {linkedEvent.location}</div>
+                            )}
+                            {reg.checkedInAt && (
+                              <div className="text-emerald-700 font-semibold tabular-nums">
+                                Đã Check-in lúc: {formatDateTimeVN(reg.checkedInAt)}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
+                          <span className="font-mono text-xs font-semibold text-slate-700">
+                            Mã vé: {reg.ticketCode}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            {canRate && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setFeedbackReg(reg);
+                                  setRatingValue(5);
+                                  setRatingComment('');
+                                }}
+                                className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-lg cursor-pointer"
+                              >
+                                <Star className="w-3.5 h-3.5" />
+                                <span>Đánh giá</span>
+                              </button>
+                            )}
+                            {canCancel && (
+                              <button
+                                type="button"
+                                onClick={() => handleCancelTicket(reg)}
+                                className="px-3 py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-lg cursor-pointer"
+                              >
+                                Hủy vé
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Right Perforated QR Stub */}
+                      <div className="sm:w-44 bg-slate-50 border-t sm:border-t-0 sm:border-l border-dashed border-slate-300 p-5 flex flex-col items-center justify-center text-center shrink-0">
+                        <div className="p-2.5 bg-white rounded-xl border border-slate-200">
+                          <QRCodeSVG
+                            value={qrPayload}
+                            size={104}
+                            level="M"
+                            fgColor={reg.status === 'cancelled' ? '#94A3B8' : '#0F172A'}
+                          />
+                        </div>
+                        <span className="mt-2.5 font-mono text-[11px] font-bold text-slate-800 tracking-wide">
+                          {reg.ticketCode}
+                        </span>
+                        <span className="mt-0.5 text-[11px] text-slate-500">
+                          {reg.status === 'cancelled' ? 'Vé đã vô hiệu' : 'Quét QR Check-in'}
+                        </span>
+                      </div>
+                    </article>
+                  );
+                })}
               </div>
             )}
           </section>
         )}
       </main>
 
-      {/* Event Detail & Registration Modal */}
+      {/* Event Detail Modal */}
       {selectedEvent && (
+        <EventDetailModal
+          event={selectedEvent}
+          currentUser={currentUser}
+          existingRegistration={activeRegistrationMap.get(selectedEvent.id)}
+          feedbacks={feedbacks}
+          onClose={() => setSelectedEvent(null)}
+          onRequireAuth={() => {
+            setSelectedEvent(null);
+            onOpenAuth();
+          }}
+          onViewMyTickets={() => setActiveTab('tickets')}
+          onNotify={onNotify}
+        />
+      )}
+
+      {/* Feedback Modal from E-Ticket */}
+      {feedbackReg && (
         <div
           className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
-          aria-labelledby="event-modal-title"
         >
-          <div className="bg-white border border-slate-200 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="relative aspect-video w-full bg-slate-100">
-              <EventBanner
-                src={selectedEvent.bannerUrl}
-                alt={selectedEvent.title}
-                className="w-full h-full"
-              />
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-bold text-slate-900">Đánh giá sự kiện</h2>
               <button
                 type="button"
-                aria-label="Đóng hộp thoại"
-                onClick={() => setSelectedEvent(null)}
-                className="absolute top-3 right-3 p-2 bg-white/90 hover:bg-white text-slate-700 rounded-lg shadow-xs cursor-pointer"
+                onClick={() => setFeedbackReg(null)}
+                className="p-1.5 text-slate-500 hover:bg-slate-100 rounded-lg cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
+            <p className="text-xs text-slate-500">{feedbackReg.eventTitle}</p>
 
-            <div className="p-6 sm:p-8 space-y-6">
+            <form onSubmit={handleSubmitTicketFeedback} className="space-y-4">
               <div>
-                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 tabular-nums">
-                  <span className={`font-semibold ${EVENT_STATUS_META[selectedEvent.status].textClass}`}>
-                    {EVENT_STATUS_META[selectedEvent.status].label}
-                  </span>
-                  <span aria-hidden="true">·</span>
-                  <span>
-                    {formatDateTimeVN(selectedEvent.startTime)} –{' '}
-                    {formatDateTimeVN(selectedEvent.endTime)}
-                  </span>
-                </div>
-                <h2 id="event-modal-title" className="mt-2 text-xl sm:text-2xl font-bold text-slate-900">
-                  {selectedEvent.title}
-                </h2>
-                <p className="mt-2 text-sm text-slate-600 leading-relaxed">
-                  {selectedEvent.description}
-                </p>
-                <div className="mt-4 flex flex-wrap gap-4 text-xs text-slate-600">
-                  <span className="inline-flex items-center gap-1.5">
-                    <MapPin className="w-3.5 h-3.5 text-indigo-600" />
-                    {selectedEvent.location}
-                  </span>
-                  <span className="inline-flex items-center gap-1.5 tabular-nums">
-                    <Users className="w-3.5 h-3.5 text-indigo-600" />
-                    {selectedEvent.registeredCount}/{selectedEvent.maxSlots} chỗ đã đăng ký
-                  </span>
+                <label className="block text-xs font-semibold text-slate-700 mb-2">
+                  Mức độ hài lòng
+                </label>
+                <div className="flex items-center gap-2">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      type="button"
+                      onClick={() => setRatingValue(star)}
+                      className="p-1 cursor-pointer"
+                    >
+                      <Star
+                        className={`w-6 h-6 ${
+                          star <= ratingValue
+                            ? 'text-amber-500 fill-amber-400'
+                            : 'text-slate-300'
+                        }`}
+                      />
+                    </button>
+                  ))}
                 </div>
               </div>
 
-              {selectedEvent.status === 'cancelled' || selectedEvent.status === 'completed' ? (
-                <div className="rounded-xl bg-slate-100 p-4 text-sm text-slate-600">
-                  Sự kiện này hiện không tiếp nhận thêm lượt đăng ký mới.
-                </div>
-              ) : (
-                <form onSubmit={handleRegister} className="pt-5 border-t border-slate-200 space-y-4">
-                  <h3 className="text-sm font-bold text-slate-900">Đăng ký tham dự</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-medium text-slate-700 mb-1">
-                        Họ và tên
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={guestName}
-                        onChange={(e) => setGuestName(e.target.value)}
-                        className="w-full px-3.5 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-600"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-slate-700 mb-1">
-                        Số điện thoại
-                      </label>
-                      <input
-                        type="tel"
-                        required
-                        value={guestPhone}
-                        onChange={(e) => setGuestPhone(e.target.value)}
-                        className="w-full px-3.5 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-600"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-700 mb-1">
-                      Email nhận vé
-                    </label>
-                    <input
-                      type="email"
-                      required
-                      value={guestEmail}
-                      onChange={(e) => setGuestEmail(e.target.value)}
-                      className="w-full px-3.5 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-600"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-700 mb-1">
-                      Ghi chú (không bắt buộc)
-                    </label>
-                    <input
-                      type="text"
-                      value={note}
-                      onChange={(e) => setNote(e.target.value)}
-                      placeholder="Yêu cầu đặc biệt hoặc câu hỏi cho diễn giả..."
-                      className="w-full px-3.5 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-600"
-                    />
-                  </div>
-                  <div className="flex items-center justify-end gap-3 pt-2">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedEvent(null)}
-                      className="px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg cursor-pointer"
-                    >
-                      Đóng
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={registering}
-                      className="inline-flex items-center gap-2 px-5 py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg cursor-pointer disabled:opacity-60"
-                    >
-                      <CheckCircle2 className="w-4 h-4" />
-                      <span>{registering ? 'Đang gửi...' : 'Xác nhận đăng ký'}</span>
-                    </button>
-                  </div>
-                </form>
-              )}
-            </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  Nhận xét của bạn
+                </label>
+                <textarea
+                  rows={3}
+                  required
+                  value={ratingComment}
+                  onChange={(e) => setRatingComment(e.target.value)}
+                  placeholder="Chia sẻ cảm nhận về nội dung, diễn giả và công tác tổ chức..."
+                  className="w-full px-3.5 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-600"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setFeedbackReg(null)}
+                  className="px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg cursor-pointer"
+                >
+                  Đóng
+                </button>
+                <button
+                  type="submit"
+                  disabled={sendingFeedback}
+                  className="px-4 py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg cursor-pointer disabled:opacity-60"
+                >
+                  {sendingFeedback ? 'Đang gửi...' : 'Gửi đánh giá'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

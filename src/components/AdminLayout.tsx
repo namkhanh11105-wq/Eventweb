@@ -4,6 +4,8 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  Pie,
+  PieChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -12,7 +14,10 @@ import {
 import {
   Calendar,
   Check,
+  CheckCircle2,
+  Copy,
   Database,
+  Download,
   Edit3,
   ExternalLink,
   Image as ImageIcon,
@@ -20,6 +25,7 @@ import {
   LogOut,
   Menu,
   Plus,
+  QrCode,
   Search,
   Trash2,
   UserCheck,
@@ -28,15 +34,20 @@ import {
 } from 'lucide-react';
 import { DEFAULT_EVENT_BANNERS } from '../data/seedData';
 import {
+  checkInByTicketCode,
   createEvent,
   deleteEvent,
+  duplicateEvent,
   seedSampleData,
   updateEvent,
   updateRegistrationStatus,
 } from '../services/dataService';
 import { EventBanner } from './EventBanner';
 import {
+  EVENT_CATEGORIES,
   EVENT_STATUS_META,
+  exportRegistrationsToCSV,
+  formatCurrencyVN,
   formatDateTimeVN,
   formatShortDateVN,
   REGISTRATION_STATUS_META,
@@ -44,6 +55,7 @@ import {
 } from '../utils/formatters';
 import type {
   AppUser,
+  EventCategory,
   EventFormInput,
   EventItem,
   EventStatus,
@@ -58,34 +70,56 @@ interface AdminLayoutProps {
   events: EventItem[];
   registrations: RegistrationItem[];
   users: AppUser[];
+  permissionWarning?: string | null;
   onSwitchToUser: () => void;
   onLogout: () => void;
   onNotify: (message: string, type?: 'success' | 'error') => void;
 }
 
 const SECTION_TITLES: Record<AdminSection, string> = {
-  overview: 'Tổng quan hệ thống',
+  overview: 'Tổng quan điều hành',
   events: 'Quản lý sự kiện',
-  registrations: 'Danh sách lượt đăng ký',
+  registrations: 'Khách tham dự & Check-in QR',
   users: 'Tài khoản người dùng',
 };
 
-const EMPTY_FORM: EventFormInput = {
-  title: '',
-  description: '',
-  bannerUrl: DEFAULT_EVENT_BANNERS[0].url,
-  location: '',
-  startTime: '',
-  endTime: '',
-  maxSlots: 80,
-  status: 'upcoming',
+const CATEGORY_COLORS: Record<EventCategory, string> = {
+  'Công nghệ': '#4F46E5',
+  Workshop: '#0EA5E9',
+  'Âm nhạc': '#EC4899',
+  'Hội thảo': '#F59E0B',
+  'Thể thao': '#10B981',
 };
+
+function createEmptyForm(): EventFormInput {
+  return {
+    title: '',
+    description: '',
+    bannerUrl: DEFAULT_EVENT_BANNERS[0].url,
+    location: '',
+    startTime: '',
+    endTime: '',
+    maxSlots: 80,
+    status: 'ongoing',
+    category: 'Công nghệ',
+    price: 0,
+    vipPrice: 0,
+    organizer: 'Ban tổ chức EventFlow',
+    speakers: [{ name: '', role: '' }],
+    agenda: [
+      { time: '08:30 - 09:00', title: 'Đón khách & Check-in QR', speaker: '' },
+      { time: '09:00 - 11:00', title: 'Phiên nội dung chính', speaker: '' },
+    ],
+    rules: 'Vui lòng mang theo mã QR vé điện tử để check-in tại quầy lễ tân.',
+  };
+}
 
 export function AdminLayout({
   currentUser,
   events,
   registrations,
   users,
+  permissionWarning,
   onSwitchToUser,
   onLogout,
   onNotify,
@@ -94,89 +128,124 @@ export function AdminLayout({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [seeding, setSeeding] = useState(false);
 
+  // Events filter
   const [eventSearch, setEventSearch] = useState('');
+  const [eventCategoryFilter, setEventCategoryFilter] = useState<'all' | EventCategory>('all');
+
+  // Registrations & Check-in filter
+  const [regEventFilter, setRegEventFilter] = useState<string>('all');
   const [regStatusFilter, setRegStatusFilter] = useState<'all' | RegistrationStatus>('all');
   const [regSearch, setRegSearch] = useState('');
+  const [qrInput, setQrInput] = useState('');
+  const [checkingInQr, setCheckingInQr] = useState(false);
 
+  // Event modal
   const [eventModalOpen, setEventModalOpen] = useState(false);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
-  const [formState, setFormState] = useState<EventFormInput>(EMPTY_FORM);
+  const [formState, setFormState] = useState<EventFormInput>(createEmptyForm);
   const [savingEvent, setSavingEvent] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
 
   const stats = useMemo(() => {
     const totalEvents = events.length;
-    const activeEvents = events.filter(
-      (e) => e.status === 'upcoming' || e.status === 'ongoing'
-    ).length;
-    const totalCapacity = events.reduce((acc, e) => acc + (e.maxSlots || 0), 0);
-    const activeRegistrations = registrations.filter((r) => r.status !== 'cancelled').length;
-    const fillRate =
-      totalCapacity > 0 ? Math.round((activeRegistrations / totalCapacity) * 100) : 0;
+    const activeRegistrations = registrations.filter((r) => r.status !== 'cancelled');
+    const attendedCount = registrations.filter((r) => r.status === 'attended').length;
+
+    const fillRates = events
+      .filter((e) => e.maxSlots > 0 && e.status !== 'cancelled')
+      .map((e) => Math.min(100, (e.registeredCount / e.maxSlots) * 100));
+    const avgFillRate =
+      fillRates.length > 0
+        ? Math.round(fillRates.reduce((a, b) => a + b, 0) / fillRates.length)
+        : 0;
+
+    const checkInRate =
+      activeRegistrations.length > 0
+        ? Math.round((attendedCount / activeRegistrations.length) * 100)
+        : 0;
 
     return {
       totalEvents,
-      activeEvents,
       totalRegistrations: registrations.length,
-      activeRegistrations,
-      fillRate,
+      activeRegistrationsCount: activeRegistrations.length,
+      attendedCount,
+      avgFillRate,
+      checkInRate,
     };
   }, [events, registrations]);
 
   const capacityChartData = useMemo(() => {
     return events.slice(0, 6).map((ev) => ({
-      name: ev.title.length > 18 ? `${ev.title.slice(0, 18)}…` : ev.title,
+      name: ev.title.length > 16 ? `${ev.title.slice(0, 16)}…` : ev.title,
       registered: ev.registeredCount,
       maxSlots: ev.maxSlots,
     }));
   }, [events]);
 
-  const statusChartData = useMemo(() => {
-    const counts: Record<RegistrationStatus, number> = {
-      confirmed: 0,
-      attended: 0,
-      pending: 0,
-      cancelled: 0,
+  const categoryChartData = useMemo(() => {
+    const eventCategoryMap = new Map<string, EventCategory>();
+    for (const ev of events) {
+      eventCategoryMap.set(ev.id, ev.category);
+    }
+    const counts: Record<EventCategory, number> = {
+      'Công nghệ': 0,
+      Workshop: 0,
+      'Âm nhạc': 0,
+      'Hội thảo': 0,
+      'Thể thao': 0,
     };
     for (const r of registrations) {
-      counts[r.status] = (counts[r.status] || 0) + 1;
+      if (r.status === 'cancelled') continue;
+      const cat = eventCategoryMap.get(r.eventId);
+      if (cat) counts[cat] += 1;
     }
-    return [
-      { key: 'confirmed', label: 'Đã xác nhận', value: counts.confirmed, color: '#4F46E5' },
-      { key: 'attended', label: 'Đã tham dự', value: counts.attended, color: '#16A34A' },
-      { key: 'pending', label: 'Chờ duyệt', value: counts.pending, color: '#D97706' },
-      { key: 'cancelled', label: 'Đã hủy', value: counts.cancelled, color: '#E11D48' },
-    ];
-  }, [registrations]);
+    return EVENT_CATEGORIES.map((cat) => ({
+      name: cat,
+      value: counts[cat],
+      color: CATEGORY_COLORS[cat],
+    })).filter((d) => d.value > 0);
+  }, [events, registrations]);
 
   const filteredEvents = useMemo(() => {
     const q = eventSearch.trim().toLowerCase();
-    if (!q) return events;
-    return events.filter(
-      (ev) =>
-        ev.title.toLowerCase().includes(q) || ev.location.toLowerCase().includes(q)
-    );
-  }, [events, eventSearch]);
+    return events.filter((ev) => {
+      if (eventCategoryFilter !== 'all' && ev.category !== eventCategoryFilter) return false;
+      if (!q) return true;
+      return (
+        ev.title.toLowerCase().includes(q) ||
+        ev.location.toLowerCase().includes(q) ||
+        ev.organizer.toLowerCase().includes(q)
+      );
+    });
+  }, [events, eventCategoryFilter, eventSearch]);
 
   const filteredRegistrations = useMemo(() => {
     const q = regSearch.trim().toLowerCase();
     return registrations.filter((r) => {
+      if (regEventFilter !== 'all' && r.eventId !== regEventFilter) return false;
       if (regStatusFilter !== 'all' && r.status !== regStatusFilter) return false;
       if (!q) return true;
       return (
         r.guestName.toLowerCase().includes(q) ||
         r.guestEmail.toLowerCase().includes(q) ||
+        r.ticketCode.toLowerCase().includes(q) ||
         r.eventTitle.toLowerCase().includes(q)
       );
     });
-  }, [registrations, regStatusFilter, regSearch]);
+  }, [registrations, regEventFilter, regStatusFilter, regSearch]);
+
+  const sampleTicketCodes = useMemo(() => {
+    return registrations
+      .filter((r) => r.status === 'confirmed' || r.status === 'pending')
+      .slice(0, 4);
+  }, [registrations]);
 
   async function handleSeedData() {
     setSeeding(true);
     try {
       const result = await seedSampleData();
       onNotify(
-        `Đã khởi tạo thành công ${result.eventsCount} sự kiện mẫu và ${result.registrationsCount} lượt đăng ký mẫu.`
+        `Đã đồng bộ Cloud Firestore: ${result.eventsCount} sự kiện, ${result.registrationsCount} lượt đăng ký, ${result.usersCount} người dùng và ${result.feedbacksCount} đánh giá mẫu.`
       );
     } catch (err) {
       onNotify(
@@ -197,7 +266,7 @@ export function AdminLayout({
 
     setEditingEventId(null);
     setFormState({
-      ...EMPTY_FORM,
+      ...createEmptyForm(),
       startTime: toDatetimeLocalValue(start.toISOString()),
       endTime: toDatetimeLocalValue(end.toISOString()),
     });
@@ -215,6 +284,13 @@ export function AdminLayout({
       endTime: toDatetimeLocalValue(ev.endTime),
       maxSlots: ev.maxSlots,
       status: ev.status,
+      category: ev.category,
+      price: ev.price,
+      vipPrice: ev.vipPrice || 0,
+      organizer: ev.organizer,
+      speakers: ev.speakers.length > 0 ? ev.speakers : [{ name: '', role: '' }],
+      agenda: ev.agenda.length > 0 ? ev.agenda : [{ time: '', title: '', speaker: '' }],
+      rules: ev.rules,
     });
     setEventModalOpen(true);
   }
@@ -225,7 +301,7 @@ export function AdminLayout({
     try {
       if (editingEventId) {
         await updateEvent(editingEventId, formState);
-        onNotify('Đã cập nhật thông tin sự kiện.');
+        onNotify('Đã cập nhật đầy đủ thông tin sự kiện.');
       } else {
         await createEvent(formState);
         onNotify('Đã tạo sự kiện mới thành công.');
@@ -238,6 +314,30 @@ export function AdminLayout({
       );
     } finally {
       setSavingEvent(false);
+    }
+  }
+
+  async function handleDuplicateEvent(ev: EventItem) {
+    try {
+      await duplicateEvent(ev);
+      onNotify(`Đã nhân bản sự kiện "${ev.title}".`);
+    } catch (err) {
+      onNotify(
+        err instanceof Error ? err.message : 'Không thể nhân bản sự kiện.',
+        'error'
+      );
+    }
+  }
+
+  async function handleQuickEventStatus(id: string, nextStatus: EventStatus) {
+    try {
+      await updateEvent(id, { status: nextStatus });
+      onNotify(`Đã đổi trạng thái sang "${EVENT_STATUS_META[nextStatus].label}".`);
+    } catch (err) {
+      onNotify(
+        err instanceof Error ? err.message : 'Không thể đổi trạng thái sự kiện.',
+        'error'
+      );
     }
   }
 
@@ -257,7 +357,11 @@ export function AdminLayout({
   async function handleStatusChange(reg: RegistrationItem, nextStatus: RegistrationStatus) {
     try {
       await updateRegistrationStatus(reg, nextStatus);
-      onNotify(`Đã cập nhật trạng thái sang "${REGISTRATION_STATUS_META[nextStatus].label}".`);
+      onNotify(
+        nextStatus === 'attended'
+          ? `Check-in thành công cho ${reg.guestName} (${reg.ticketCode}).`
+          : `Đã cập nhật trạng thái vé ${reg.ticketCode} sang "${REGISTRATION_STATUS_META[nextStatus].label}".`
+      );
     } catch (err) {
       onNotify(
         err instanceof Error ? err.message : 'Không thể cập nhật trạng thái.',
@@ -266,16 +370,52 @@ export function AdminLayout({
     }
   }
 
+  async function handleQrCheckIn(e: FormEvent) {
+    e.preventDefault();
+    if (!qrInput.trim()) return;
+    setCheckingInQr(true);
+    try {
+      // Hỗ trợ người dùng dán nguyên chuỗi JSON QR hoặc chỉ mã vé EF-XXXX-XXXX
+      let parsedCode = qrInput.trim();
+      if (parsedCode.startsWith('{')) {
+        try {
+          const obj = JSON.parse(parsedCode) as { ticketCode?: string };
+          if (obj.ticketCode) parsedCode = obj.ticketCode;
+        } catch {
+          // fallback raw string
+        }
+      }
+      const checked = await checkInByTicketCode(parsedCode, registrations);
+      setQrInput('');
+      onNotify(
+        `Check-in QR thành công: ${checked.guestName} · Vé ${checked.ticketCode} (${checked.eventTitle}).`
+      );
+    } catch (err) {
+      onNotify(err instanceof Error ? err.message : 'Check-in thất bại.', 'error');
+    } finally {
+      setCheckingInQr(false);
+    }
+  }
+
+  function handleExportCsv() {
+    if (filteredRegistrations.length === 0) {
+      onNotify('Không có dữ liệu khách tham dự để xuất file.', 'error');
+      return;
+    }
+    const suffix = regEventFilter === 'all' ? 'tat-ca-su-kien' : regEventFilter;
+    exportRegistrationsToCSV(filteredRegistrations, `khach-tham-du-${suffix}.csv`);
+    onNotify(`Đã xuất ${filteredRegistrations.length} dòng ra file CSV chuẩn UTF-8.`);
+  }
+
   const navItems: { key: AdminSection; label: string; icon: typeof LayoutDashboard }[] = [
     { key: 'overview', label: 'Tổng quan', icon: LayoutDashboard },
     { key: 'events', label: 'Quản lý sự kiện', icon: Calendar },
-    { key: 'registrations', label: 'Lượt đăng ký', icon: UserCheck },
+    { key: 'registrations', label: 'Khách & Check-in QR', icon: UserCheck },
     { key: 'users', label: 'Người dùng', icon: Users },
   ];
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
-      {/* Mobile Sidebar Backdrop */}
       {sidebarOpen && (
         <div
           className="fixed inset-0 z-40 bg-slate-900/40 lg:hidden"
@@ -360,7 +500,6 @@ export function AdminLayout({
 
       {/* Main Content Shell */}
       <div className="flex-1 min-w-0 flex flex-col">
-        {/* Top Header */}
         <header className="sticky top-0 z-30 h-16 bg-white border-b border-slate-200 px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
             <button
@@ -404,18 +543,33 @@ export function AdminLayout({
         </header>
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto space-y-6">
+          {permissionWarning && (
+            <div
+              role="alert"
+              className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3.5 text-sm text-amber-900"
+            >
+              <p className="font-semibold">
+                Cloud Firestore đang từ chối quyền truy cập ({permissionWarning})
+              </p>
+              <p className="mt-1 text-xs text-amber-800 leading-relaxed">
+                Hãy mở Firebase Console của dự án <strong>quan-ly-su-kien-86a89</strong> →{' '}
+                <strong>Firestore Database → Rules</strong> và cập nhật rules cho phép người dùng đã
+                đăng nhập đọc/ghi các collection <code>events</code>, <code>users</code>,{' '}
+                <code>registrations</code>, <code>feedbacks</code>.
+              </p>
+            </div>
+          )}
+
           {section === 'overview' && (
             <>
               {/* 4 KPI Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
                 <div className="bg-white border border-slate-200 rounded-xl p-5">
-                  <p className="text-xs font-medium text-slate-500">Tổng số sự kiện</p>
+                  <p className="text-xs font-medium text-slate-500">Tổng sự kiện</p>
                   <p className="mt-2 text-3xl font-bold text-slate-900 tabular-nums">
                     {stats.totalEvents}
                   </p>
-                  <p className="mt-1 text-xs text-slate-500 tabular-nums">
-                    {stats.activeEvents} sự kiện sắp &amp; đang diễn ra
-                  </p>
+                  <p className="mt-1 text-xs text-slate-500">Trên 5 nhóm danh mục</p>
                 </div>
 
                 <div className="bg-white border border-slate-200 rounded-xl p-5">
@@ -424,24 +578,26 @@ export function AdminLayout({
                     {stats.totalRegistrations}
                   </p>
                   <p className="mt-1 text-xs text-slate-500 tabular-nums">
-                    {stats.activeRegistrations} lượt hợp lệ
+                    {stats.activeRegistrationsCount} vé đang hiệu lực
                   </p>
                 </div>
 
                 <div className="bg-white border border-slate-200 rounded-xl p-5">
-                  <p className="text-xs font-medium text-slate-500">Tỷ lệ lấp đầy</p>
+                  <p className="text-xs font-medium text-slate-500">Tỷ lệ lấp đầy trung bình</p>
                   <p className="mt-2 text-3xl font-bold text-indigo-600 tabular-nums">
-                    {stats.fillRate}%
+                    {stats.avgFillRate}%
                   </p>
-                  <p className="mt-1 text-xs text-slate-500">Tính trên tổng sức chứa</p>
+                  <p className="mt-1 text-xs text-slate-500">Trung bình các sự kiện đang mở</p>
                 </div>
 
                 <div className="bg-white border border-slate-200 rounded-xl p-5">
-                  <p className="text-xs font-medium text-slate-500">Tài khoản hệ thống</p>
-                  <p className="mt-2 text-3xl font-bold text-slate-900 tabular-nums">
-                    {users.length}
+                  <p className="text-xs font-medium text-slate-500">Tỷ lệ Check-in thực tế</p>
+                  <p className="mt-2 text-3xl font-bold text-emerald-600 tabular-nums">
+                    {stats.checkInRate}%
                   </p>
-                  <p className="mt-1 text-xs text-slate-500">Quản trị viên &amp; thành viên</p>
+                  <p className="mt-1 text-xs text-slate-500 tabular-nums">
+                    {stats.attendedCount} khách đã qua cổng QR
+                  </p>
                 </div>
               </div>
 
@@ -452,8 +608,8 @@ export function AdminLayout({
                     Chưa có dữ liệu sự kiện để thống kê
                   </h2>
                   <p className="mt-1.5 text-sm text-slate-500 max-w-md mx-auto">
-                    Nhấn nút &ldquo;Tạo dữ liệu mẫu (Seed Data)&rdquo; ở thanh tiêu đề hoặc bên
-                    dưới để tự động thêm 6 sự kiện mẫu và 15 lượt đăng ký vào hệ thống.
+                    Nhấn nút &ldquo;Tạo dữ liệu mẫu (Seed Data)&rdquo; để sinh bộ dữ liệu 8 sự kiện
+                    đa dạng lĩnh vực kèm 20 vé đăng ký và đánh giá thực tế trên Firestore.
                   </p>
                   <button
                     type="button"
@@ -467,19 +623,22 @@ export function AdminLayout({
                 </div>
               ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                  {/* Capacity vs Registrations Bar Chart */}
+                  {/* Event Registrations vs Capacity Bar Chart */}
                   <div className="lg:col-span-7 bg-white border border-slate-200 rounded-xl p-6">
                     <div className="mb-4">
                       <h2 className="text-sm font-bold text-slate-900">
-                        Lượt đăng ký so với Sức chứa tối đa
+                        Lượt đăng ký theo từng sự kiện
                       </h2>
                       <p className="text-xs text-slate-500 mt-0.5">
-                        Thống kê theo từng sự kiện mới nhất
+                        So sánh số vé đã đặt và sức chứa tối đa
                       </p>
                     </div>
                     <div className="h-72 w-full">
                       <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={capacityChartData} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+                        <BarChart
+                          data={capacityChartData}
+                          margin={{ top: 8, right: 8, left: -12, bottom: 0 }}
+                        >
                           <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
                           <XAxis
                             dataKey="name"
@@ -517,38 +676,34 @@ export function AdminLayout({
                     </div>
                   </div>
 
-                  {/* Registration Status Breakdown */}
-                  <div className="lg:col-span-5 bg-white border border-slate-200 rounded-xl p-6">
-                    <div className="mb-4">
+                  {/* Category Distribution Donut Chart */}
+                  <div className="lg:col-span-5 bg-white border border-slate-200 rounded-xl p-6 flex flex-col justify-between">
+                    <div className="mb-2">
                       <h2 className="text-sm font-bold text-slate-900">
-                        Phân bố trạng thái đăng ký
+                        Lượt đăng ký theo Danh mục
                       </h2>
                       <p className="text-xs text-slate-500 mt-0.5">
-                        Tổng hợp toàn bộ {registrations.length} lượt đăng ký
+                        Phân bổ vé hợp lệ giữa các lĩnh vực sự kiện
                       </p>
                     </div>
-                    <div className="h-72 w-full">
+
+                    <div className="h-56 w-full">
                       <ResponsiveContainer width="100%" height="100%">
-                        <BarChart
-                          data={statusChartData}
-                          layout="vertical"
-                          margin={{ top: 8, right: 20, left: 10, bottom: 0 }}
-                        >
-                          <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" horizontal={false} />
-                          <XAxis
-                            type="number"
-                            tick={{ fontSize: 11, fill: '#64748B' }}
-                            axisLine={false}
-                            tickLine={false}
-                          />
-                          <YAxis
-                            type="category"
-                            dataKey="label"
-                            width={90}
-                            tick={{ fontSize: 12, fill: '#334155' }}
-                            axisLine={false}
-                            tickLine={false}
-                          />
+                        <PieChart>
+                          <Pie
+                            data={categoryChartData}
+                            dataKey="value"
+                            nameKey="name"
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={52}
+                            outerRadius={82}
+                            paddingAngle={3}
+                          >
+                            {categoryChartData.map((entry) => (
+                              <Cell key={entry.name} fill={entry.color} />
+                            ))}
+                          </Pie>
                           <Tooltip
                             contentStyle={{
                               backgroundColor: '#FFFFFF',
@@ -557,13 +712,28 @@ export function AdminLayout({
                               fontSize: '12px',
                             }}
                           />
-                          <Bar dataKey="value" name="Số lượng" radius={[0, 4, 4, 0]}>
-                            {statusChartData.map((entry) => (
-                              <Cell key={entry.key} fill={entry.color} />
-                            ))}
-                          </Bar>
-                        </BarChart>
+                        </PieChart>
                       </ResponsiveContainer>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 pt-2 border-t border-slate-100">
+                      {categoryChartData.map((entry) => (
+                        <div
+                          key={entry.name}
+                          className="flex items-center justify-between text-xs"
+                        >
+                          <span className="flex items-center gap-2 text-slate-700 truncate">
+                            <span
+                              className="w-2.5 h-2.5 rounded-xs shrink-0"
+                              style={{ backgroundColor: entry.color }}
+                            />
+                            <span className="truncate">{entry.name}</span>
+                          </span>
+                          <span className="font-semibold text-slate-900 tabular-nums">
+                            {entry.value}
+                          </span>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 </div>
@@ -573,25 +743,43 @@ export function AdminLayout({
 
           {section === 'events' && (
             <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-              <div className="p-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="relative w-full sm:w-80">
-                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="search"
-                    value={eventSearch}
-                    onChange={(e) => setEventSearch(e.target.value)}
-                    placeholder="Tìm tên sự kiện hoặc địa điểm..."
-                    className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-600"
-                  />
+              <div className="p-4 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                <div className="flex flex-col sm:flex-row gap-3 flex-1">
+                  <div className="relative w-full sm:w-72">
+                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="search"
+                      value={eventSearch}
+                      onChange={(e) => setEventSearch(e.target.value)}
+                      placeholder="Tìm tên sự kiện, địa điểm..."
+                      className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-600"
+                    />
+                  </div>
+                  <select
+                    aria-label="Lọc danh mục sự kiện"
+                    value={eventCategoryFilter}
+                    onChange={(e) =>
+                      setEventCategoryFilter(e.target.value as 'all' | EventCategory)
+                    }
+                    className="px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-600"
+                  >
+                    <option value="all">Tất cả danh mục</option>
+                    {EVENT_CATEGORIES.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
                 </div>
+
                 <span className="text-xs text-slate-500 tabular-nums">
-                  Hiển thị {filteredEvents.length} sự kiện
+                  {filteredEvents.length} sự kiện
                 </span>
               </div>
 
               {filteredEvents.length === 0 ? (
                 <div className="p-10 text-center text-sm text-slate-500">
-                  Chưa có sự kiện nào. Hãy bấm &ldquo;Tạo sự kiện&rdquo; hoặc &ldquo;Tạo dữ liệu mẫu (Seed Data)&rdquo;.
+                  Chưa có sự kiện phù hợp. Hãy bấm &ldquo;Tạo sự kiện&rdquo; hoặc &ldquo;Tạo dữ liệu mẫu (Seed Data)&rdquo;.
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -599,86 +787,112 @@ export function AdminLayout({
                     <thead>
                       <tr className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-600">
                         <th className="py-3 px-4">Sự kiện</th>
-                        <th className="py-3 px-4">Địa điểm</th>
+                        <th className="py-3 px-4">Danh mục</th>
+                        <th className="py-3 px-4">Giá vé</th>
                         <th className="py-3 px-4">Bắt đầu</th>
                         <th className="py-3 px-4 text-right">Đăng ký / Tối đa</th>
-                        <th className="py-3 px-4">Trạng thái</th>
+                        <th className="py-3 px-4">Đổi trạng thái nhanh</th>
                         <th className="py-3 px-4 text-right">Thao tác</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-sm">
-                      {filteredEvents.map((ev) => {
-                        const statusMeta = EVENT_STATUS_META[ev.status];
-                        return (
-                          <tr key={ev.id} className="hover:bg-slate-50/70">
-                            <td className="py-3 px-4">
-                              <div className="flex items-center gap-3 min-w-[220px]">
-                                <EventBanner
-                                  src={ev.bannerUrl}
-                                  alt={ev.title}
-                                  className="w-14 h-9 rounded-md shrink-0"
-                                />
-                                <span className="font-semibold text-slate-900 line-clamp-1">
+                      {filteredEvents.map((ev) => (
+                        <tr key={ev.id} className="hover:bg-slate-50/70">
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-3 min-w-[230px]">
+                              <EventBanner
+                                src={ev.bannerUrl}
+                                alt={ev.title}
+                                className="w-14 h-9 rounded-md shrink-0"
+                              />
+                              <div className="min-w-0">
+                                <div className="font-semibold text-slate-900 line-clamp-1">
                                   {ev.title}
-                                </span>
+                                </div>
+                                <div className="text-xs text-slate-500 truncate max-w-[220px]">
+                                  {ev.location}
+                                </div>
                               </div>
-                            </td>
-                            <td className="py-3 px-4 text-slate-600 max-w-[200px] truncate">
-                              {ev.location}
-                            </td>
-                            <td className="py-3 px-4 text-slate-600 tabular-nums whitespace-nowrap">
-                              {formatShortDateVN(ev.startTime)}
-                            </td>
-                            <td className="py-3 px-4 text-right font-mono text-xs font-semibold text-slate-800 tabular-nums">
-                              {ev.registeredCount}/{ev.maxSlots}
-                            </td>
-                            <td className="py-3 px-4 whitespace-nowrap">
-                              <span className={`text-xs font-semibold ${statusMeta.textClass}`}>
-                                {statusMeta.label}
-                              </span>
-                            </td>
-                            <td className="py-3 px-4 text-right whitespace-nowrap">
-                              <div className="inline-flex items-center gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => openEditModal(ev)}
-                                  className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-md cursor-pointer"
-                                  title="Chỉnh sửa"
-                                >
-                                  <Edit3 className="w-4 h-4" />
-                                </button>
-                                {deleteTargetId === ev.id ? (
-                                  <div className="inline-flex items-center gap-1">
-                                    <button
-                                      type="button"
-                                      onClick={() => handleConfirmDelete(ev.id)}
-                                      className="px-2 py-1 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded cursor-pointer"
-                                    >
-                                      Xóa
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => setDeleteTargetId(null)}
-                                      className="px-2 py-1 text-xs font-medium text-slate-600 bg-slate-100 rounded cursor-pointer"
-                                    >
-                                      Hủy
-                                    </button>
-                                  </div>
-                                ) : (
+                            </div>
+                          </td>
+                          <td className="py-3 px-4 text-xs font-medium text-slate-700 whitespace-nowrap">
+                            {ev.category}
+                          </td>
+                          <td className="py-3 px-4 text-xs font-semibold text-slate-900 tabular-nums whitespace-nowrap">
+                            {formatCurrencyVN(ev.price)}
+                          </td>
+                          <td className="py-3 px-4 text-xs text-slate-600 tabular-nums whitespace-nowrap">
+                            {formatShortDateVN(ev.startTime)}
+                          </td>
+                          <td className="py-3 px-4 text-right font-mono text-xs font-semibold text-slate-800 tabular-nums">
+                            {ev.registeredCount}/{ev.maxSlots}
+                          </td>
+                          <td className="py-3 px-4 whitespace-nowrap">
+                            <select
+                              aria-label={`Trạng thái sự kiện ${ev.title}`}
+                              value={ev.status}
+                              onChange={(e) =>
+                                handleQuickEventStatus(ev.id, e.target.value as EventStatus)
+                              }
+                              className={`px-2.5 py-1.5 text-xs font-semibold bg-white border border-slate-200 rounded-md focus:outline-none focus:border-indigo-600 cursor-pointer ${
+                                EVENT_STATUS_META[ev.status].textClass
+                              }`}
+                            >
+                              <option value="ongoing">Đang mở đăng ký</option>
+                              <option value="upcoming">Sắp diễn ra</option>
+                              <option value="completed">Đã kết thúc</option>
+                              <option value="cancelled">Đã hủy</option>
+                            </select>
+                          </td>
+                          <td className="py-3 px-4 text-right whitespace-nowrap">
+                            <div className="inline-flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => handleDuplicateEvent(ev)}
+                                className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-md cursor-pointer"
+                                title="Nhân bản sự kiện"
+                              >
+                                <Copy className="w-4 h-4" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => openEditModal(ev)}
+                                className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-md cursor-pointer"
+                                title="Chỉnh sửa"
+                              >
+                                <Edit3 className="w-4 h-4" />
+                              </button>
+                              {deleteTargetId === ev.id ? (
+                                <div className="inline-flex items-center gap-1">
                                   <button
                                     type="button"
-                                    onClick={() => setDeleteTargetId(ev.id)}
-                                    className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-md cursor-pointer"
-                                    title="Xóa sự kiện"
+                                    onClick={() => handleConfirmDelete(ev.id)}
+                                    className="px-2 py-1 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded cursor-pointer"
                                   >
-                                    <Trash2 className="w-4 h-4" />
+                                    Xóa
                                   </button>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
+                                  <button
+                                    type="button"
+                                    onClick={() => setDeleteTargetId(null)}
+                                    className="px-2 py-1 text-xs font-medium text-slate-600 bg-slate-100 rounded cursor-pointer"
+                                  >
+                                    Hủy
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setDeleteTargetId(ev.id)}
+                                  className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-md cursor-pointer"
+                                  title="Xóa sự kiện"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>
@@ -687,105 +901,214 @@ export function AdminLayout({
           )}
 
           {section === 'registrations' && (
-            <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-              <div className="p-4 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-3">
-                <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-lg overflow-x-auto">
-                  {(
-                    [
-                      { key: 'all', label: 'Tất cả' },
-                      { key: 'pending', label: 'Chờ duyệt' },
-                      { key: 'confirmed', label: 'Đã xác nhận' },
-                      { key: 'attended', label: 'Đã tham dự' },
-                      { key: 'cancelled', label: 'Đã hủy' },
-                    ] as const
-                  ).map((tab) => (
+            <div className="space-y-5">
+              {/* Interactive QR Code Check-in Simulator Panel */}
+              <div className="bg-white border border-indigo-200 rounded-xl p-5 space-y-4">
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                      <QrCode className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h2 className="text-sm font-bold text-slate-900">
+                        Bộ giả lập Quét mã QR / Check-in nhanh bằng mã vé
+                      </h2>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Nhập mã vé (ví dụ <code className="font-mono">EF-8421-TECH</code>) hoặc dán
+                        nội dung JSON từ mã QR của khách để xác thực và ghi nhận thời gian check-in
+                        lên Firestore.
+                      </p>
+                    </div>
+                  </div>
+
+                  <form onSubmit={handleQrCheckIn} className="flex gap-2 w-full lg:w-auto">
+                    <input
+                      type="text"
+                      value={qrInput}
+                      onChange={(e) => setQrInput(e.target.value)}
+                      placeholder="Nhập mã vé EF-XXXX-XXXX..."
+                      className="flex-1 lg:w-64 px-3.5 py-2 text-sm font-mono border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-600"
+                    />
                     <button
-                      key={tab.key}
-                      type="button"
-                      onClick={() => setRegStatusFilter(tab.key)}
-                      className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors whitespace-nowrap cursor-pointer ${
-                        regStatusFilter === tab.key
-                          ? 'bg-white text-slate-900 shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
+                      type="submit"
+                      disabled={checkingInQr || !qrInput.trim()}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg cursor-pointer disabled:opacity-50 whitespace-nowrap shrink-0"
                     >
-                      {tab.label}
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>{checkingInQr ? 'Đang xử lý...' : 'Check-in QR'}</span>
                     </button>
-                  ))}
+                  </form>
                 </div>
 
-                <div className="relative w-full md:w-72">
-                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="search"
-                    value={regSearch}
-                    onChange={(e) => setRegSearch(e.target.value)}
-                    placeholder="Tìm khách, email, sự kiện..."
-                    className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-600"
-                  />
-                </div>
+                {sampleTicketCodes.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100 text-xs">
+                    <span className="text-slate-500 font-medium">
+                      Mã vé chờ check-in (bấm để thử nhanh):
+                    </span>
+                    {sampleTicketCodes.map((r) => (
+                      <button
+                        key={r.id}
+                        type="button"
+                        onClick={() => setQrInput(r.ticketCode)}
+                        className="px-2.5 py-1 font-mono font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-md cursor-pointer"
+                      >
+                        {r.ticketCode} ({r.guestName})
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
-              {filteredRegistrations.length === 0 ? (
-                <div className="p-10 text-center text-sm text-slate-500">
-                  Không tìm thấy lượt đăng ký phù hợp.
+              {/* Attendees Filter & Export Toolbar */}
+              <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+                <div className="p-4 border-b border-slate-200 flex flex-col xl:flex-row xl:items-center justify-between gap-3">
+                  <div className="flex flex-col sm:flex-row flex-wrap gap-2.5">
+                    <select
+                      aria-label="Lọc theo sự kiện"
+                      value={regEventFilter}
+                      onChange={(e) => setRegEventFilter(e.target.value)}
+                      className="px-3 py-2 text-xs font-medium bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-600 max-w-xs"
+                    >
+                      <option value="all">Tất cả sự kiện ({events.length})</option>
+                      {events.map((ev) => (
+                        <option key={ev.id} value={ev.id}>
+                          {ev.title}
+                        </option>
+                      ))}
+                    </select>
+
+                    <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-lg overflow-x-auto">
+                      {(
+                        [
+                          { key: 'all', label: 'Tất cả' },
+                          { key: 'confirmed', label: 'Đã xác nhận' },
+                          { key: 'attended', label: 'Đã tham dự' },
+                          { key: 'pending', label: 'Chờ duyệt' },
+                          { key: 'cancelled', label: 'Đã hủy' },
+                        ] as const
+                      ).map((tab) => (
+                        <button
+                          key={tab.key}
+                          type="button"
+                          onClick={() => setRegStatusFilter(tab.key)}
+                          className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-colors whitespace-nowrap cursor-pointer ${
+                            regStatusFilter === tab.key
+                              ? 'bg-white text-slate-900 shadow-xs'
+                              : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          {tab.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-2.5">
+                    <div className="relative w-full sm:w-64">
+                      <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="search"
+                        value={regSearch}
+                        onChange={(e) => setRegSearch(e.target.value)}
+                        placeholder="Tìm tên, email, mã vé..."
+                        className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-600"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleExportCsv}
+                      className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-lg transition-colors cursor-pointer whitespace-nowrap shrink-0"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Xuất Excel / CSV (UTF-8)</span>
+                    </button>
+                  </div>
                 </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-600">
-                        <th className="py-3 px-4">Khách tham dự</th>
-                        <th className="py-3 px-4">Sự kiện</th>
-                        <th className="py-3 px-4">Thời gian ĐK</th>
-                        <th className="py-3 px-4">Trạng thái</th>
-                        <th className="py-3 px-4 text-right">Cập nhật</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 text-sm">
-                      {filteredRegistrations.map((reg) => {
-                        const statusMeta = REGISTRATION_STATUS_META[reg.status];
-                        return (
-                          <tr key={reg.id} className="hover:bg-slate-50/70">
-                            <td className="py-3 px-4">
-                              <div className="font-semibold text-slate-900">{reg.guestName}</div>
-                              <div className="text-xs text-slate-500">
-                                {reg.guestEmail} · {reg.guestPhone}
-                              </div>
-                            </td>
-                            <td className="py-3 px-4 text-slate-700 max-w-[240px] truncate">
-                              {reg.eventTitle}
-                            </td>
-                            <td className="py-3 px-4 text-slate-500 tabular-nums whitespace-nowrap">
-                              {formatDateTimeVN(reg.registeredAt)}
-                            </td>
-                            <td className="py-3 px-4 whitespace-nowrap">
-                              <span className={`text-xs font-semibold ${statusMeta.textClass}`}>
-                                {statusMeta.label}
-                              </span>
-                            </td>
-                            <td className="py-3 px-4 text-right whitespace-nowrap">
-                              <select
-                                aria-label={`Trạng thái đăng ký của ${reg.guestName}`}
-                                value={reg.status}
-                                onChange={(e) =>
-                                  handleStatusChange(reg, e.target.value as RegistrationStatus)
-                                }
-                                className="px-2.5 py-1.5 text-xs font-medium bg-white border border-slate-200 rounded-md focus:outline-none focus:border-indigo-600 cursor-pointer"
-                              >
-                                <option value="pending">Chờ duyệt</option>
-                                <option value="confirmed">Đã xác nhận</option>
-                                <option value="attended">Đã tham dự</option>
-                                <option value="cancelled">Đã hủy</option>
-                              </select>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+
+                {filteredRegistrations.length === 0 ? (
+                  <div className="p-10 text-center text-sm text-slate-500">
+                    Không tìm thấy lượt đăng ký phù hợp.
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-600">
+                          <th className="py-3 px-4">Mã vé</th>
+                          <th className="py-3 px-4">Khách tham dự</th>
+                          <th className="py-3 px-4">Sự kiện &amp; Hạng vé</th>
+                          <th className="py-3 px-4">Trạng thái / Check-in</th>
+                          <th className="py-3 px-4 text-right">Thao tác</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 text-sm">
+                        {filteredRegistrations.map((reg) => {
+                          const statusMeta = REGISTRATION_STATUS_META[reg.status];
+                          return (
+                            <tr key={reg.id} className="hover:bg-slate-50/70">
+                              <td className="py-3 px-4 font-mono text-xs font-bold text-slate-800 whitespace-nowrap">
+                                {reg.ticketCode}
+                              </td>
+                              <td className="py-3 px-4">
+                                <div className="font-semibold text-slate-900">{reg.guestName}</div>
+                                <div className="text-xs text-slate-500">
+                                  {reg.guestEmail} · {reg.guestPhone}
+                                </div>
+                              </td>
+                              <td className="py-3 px-4">
+                                <div className="text-slate-800 font-medium max-w-[240px] truncate">
+                                  {reg.eventTitle}
+                                </div>
+                                <div className="text-xs text-slate-500 tabular-nums">
+                                  {reg.ticketTier === 'vip' ? 'VIP' : 'Tiêu chuẩn'} ·{' '}
+                                  {formatCurrencyVN(reg.ticketPrice)}
+                                </div>
+                              </td>
+                              <td className="py-3 px-4 whitespace-nowrap">
+                                <div className={`text-xs font-semibold ${statusMeta.textClass}`}>
+                                  {statusMeta.label}
+                                </div>
+                                <div className="text-[11px] text-slate-400 tabular-nums">
+                                  {reg.checkedInAt
+                                    ? `Check-in: ${formatDateTimeVN(reg.checkedInAt)}`
+                                    : `ĐK: ${formatShortDateVN(reg.registeredAt)}`}
+                                </div>
+                              </td>
+                              <td className="py-3 px-4 text-right whitespace-nowrap">
+                                <div className="inline-flex items-center gap-2">
+                                  {(reg.status === 'confirmed' || reg.status === 'pending') && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleStatusChange(reg, 'attended')}
+                                      className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-md cursor-pointer"
+                                    >
+                                      <CheckCircle2 className="w-3.5 h-3.5" />
+                                      <span>Check-in</span>
+                                    </button>
+                                  )}
+                                  <select
+                                    aria-label={`Trạng thái vé ${reg.ticketCode}`}
+                                    value={reg.status}
+                                    onChange={(e) =>
+                                      handleStatusChange(reg, e.target.value as RegistrationStatus)
+                                    }
+                                    className="px-2 py-1.5 text-xs font-medium bg-white border border-slate-200 rounded-md focus:outline-none focus:border-indigo-600 cursor-pointer"
+                                  >
+                                    <option value="pending">Chờ duyệt</option>
+                                    <option value="confirmed">Đã xác nhận</option>
+                                    <option value="attended">Đã tham dự</option>
+                                    <option value="cancelled">Đã hủy</option>
+                                  </select>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -840,7 +1163,7 @@ export function AdminLayout({
         </main>
       </div>
 
-      {/* Create / Edit Event Modal (No Firebase Storage, uses URL + 5 preset banners) */}
+      {/* Create / Edit Event Modal with Category, Pricing, Speakers & Agenda Builder */}
       {eventModalOpen && (
         <div
           className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4"
@@ -848,8 +1171,8 @@ export function AdminLayout({
           aria-modal="true"
           aria-labelledby="admin-event-modal-title"
         >
-          <div className="bg-white border border-slate-200 rounded-2xl max-w-2xl w-full max-h-[92vh] overflow-y-auto">
-            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-3xl w-full max-h-[92vh] overflow-y-auto">
+            <div className="sticky top-0 z-10 bg-white px-6 py-4 border-b border-slate-200 flex items-center justify-between">
               <h2 id="admin-event-modal-title" className="text-lg font-bold text-slate-900">
                 {editingEventId ? 'Chỉnh sửa sự kiện' : 'Tạo sự kiện mới'}
               </h2>
@@ -862,19 +1185,39 @@ export function AdminLayout({
               </button>
             </div>
 
-            <form onSubmit={handleSaveEvent} className="p-6 space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                  Tên sự kiện
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={formState.title}
-                  onChange={(e) => setFormState((s) => ({ ...s, title: e.target.value }))}
-                  placeholder="Ví dụ: Hội thảo AI & Cloud 2026"
-                  className="w-full px-3.5 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-600"
-                />
+            <form onSubmit={handleSaveEvent} className="p-6 space-y-5">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                    Tên sự kiện
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formState.title}
+                    onChange={(e) => setFormState((s) => ({ ...s, title: e.target.value }))}
+                    placeholder="Ví dụ: Hội thảo AI & Cloud 2026"
+                    className="w-full px-3.5 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-600"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                    Danh mục
+                  </label>
+                  <select
+                    value={formState.category}
+                    onChange={(e) =>
+                      setFormState((s) => ({ ...s, category: e.target.value as EventCategory }))
+                    }
+                    className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-600"
+                  >
+                    {EVENT_CATEGORIES.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               <div>
@@ -886,12 +1229,12 @@ export function AdminLayout({
                   required
                   value={formState.description}
                   onChange={(e) => setFormState((s) => ({ ...s, description: e.target.value }))}
-                  placeholder="Nội dung chính, đối tượng tham dự, diễn giả..."
+                  placeholder="Nội dung chính, đối tượng tham dự, giá trị nhận được..."
                   className="w-full px-3.5 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-600"
                 />
               </div>
 
-              {/* Banner URL + 5 Preset Picker */}
+              {/* Banner URL + 6 Preset Picker */}
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                   Ảnh bìa sự kiện (URL hoặc chọn nhanh mẫu có sẵn)
@@ -908,7 +1251,7 @@ export function AdminLayout({
                   />
                 </div>
 
-                <div className="mt-2.5 grid grid-cols-2 sm:grid-cols-5 gap-2">
+                <div className="mt-2.5 grid grid-cols-3 sm:grid-cols-6 gap-2">
                   {DEFAULT_EVENT_BANNERS.map((preset) => {
                     const selected = formState.bannerUrl === preset.url;
                     return (
@@ -941,18 +1284,31 @@ export function AdminLayout({
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                  Địa điểm tổ chức
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={formState.location}
-                  onChange={(e) => setFormState((s) => ({ ...s, location: e.target.value }))}
-                  placeholder="Địa chỉ hội trường hoặc link trực tuyến"
-                  className="w-full px-3.5 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-600"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                    Địa điểm tổ chức
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formState.location}
+                    onChange={(e) => setFormState((s) => ({ ...s, location: e.target.value }))}
+                    className="w-full px-3.5 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-600"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                    Đơn vị tổ chức
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formState.organizer}
+                    onChange={(e) => setFormState((s) => ({ ...s, organizer: e.target.value }))}
+                    className="w-full px-3.5 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-600"
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -982,10 +1338,40 @@ export function AdminLayout({
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                    Số lượng chỗ tối đa
+                    Giá vé tiêu chuẩn (VNĐ)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    step={1000}
+                    value={formState.price}
+                    onChange={(e) =>
+                      setFormState((s) => ({ ...s, price: Number(e.target.value) || 0 }))
+                    }
+                    className="w-full px-3.5 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-600 tabular-nums"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                    Giá vé VIP (0 = tắt)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    step={1000}
+                    value={formState.vipPrice || 0}
+                    onChange={(e) =>
+                      setFormState((s) => ({ ...s, vipPrice: Number(e.target.value) || 0 }))
+                    }
+                    className="w-full px-3.5 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-600 tabular-nums"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                    Sức chứa tối đa
                   </label>
                   <input
                     type="number"
@@ -1008,14 +1394,159 @@ export function AdminLayout({
                     onChange={(e) =>
                       setFormState((s) => ({ ...s, status: e.target.value as EventStatus }))
                     }
-                    className="w-full px-3.5 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-600"
+                    className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-600"
                   >
+                    <option value="ongoing">Đang mở đăng ký</option>
                     <option value="upcoming">Sắp diễn ra</option>
-                    <option value="ongoing">Đang diễn ra</option>
                     <option value="completed">Đã kết thúc</option>
                     <option value="cancelled">Đã hủy</option>
                   </select>
                 </div>
+              </div>
+
+              {/* Speakers Builder */}
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-800">
+                    Diễn giả / Khách mời
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFormState((s) => ({
+                        ...s,
+                        speakers: [...s.speakers, { name: '', role: '' }],
+                      }))
+                    }
+                    className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 cursor-pointer"
+                  >
+                    + Thêm diễn giả
+                  </button>
+                </div>
+
+                {formState.speakers.map((sp, idx) => (
+                  <div key={idx} className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
+                    <input
+                      type="text"
+                      value={sp.name}
+                      onChange={(e) => {
+                        const next = [...formState.speakers];
+                        next[idx] = { ...next[idx], name: e.target.value };
+                        setFormState((s) => ({ ...s, speakers: next }));
+                      }}
+                      placeholder="Tên diễn giả"
+                      className="sm:col-span-5 px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-md"
+                    />
+                    <input
+                      type="text"
+                      value={sp.role}
+                      onChange={(e) => {
+                        const next = [...formState.speakers];
+                        next[idx] = { ...next[idx], role: e.target.value };
+                        setFormState((s) => ({ ...s, speakers: next }));
+                      }}
+                      placeholder="Chức danh / Đơn vị"
+                      className="sm:col-span-6 px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-md"
+                    />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setFormState((s) => ({
+                          ...s,
+                          speakers: s.speakers.filter((_, i) => i !== idx),
+                        }))
+                      }
+                      className="sm:col-span-1 p-1.5 text-slate-400 hover:text-rose-600 cursor-pointer"
+                      aria-label="Xóa diễn giả"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              {/* Agenda Builder */}
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-800">
+                    Lịch trình chi tiết (Agenda)
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFormState((s) => ({
+                        ...s,
+                        agenda: [...s.agenda, { time: '', title: '', speaker: '' }],
+                      }))
+                    }
+                    className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 cursor-pointer"
+                  >
+                    + Thêm mốc giờ
+                  </button>
+                </div>
+
+                {formState.agenda.map((item, idx) => (
+                  <div key={idx} className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
+                    <input
+                      type="text"
+                      value={item.time}
+                      onChange={(e) => {
+                        const next = [...formState.agenda];
+                        next[idx] = { ...next[idx], time: e.target.value };
+                        setFormState((s) => ({ ...s, agenda: next }));
+                      }}
+                      placeholder="09:00 - 10:30"
+                      className="sm:col-span-3 px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-md"
+                    />
+                    <input
+                      type="text"
+                      value={item.title}
+                      onChange={(e) => {
+                        const next = [...formState.agenda];
+                        next[idx] = { ...next[idx], title: e.target.value };
+                        setFormState((s) => ({ ...s, agenda: next }));
+                      }}
+                      placeholder="Nội dung phiên"
+                      className="sm:col-span-5 px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-md"
+                    />
+                    <input
+                      type="text"
+                      value={item.speaker || ''}
+                      onChange={(e) => {
+                        const next = [...formState.agenda];
+                        next[idx] = { ...next[idx], speaker: e.target.value };
+                        setFormState((s) => ({ ...s, agenda: next }));
+                      }}
+                      placeholder="Diễn giả (tùy chọn)"
+                      className="sm:col-span-3 px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-md"
+                    />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setFormState((s) => ({
+                          ...s,
+                          agenda: s.agenda.filter((_, i) => i !== idx),
+                        }))
+                      }
+                      className="sm:col-span-1 p-1.5 text-slate-400 hover:text-rose-600 cursor-pointer"
+                      aria-label="Xóa mốc giờ"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  Quy định tham gia
+                </label>
+                <input
+                  type="text"
+                  value={formState.rules}
+                  onChange={(e) => setFormState((s) => ({ ...s, rules: e.target.value }))}
+                  className="w-full px-3.5 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-600"
+                />
               </div>
 
               <div className="pt-4 border-t border-slate-200 flex items-center justify-end gap-3">

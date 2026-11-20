@@ -7,10 +7,11 @@ import {
   logoutAccount,
   subscribeAuthUser,
   subscribeEvents,
+  subscribeFeedbacks,
   subscribeRegistrations,
   subscribeUsers,
 } from './services/dataService';
-import type { AppUser, EventItem, RegistrationItem } from './types';
+import type { AppUser, EventItem, FeedbackItem, RegistrationItem } from './types';
 
 interface ToastState {
   id: number;
@@ -27,6 +28,8 @@ export default function App() {
   const [events, setEvents] = useState<EventItem[]>([]);
   const [registrations, setRegistrations] = useState<RegistrationItem[]>([]);
   const [users, setUsers] = useState<AppUser[]>([]);
+  const [feedbacks, setFeedbacks] = useState<FeedbackItem[]>([]);
+  const [permissionWarning, setPermissionWarning] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
 
   function showToast(message: string, type: 'success' | 'error' = 'success') {
@@ -34,37 +37,71 @@ export default function App() {
     setToast({ id, message, type });
     window.setTimeout(() => {
       setToast((prev) => (prev?.id === id ? null : prev));
-    }, 4000);
+    }, 4500);
   }
 
   useEffect(() => {
     const unsubAuth = subscribeAuthUser((user) => {
       setCurrentUser(user);
       setAuthReady(true);
+      setPermissionWarning(null);
       if (user) {
         setGuestMode(false);
         setPortalView(user.role === 'admin' ? 'admin' : 'user');
+      } else {
+        setEvents([]);
+        setRegistrations([]);
+        setUsers([]);
+        setFeedbacks([]);
       }
     });
     return () => unsubAuth();
   }, []);
 
   useEffect(() => {
-    const unsubEvents = subscribeEvents(setEvents);
-    const unsubRegs = subscribeRegistrations(setRegistrations);
-    const unsubUsers = subscribeUsers(setUsers);
+    if (!authReady) return;
+    if (!currentUser && !guestMode) return;
+
+    const handlePermissionError = (msg: string) => {
+      setPermissionWarning(msg);
+    };
+
+    const unsubEvents = subscribeEvents(setEvents, handlePermissionError);
+    const unsubFeedbacks = subscribeFeedbacks(setFeedbacks);
+
+    let unsubRegs: (() => void) | undefined;
+    let unsubUsers: (() => void) | undefined;
+
+    if (currentUser) {
+      unsubRegs = subscribeRegistrations(
+        { userId: currentUser.uid, role: currentUser.role },
+        setRegistrations,
+        handlePermissionError
+      );
+      if (currentUser.role === 'admin') {
+        unsubUsers = subscribeUsers(setUsers, handlePermissionError);
+      } else {
+        setUsers([]);
+      }
+    } else {
+      setRegistrations([]);
+      setUsers([]);
+    }
+
     return () => {
       unsubEvents();
-      unsubRegs();
-      unsubUsers();
+      unsubFeedbacks();
+      unsubRegs?.();
+      unsubUsers?.();
     };
-  }, []);
+  }, [authReady, currentUser, guestMode]);
 
   async function handleLogout() {
     try {
       await logoutAccount();
       setGuestMode(false);
       setPortalView('user');
+      setPermissionWarning(null);
       showToast('Đã đăng xuất khỏi hệ thống.');
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Lỗi khi đăng xuất.', 'error');
@@ -90,6 +127,7 @@ export default function App() {
           events={events}
           registrations={registrations}
           users={users}
+          permissionWarning={permissionWarning}
           onSwitchToUser={() => setPortalView('user')}
           onLogout={handleLogout}
           onNotify={showToast}
@@ -99,6 +137,8 @@ export default function App() {
           currentUser={currentUser}
           events={events}
           registrations={registrations}
+          feedbacks={feedbacks}
+          permissionWarning={permissionWarning}
           onSwitchToAdmin={
             currentUser?.role === 'admin' ? () => setPortalView('admin') : undefined
           }

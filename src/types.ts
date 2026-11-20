@@ -9,7 +9,20 @@ export interface AppUser {
   createdAt: string;
 }
 
+export type EventCategory = 'Công nghệ' | 'Workshop' | 'Âm nhạc' | 'Hội thảo' | 'Thể thao';
+
 export type EventStatus = 'upcoming' | 'ongoing' | 'completed' | 'cancelled';
+
+export interface AgendaItem {
+  time: string;
+  title: string;
+  speaker?: string;
+}
+
+export interface SpeakerInfo {
+  name: string;
+  role: string;
+}
 
 export interface EventItem {
   id: string;
@@ -22,8 +35,17 @@ export interface EventItem {
   maxSlots: number;
   registeredCount: number;
   status: EventStatus;
+  category: EventCategory;
+  price: number;
+  vipPrice?: number;
+  organizer: string;
+  speakers: SpeakerInfo[];
+  agenda: AgendaItem[];
+  rules: string;
   createdAt: string;
 }
+
+export type TicketTier = 'standard' | 'vip';
 
 export type RegistrationStatus = 'pending' | 'confirmed' | 'attended' | 'cancelled';
 
@@ -36,8 +58,23 @@ export interface RegistrationItem {
   guestEmail: string;
   guestPhone: string;
   note: string;
+  ticketCode: string;
+  ticketTier: TicketTier;
+  ticketPrice: number;
   status: RegistrationStatus;
   registeredAt: string;
+  checkedInAt?: string | null;
+}
+
+export interface FeedbackItem {
+  id: string;
+  eventId: string;
+  eventTitle: string;
+  userId: string;
+  userName: string;
+  rating: number;
+  comment: string;
+  createdAt: string;
 }
 
 export interface EventFormInput {
@@ -49,6 +86,13 @@ export interface EventFormInput {
   endTime: string;
   maxSlots: number;
   status: EventStatus;
+  category: EventCategory;
+  price: number;
+  vipPrice?: number;
+  organizer: string;
+  speakers: SpeakerInfo[];
+  agenda: AgendaItem[];
+  rules: string;
 }
 
 export interface RegistrationInput {
@@ -59,4 +103,6 @@ export interface RegistrationInput {
   guestEmail: string;
   guestPhone: string;
   note: string;
+  ticketTier: TicketTier;
+  ticketPrice: number;
 }
