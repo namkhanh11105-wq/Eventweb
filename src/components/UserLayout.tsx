@@ -238,12 +238,13 @@ export function UserLayout({
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
       {/* Top Navigation Bar */}
-      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-sm border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4 lg:gap-8">
+      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-sm border-b border-slate-200/80">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-6">
+          {/* Zone 1: Brand */}
           <button
             type="button"
             onClick={() => setActiveTab('discover')}
-            className="inline-flex items-center gap-2 text-lg font-bold tracking-tight text-slate-900 whitespace-nowrap shrink-0 cursor-pointer"
+            className="inline-flex items-center gap-2.5 text-base font-bold tracking-tight text-slate-900 whitespace-nowrap shrink-0 cursor-pointer"
           >
             <span className="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center">
               <CalendarDays className="w-4 h-4" />
@@ -251,30 +252,15 @@ export function UserLayout({
             <span>EventFlow</span>
           </button>
 
-          {/* Header Quick Search */}
-          <div className="hidden xl:block relative flex-1 max-w-xs">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="search"
-              value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                if (activeTab !== 'discover') setActiveTab('discover');
-              }}
-              placeholder="Tìm sự kiện đang mở..."
-              className="w-full pl-9 pr-3 py-1.5 text-sm bg-slate-100/80 border border-slate-200 rounded-lg text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:border-indigo-600"
-            />
-          </div>
-
-          {/* Nav Links */}
-          <nav className="hidden md:flex items-center gap-5 text-sm font-medium">
+          {/* Zone 2: Clean Single-line Nav Links */}
+          <nav className="hidden md:flex items-center gap-6 text-sm font-medium">
             <button
               type="button"
               onClick={() => setActiveTab('discover')}
-              className={`whitespace-nowrap shrink-0 pb-0.5 transition-colors cursor-pointer ${
+              className={`h-16 inline-flex items-center border-b-2 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
                 activeTab === 'discover'
-                  ? 'text-indigo-600 font-semibold border-b-2 border-indigo-600'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'border-indigo-600 text-indigo-600 font-semibold'
+                  : 'border-transparent text-slate-600 hover:text-slate-900'
               }`}
             >
               Khám phá
@@ -282,14 +268,14 @@ export function UserLayout({
             <button
               type="button"
               onClick={() => scrollToSection('dich-vu-noi-bat')}
-              className="whitespace-nowrap shrink-0 text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
+              className="h-16 inline-flex items-center border-b-2 border-transparent text-slate-600 hover:text-slate-900 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             >
               Dịch vụ
             </button>
             <button
               type="button"
               onClick={() => scrollToSection('lien-he-admin')}
-              className="whitespace-nowrap shrink-0 text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
+              className="h-16 inline-flex items-center border-b-2 border-transparent text-slate-600 hover:text-slate-900 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             >
               Liên hệ
             </button>
@@ -297,20 +283,20 @@ export function UserLayout({
               <button
                 type="button"
                 onClick={() => setActiveTab('tickets')}
-                className={`whitespace-nowrap shrink-0 pb-0.5 transition-colors cursor-pointer ${
+                className={`h-16 inline-flex items-center border-b-2 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
                   activeTab === 'tickets'
-                    ? 'text-indigo-600 font-semibold border-b-2 border-indigo-600'
-                    : 'text-slate-600 hover:text-slate-900'
+                    ? 'border-indigo-600 text-indigo-600 font-semibold'
+                    : 'border-transparent text-slate-600 hover:text-slate-900'
                 }`}
               >
-                Sự kiện đã đăng ký ({myRegistrations.length})
+                Đã đăng ký ({myRegistrations.length})
               </button>
             )}
             {onSwitchToOrganizer && (
               <button
                 type="button"
                 onClick={onSwitchToOrganizer}
-                className="whitespace-nowrap shrink-0 text-sky-700 hover:text-sky-800 font-semibold transition-colors cursor-pointer"
+                className="h-16 inline-flex items-center border-b-2 border-transparent text-sky-700 hover:text-sky-800 font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer"
               >
                 Cổng Tổ chức
               </button>
@@ -319,22 +305,25 @@ export function UserLayout({
               <button
                 type="button"
                 onClick={onSwitchToAdmin}
-                className="whitespace-nowrap shrink-0 text-indigo-700 hover:text-indigo-800 font-semibold transition-colors cursor-pointer"
+                className="h-16 inline-flex items-center border-b-2 border-transparent text-indigo-700 hover:text-indigo-800 font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer"
               >
                 Cổng Quản trị
               </button>
             )}
           </nav>
 
-          {/* Account / CTA Area */}
-          <div className="hidden md:flex items-center gap-2.5 shrink-0">
+          {/* Zone 3: Account / Role & Auth */}
+          <div className="hidden md:flex items-center gap-3 shrink-0">
             {currentUser ? (
-              <div className="flex items-center gap-3">
-                <div className="text-right leading-tight">
-                  <div className="text-xs font-bold text-slate-900 truncate max-w-[140px]">
+              <div className="flex items-center gap-3 pl-4 border-l border-slate-200/80">
+                <div className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-200/80 text-slate-700 text-xs font-bold flex items-center justify-center shrink-0">
+                  {currentUser.fullName.trim().charAt(0).toUpperCase() || 'U'}
+                </div>
+                <div className="leading-tight min-w-0">
+                  <div className="text-xs font-semibold text-slate-900 truncate max-w-[140px]">
                     {currentUser.fullName}
                   </div>
-                  <div className="text-[11px] font-medium text-indigo-600">
+                  <div className="text-[11px] text-slate-500 whitespace-nowrap">
                     {currentUser.role === 'admin'
                       ? 'Quản trị viên'
                       : currentUser.role === 'organizer'
@@ -345,21 +334,30 @@ export function UserLayout({
                 <button
                   type="button"
                   onClick={onLogout}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                  className="ml-1 inline-flex items-center gap-1.5 h-9 px-3 text-xs font-medium text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200/80 rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
                 >
                   <LogOut className="w-3.5 h-3.5" />
                   <span>Đăng xuất</span>
                 </button>
               </div>
             ) : (
-              <button
-                type="button"
-                onClick={() => onOpenAuth('login', 'user')}
-                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-              >
-                <LogIn className="w-3.5 h-3.5" />
-                <span>Đăng nhập / Đăng ký</span>
-              </button>
+              <div className="flex items-center gap-2.5 pl-4 border-l border-slate-200/80">
+                <button
+                  type="button"
+                  onClick={() => onOpenAuth('login', 'user')}
+                  className="h-9 px-3 text-xs font-semibold text-slate-700 hover:text-slate-900 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                >
+                  Đăng nhập
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onOpenAuth('register', 'user')}
+                  className="inline-flex items-center gap-1.5 h-9 px-4 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                >
+                  <LogIn className="w-3.5 h-3.5" />
+                  <span>Đăng ký</span>
+                </button>
+              </div>
             )}
           </div>
 
@@ -489,68 +487,67 @@ export function UserLayout({
         )}
 
         {activeTab === 'discover' ? (
-          <div className="space-y-12">
-            {/* Public Hero Section with Dual CTAs & Live Metrics */}
-            <section className="bg-white border border-slate-200 rounded-2xl p-6 sm:p-10 lg:p-12 space-y-8">
-              <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-8">
-                <div className="max-w-3xl">
-                  <div
-                    className="inline-flex items-center gap-2 text-xs font-semibold text-indigo-700 bg-indigo-50 border border-indigo-100 px-3 py-1 rounded-md animate-ef-fade-up"
-                    style={{ animationDelay: '0ms' }}
-                  >
-                    <Sparkles className="w-3.5 h-3.5" />
-                    <span>Nền tảng Tổ chức &amp; Vận hành Sự kiện Trọn gói</span>
+          <div className="space-y-10">
+            {/* Refined Minimalist SaaS Hero Section */}
+            <section className="bg-white border border-slate-200/80 rounded-2xl p-6 sm:p-8 lg:p-10 space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-stretch">
+                {/* Hero Left: Badge + Crisp Title + Concise Description + Compact Actions */}
+                <div className="lg:col-span-7 flex flex-col justify-between">
+                  <div>
+                    <div className="inline-flex items-center gap-1.5 text-xs font-medium text-indigo-700 bg-indigo-50/80 border border-indigo-200/60 px-2.5 py-1 rounded-md animate-ef-fade-up">
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>Nền tảng Tổ chức &amp; Vận hành Sự kiện</span>
+                    </div>
+
+                    <h1
+                      className="mt-4 text-2xl sm:text-3xl lg:text-[2.125rem] font-bold text-slate-900 tracking-tight text-balance leading-[1.22] max-w-2xl animate-ef-fade-up"
+                      style={{ animationDelay: '60ms' }}
+                    >
+                      Quản lý sự kiện, dịch vụ và check-in{' '}
+                      <span className="text-indigo-600">trên một hệ thống tập trung</span>
+                    </h1>
+
+                    <p
+                      className="mt-3 text-sm sm:text-[15px] text-slate-600 leading-relaxed max-w-xl line-clamp-3 animate-ef-fade-up"
+                      style={{ animationDelay: '110ms' }}
+                    >
+                      Kết nối Người tham gia đăng ký sự kiện, Khách hàng doanh nghiệp gửi yêu cầu
+                      tổ chức và Ban quản trị điều phối khách mời, check-in QR đồng bộ theo thời
+                      gian thực.
+                    </p>
                   </div>
 
-                  <h1
-                    className="mt-4 text-3xl sm:text-4xl lg:text-5xl font-bold text-slate-900 tracking-tight text-balance leading-[1.15] animate-ef-fade-up"
-                    style={{ animationDelay: '70ms' }}
-                  >
-                    Nền tảng quản lý &amp;{' '}
-                    <span className="ef-hero-highlight">vận hành sự kiện tập trung</span> cho doanh nghiệp
-                  </h1>
-
-                  <p
-                    className="mt-4 text-sm sm:text-base text-slate-600 leading-relaxed max-w-2xl animate-ef-fade-up"
-                    style={{ animationDelay: '140ms' }}
-                  >
-                    Giải pháp đồng bộ cho cả <strong>Người tham gia</strong> đăng ký sự kiện,{' '}
-                    <strong>Khách hàng doanh nghiệp</strong> đặt tổ chức cùng dịch vụ đi kèm, và{' '}
-                    <strong>Ban quản trị</strong> điều phối khách mời VIP — check-in QR tức thì trên
-                    Cloud Firestore.
-                  </p>
-
-                  {/* Clear CTA buttons */}
+                  {/* Compact CTA Row */}
                   <div
-                    className="mt-6 flex flex-wrap items-center gap-3 animate-ef-fade-up"
-                    style={{ animationDelay: '180ms' }}
+                    className="mt-6 flex flex-wrap items-center gap-2.5 animate-ef-fade-up"
+                    style={{ animationDelay: '150ms' }}
                   >
                     {!currentUser ? (
                       <>
                         <button
                           type="button"
                           onClick={() => onOpenAuth('register', 'user')}
-                          className="inline-flex items-center gap-2 px-5 py-3 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-all duration-200 hover:-translate-y-0.5 shadow-xs hover:shadow-md cursor-pointer whitespace-nowrap"
+                          className="inline-flex items-center gap-2 h-10 px-4 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors cursor-pointer whitespace-nowrap"
                         >
                           <UserCheck className="w-4 h-4" />
-                          <span>Đăng ký tham gia sự kiện</span>
+                          <span>Đăng ký tham gia</span>
                           <ArrowRight className="w-4 h-4" />
                         </button>
                         <button
                           type="button"
                           onClick={() => onOpenAuth('register', 'organizer')}
-                          className="inline-flex items-center gap-2 px-5 py-3 text-sm font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-xl transition-colors cursor-pointer whitespace-nowrap"
+                          className="inline-flex items-center gap-2 h-10 px-4 text-sm font-semibold text-slate-800 bg-white hover:bg-slate-50 border border-slate-200/90 rounded-lg transition-colors cursor-pointer whitespace-nowrap"
                         >
-                          <Building2 className="w-4 h-4" />
+                          <Building2 className="w-4 h-4 text-indigo-600" />
                           <span>Đặt tổ chức sự kiện</span>
                         </button>
                         <button
                           type="button"
                           onClick={() => scrollToSection('lien-he-admin')}
-                          className="inline-flex items-center gap-2 px-4 py-3 text-sm font-semibold text-slate-700 hover:text-indigo-700 rounded-xl transition-colors cursor-pointer whitespace-nowrap"
+                          className="inline-flex items-center gap-1.5 h-10 px-3 text-sm font-medium text-slate-600 hover:text-indigo-600 rounded-lg transition-colors cursor-pointer whitespace-nowrap"
                         >
                           <Phone className="w-4 h-4" />
-                          <span>Liên hệ Ban quản trị</span>
+                          <span>Liên hệ tư vấn</span>
                         </button>
                       </>
                     ) : (
@@ -558,7 +555,7 @@ export function UserLayout({
                         <button
                           type="button"
                           onClick={() => scrollToSection('su-kien-cong-khai')}
-                          className="inline-flex items-center gap-2 px-5 py-3 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors cursor-pointer whitespace-nowrap"
+                          className="inline-flex items-center gap-2 h-10 px-4 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors cursor-pointer whitespace-nowrap"
                         >
                           <Calendar className="w-4 h-4" />
                           <span>Xem sự kiện đang mở</span>
@@ -567,20 +564,20 @@ export function UserLayout({
                           <button
                             type="button"
                             onClick={onSwitchToOrganizer}
-                            className="inline-flex items-center gap-2 px-5 py-3 text-sm font-semibold text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200 rounded-xl transition-colors cursor-pointer whitespace-nowrap"
+                            className="inline-flex items-center gap-2 h-10 px-4 text-sm font-semibold text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200/80 rounded-lg transition-colors cursor-pointer whitespace-nowrap"
                           >
                             <Building2 className="w-4 h-4" />
-                            <span>Mở Cổng Khách hàng Tổ chức</span>
+                            <span>Cổng Khách hàng Tổ chức</span>
                           </button>
                         )}
                         {onSwitchToAdmin && (
                           <button
                             type="button"
                             onClick={onSwitchToAdmin}
-                            className="inline-flex items-center gap-2 px-5 py-3 text-sm font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-xl transition-colors cursor-pointer whitespace-nowrap"
+                            className="inline-flex items-center gap-2 h-10 px-4 text-sm font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200/80 rounded-lg transition-colors cursor-pointer whitespace-nowrap"
                           >
                             <ShieldCheck className="w-4 h-4" />
-                            <span>Mở Cổng Quản trị</span>
+                            <span>Cổng Quản trị</span>
                           </button>
                         )}
                       </>
@@ -588,117 +585,141 @@ export function UserLayout({
                   </div>
                 </div>
 
-                {/* Direct Contact Quick Card in Hero (Always visible without login) */}
+                {/* Hero Right: Harmonized Admin Contact Card */}
                 <div
-                  className="lg:w-80 shrink-0 rounded-2xl bg-slate-50 border border-slate-200 p-5 space-y-3 animate-ef-fade-up"
-                  style={{ animationDelay: '160ms' }}
+                  className="lg:col-span-5 rounded-xl bg-slate-50/70 border border-slate-200/80 p-5 flex flex-col justify-between gap-4 animate-ef-fade-up"
+                  style={{ animationDelay: '140ms' }}
                 >
-                  <div className="text-xs font-bold text-indigo-700">
-                    Liên hệ nhanh Ban quản trị
+                  <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-200/70">
+                    <div>
+                      <div className="text-[11px] font-semibold text-indigo-600">
+                        Liên hệ Ban quản trị
+                      </div>
+                      <div className="mt-0.5 text-sm font-bold text-slate-900">
+                        {publicContact.adminName}
+                      </div>
+                    </div>
+                    <span className="text-[11px] font-medium text-slate-500 whitespace-nowrap">
+                      Hỗ trợ trực tiếp
+                    </span>
                   </div>
-                  <div className="text-sm font-bold text-slate-900">
-                    {publicContact.adminName}
-                  </div>
-                  <div className="space-y-2 text-xs text-slate-600">
+
+                  <div className="space-y-2.5 text-xs">
                     <a
                       href={`tel:${publicContact.phone.replace(/\s+/g, '')}`}
-                      className="flex items-center gap-2 font-semibold text-slate-900 hover:text-indigo-600 tabular-nums"
+                      className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-white border border-slate-200/80 hover:border-indigo-300 transition-colors"
                     >
-                      <Phone className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                      <span>{publicContact.phone}</span>
+                      <span className="inline-flex items-center gap-2 text-slate-600 font-medium">
+                        <Phone className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                        <span>Điện thoại</span>
+                      </span>
+                      <span className="font-semibold text-slate-900 tabular-nums">
+                        {publicContact.phone}
+                      </span>
                     </a>
+
                     <a
                       href={`mailto:${publicContact.email}`}
-                      className="flex items-center gap-2 font-medium text-slate-800 hover:text-indigo-600"
+                      className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-white border border-slate-200/80 hover:border-indigo-300 transition-colors"
                     >
-                      <Mail className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                      <span className="truncate">{publicContact.email}</span>
+                      <span className="inline-flex items-center gap-2 text-slate-600 font-medium">
+                        <Mail className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                        <span>Email</span>
+                      </span>
+                      <span className="font-semibold text-slate-900 truncate">
+                        {publicContact.email}
+                      </span>
                     </a>
-                    <div className="flex items-center gap-2 text-slate-500">
-                      <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                      <span>{publicContact.workingHours}</span>
+
+                    <div className="flex items-center justify-between gap-3 px-1 pt-0.5 text-[11px] text-slate-500">
+                      <span className="inline-flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span>{publicContact.workingHours}</span>
+                      </span>
+                      <span className="tabular-nums font-medium text-slate-600">
+                        {publicContact.hotline}
+                      </span>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Hero Quick Filter Bar */}
+              {/* Unified Single-Row Search & Filter Bar */}
               <div
-                className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex flex-col lg:flex-row gap-3 animate-ef-fade-up"
-                style={{ animationDelay: '200ms' }}
+                className="p-2 bg-slate-50/80 border border-slate-200/80 rounded-xl flex flex-col lg:flex-row items-stretch lg:items-center gap-2 animate-ef-fade-up"
+                style={{ animationDelay: '180ms' }}
               >
-                <div className="relative flex-1">
+                <div className="relative flex-1 min-w-0">
                   <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
                     type="search"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Tìm kiếm theo tên sự kiện, địa điểm, đơn vị tổ chức..."
-                    className="w-full pl-10 pr-4 py-2.5 text-sm bg-white border border-slate-200 rounded-lg text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-600 transition-colors"
+                    placeholder="Tìm kiếm sự kiện theo tên, địa điểm, đơn vị tổ chức..."
+                    className="w-full h-10 pl-10 pr-3.5 text-sm bg-white border border-slate-200/80 rounded-lg text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-600 transition-colors"
                   />
                 </div>
-                <select
-                  aria-label="Lọc theo danh mục"
-                  value={categoryFilter}
-                  onChange={(e) => setCategoryFilter(e.target.value)}
-                  className="px-3.5 py-2.5 text-sm font-medium bg-white border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:border-indigo-600 cursor-pointer transition-colors"
-                >
-                  <option value="all">Tất cả danh mục</option>
-                  {EVENT_CATEGORIES.map((cat) => (
-                    <option key={cat} value={cat}>
-                      {cat}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  aria-label="Lọc theo trạng thái"
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value as 'all' | EventStatus)}
-                  className="px-3.5 py-2.5 text-sm font-medium bg-white border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:border-indigo-600 cursor-pointer transition-colors"
-                >
-                  <option value="all">Tất cả trạng thái</option>
-                  <option value="ongoing">Mở đăng ký</option>
-                  <option value="upcoming">Sắp diễn ra</option>
-                  <option value="paused">Tạm đóng</option>
-                  <option value="completed">Đã kết thúc</option>
-                </select>
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0">
+                  <select
+                    aria-label="Lọc theo danh mục"
+                    value={categoryFilter}
+                    onChange={(e) => setCategoryFilter(e.target.value)}
+                    className="h-10 px-3 text-sm font-medium bg-white border border-slate-200/80 rounded-lg text-slate-700 focus:outline-none focus:border-indigo-600 cursor-pointer transition-colors"
+                  >
+                    <option value="all">Tất cả danh mục</option>
+                    {EVENT_CATEGORIES.map((cat) => (
+                      <option key={cat} value={cat}>
+                        {cat}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    aria-label="Lọc theo trạng thái"
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value as 'all' | EventStatus)}
+                    className="h-10 px-3 text-sm font-medium bg-white border border-slate-200/80 rounded-lg text-slate-700 focus:outline-none focus:border-indigo-600 cursor-pointer transition-colors"
+                  >
+                    <option value="all">Tất cả trạng thái</option>
+                    <option value="ongoing">Mở đăng ký</option>
+                    <option value="upcoming">Sắp diễn ra</option>
+                    <option value="paused">Tạm đóng</option>
+                    <option value="completed">Đã kết thúc</option>
+                  </select>
+                  {(searchQuery || categoryFilter !== 'all' || statusFilter !== 'all') && (
+                    <button
+                      type="button"
+                      onClick={resetAllFilters}
+                      className="h-10 px-3 text-xs font-semibold text-slate-600 hover:text-indigo-700 bg-white border border-slate-200/80 rounded-lg transition-colors whitespace-nowrap cursor-pointer"
+                    >
+                      Xóa lọc
+                    </button>
+                  )}
+                </div>
               </div>
 
-              {/* 4 Live Metrics */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 pt-2 border-t border-slate-100">
-                <div
-                  className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 transition-colors hover:border-indigo-200 animate-ef-fade-up"
-                  style={{ animationDelay: '220ms' }}
-                >
-                  <div className="text-xs font-medium text-slate-500">Sự kiện công khai</div>
-                  <div className="mt-1.5 text-2xl sm:text-3xl font-bold text-slate-900 tabular-nums">
+              {/* Clean Hairline-Divided Metrics Strip */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-slate-200/80 border border-slate-200/80 rounded-xl bg-slate-50/40">
+                <div className="px-4 py-3.5">
+                  <div className="text-xs text-slate-500">Sự kiện công khai</div>
+                  <div className="mt-1 text-xl font-bold text-slate-900 tabular-nums">
                     <AnimatedNumber value={heroMetrics.totalEvents} />
                   </div>
                 </div>
-                <div
-                  className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 transition-colors hover:border-indigo-200 animate-ef-fade-up"
-                  style={{ animationDelay: '270ms' }}
-                >
-                  <div className="text-xs font-medium text-slate-500">Lượt đăng ký tham gia</div>
-                  <div className="mt-1.5 text-2xl sm:text-3xl font-bold text-slate-900 tabular-nums">
+                <div className="px-4 py-3.5">
+                  <div className="text-xs text-slate-500">Lượt đăng ký tham gia</div>
+                  <div className="mt-1 text-xl font-bold text-slate-900 tabular-nums">
                     <AnimatedNumber value={heroMetrics.totalRegistrations} />
                   </div>
                 </div>
-                <div
-                  className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 transition-colors hover:border-indigo-200 animate-ef-fade-up"
-                  style={{ animationDelay: '320ms' }}
-                >
-                  <div className="text-xs font-medium text-slate-500">Tỷ lệ lấp đầy</div>
-                  <div className="mt-1.5 text-2xl sm:text-3xl font-bold text-indigo-600 tabular-nums">
+                <div className="px-4 py-3.5">
+                  <div className="text-xs text-slate-500">Tỷ lệ lấp đầy</div>
+                  <div className="mt-1 text-xl font-bold text-indigo-600 tabular-nums">
                     <AnimatedNumber value={heroMetrics.avgFillRate} suffix="%" />
                   </div>
                 </div>
-                <div
-                  className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 transition-colors hover:border-emerald-200 animate-ef-fade-up"
-                  style={{ animationDelay: '370ms' }}
-                >
-                  <div className="text-xs font-medium text-slate-500">Tỷ lệ check-in</div>
-                  <div className="mt-1.5 text-2xl sm:text-3xl font-bold text-emerald-600 tabular-nums">
+                <div className="px-4 py-3.5">
+                  <div className="text-xs text-slate-500">Tỷ lệ check-in</div>
+                  <div className="mt-1 text-xl font-bold text-emerald-600 tabular-nums">
                     <AnimatedNumber value={heroMetrics.checkInRate} suffix="%" />
                   </div>
                 </div>
@@ -707,15 +728,15 @@ export function UserLayout({
 
             {/* Public Service Overview & Highlight Packages */}
             <RevealBlock>
-              <section id="dich-vu-noi-bat" className="space-y-6 scroll-mt-20">
-                <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+              <section id="dich-vu-noi-bat" className="space-y-5 scroll-mt-20">
+                <div className="flex flex-col md:flex-row md:items-end justify-between gap-3">
                   <div>
-                    <h2 className="text-2xl font-bold text-slate-900">
+                    <h2 className="text-xl font-bold text-slate-900 tracking-tight">
                       Dịch vụ Tổ chức &amp; Vận hành Sự kiện
                     </h2>
                     <p className="mt-1 text-sm text-slate-600 max-w-2xl">
-                      Khách hàng tổ chức có thể chọn trực tiếp các gói dịch vụ và hạng mục hỗ trợ
-                      khi gửi yêu cầu sự kiện mới (chưa áp dụng thanh toán trực tuyến).
+                      Khách hàng tổ chức có thể chọn trực tiếp gói dịch vụ và hạng mục hỗ trợ khi
+                      gửi yêu cầu sự kiện mới.
                     </p>
                   </div>
                   {!currentUser && (
@@ -724,27 +745,27 @@ export function UserLayout({
                       onClick={() => onOpenAuth('register', 'organizer')}
                       className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-700 cursor-pointer whitespace-nowrap"
                     >
-                      <span>Đăng ký tài khoản để gửi yêu cầu tổ chức</span>
+                      <span>Đăng ký để gửi yêu cầu tổ chức</span>
                       <ArrowRight className="w-3.5 h-3.5" />
                     </button>
                   )}
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                   {SERVICE_PACKAGE_HIGHLIGHTS.map((pkg, idx) => (
-                    <RevealBlock key={pkg.code} delayMs={idx * 60}>
-                      <div className="bg-white border border-slate-200 rounded-2xl p-6 h-full flex flex-col justify-between transition-all duration-200 hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-sm">
+                    <RevealBlock key={pkg.code} delayMs={idx * 50}>
+                      <div className="bg-white border border-slate-200/80 rounded-xl p-5 h-full flex flex-col justify-between transition-colors hover:border-indigo-200">
                         <div>
-                          <div className="text-xs font-mono font-bold text-indigo-600">
-                            {pkg.code}. Gói dịch vụ tiêu chuẩn
+                          <div className="text-xs font-mono font-semibold text-indigo-600">
+                            {pkg.code}. Gói tiêu chuẩn
                           </div>
-                          <h3 className="mt-2 text-lg font-bold text-slate-900">{pkg.title}</h3>
-                          <p className="mt-2 text-sm text-slate-600 leading-relaxed">
+                          <h3 className="mt-1.5 text-base font-bold text-slate-900">{pkg.title}</h3>
+                          <p className="mt-1.5 text-sm text-slate-600 leading-relaxed">
                             {pkg.description}
                           </p>
                         </div>
 
-                        <ul className="mt-5 pt-4 border-t border-slate-100 space-y-2 text-xs text-slate-700">
+                        <ul className="mt-4 pt-3.5 border-t border-slate-100 space-y-1.5 text-xs text-slate-600">
                           {pkg.included.map((item) => (
                             <li key={item} className="flex items-center gap-2">
                               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
@@ -757,19 +778,18 @@ export function UserLayout({
                   ))}
                 </div>
 
-                {/* System Services Available When Requesting */}
-                <div className="bg-white border border-slate-200 rounded-2xl p-6 space-y-4">
-                  <div className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                <div className="bg-white border border-slate-200/80 rounded-xl p-5 space-y-3.5">
+                  <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
                     <Layers className="w-4 h-4 text-indigo-600" />
-                    <span>Các hạng mục dịch vụ đi kèm có thể yêu cầu trên hệ thống</span>
+                    <span>Hạng mục dịch vụ đi kèm có thể yêu cầu trên hệ thống</span>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     {SYSTEM_SERVICE_CATALOG.map((srv) => (
                       <div
                         key={srv.key}
-                        className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80"
+                        className="p-3.5 rounded-lg bg-slate-50/70 border border-slate-200/70"
                       >
-                        <div className="text-xs font-bold text-slate-900">{srv.name}</div>
+                        <div className="text-xs font-semibold text-slate-900">{srv.name}</div>
                         <p className="mt-1 text-xs text-slate-500 leading-relaxed">{srv.summary}</p>
                       </div>
                     ))}
@@ -781,15 +801,15 @@ export function UserLayout({
             {/* Enterprise Trust Strip */}
             <RevealBlock>
               <section aria-label="Đơn vị tổ chức và đối tác tiêu biểu" className="space-y-3">
-                <div className="text-xs font-semibold text-slate-500">
-                  Đơn vị tổ chức &amp; đối tác doanh nghiệp đã xác thực trên EventFlow
+                <div className="text-xs font-medium text-slate-500">
+                  Đơn vị tổ chức &amp; đối tác doanh nghiệp trên EventFlow
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                   {ENTERPRISE_PARTNERS.map((partner, idx) => (
-                    <RevealBlock key={partner.name} delayMs={idx * 45}>
-                      <div className="bg-white border border-slate-200 rounded-xl px-4 py-3 flex items-center justify-between gap-2 transition-all duration-200 hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-xs">
+                    <RevealBlock key={partner.name} delayMs={idx * 40}>
+                      <div className="bg-white border border-slate-200/80 rounded-xl px-3.5 py-2.5 flex items-center justify-between gap-2 transition-colors hover:border-indigo-200">
                         <div className="min-w-0">
-                          <div className="text-xs font-bold text-slate-900 truncate">
+                          <div className="text-xs font-semibold text-slate-900 truncate">
                             {partner.name}
                           </div>
                           <div className="text-[11px] text-slate-500 truncate">{partner.sector}</div>
@@ -806,10 +826,10 @@ export function UserLayout({
             {!eventsLoading && featuredEvent && (
               <RevealBlock>
                 <section className="space-y-3">
-                  <h2 className="text-lg font-bold text-slate-900">Sự kiện công khai tiêu biểu</h2>
+                  <h2 className="text-base font-bold text-slate-900">Sự kiện công khai tiêu biểu</h2>
                   <article
                     onClick={() => setSelectedEvent(featuredEvent)}
-                    className="group ef-card-shine bg-white border border-slate-200 rounded-2xl overflow-hidden grid grid-cols-1 lg:grid-cols-12 items-stretch transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-1 hover:border-indigo-300 hover:shadow-[0_16px_34px_-14px_rgba(79,70,229,0.2)] cursor-pointer"
+                    className="group bg-white border border-slate-200/80 rounded-xl overflow-hidden grid grid-cols-1 lg:grid-cols-12 items-stretch transition-all duration-200 hover:border-indigo-300 hover:shadow-sm cursor-pointer"
                   >
                     <div className="lg:col-span-6 aspect-video lg:aspect-auto bg-slate-100 overflow-hidden">
                       <EventBanner
@@ -999,15 +1019,15 @@ export function UserLayout({
                       <article
                         key={ev.id}
                         onClick={() => setSelectedEvent(ev)}
-                        style={{ animationDelay: `${Math.min(idx, 5) * 55}ms` }}
-                        className="group ef-card-shine animate-ef-fade-up bg-white border border-slate-200 rounded-2xl overflow-hidden flex flex-col justify-between transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-1 hover:border-indigo-300 hover:shadow-[0_14px_30px_-12px_rgba(79,70,229,0.18)] cursor-pointer"
+                        style={{ animationDelay: `${Math.min(idx, 5) * 45}ms` }}
+                        className="group animate-ef-fade-up bg-white border border-slate-200/80 rounded-xl overflow-hidden flex flex-col justify-between transition-all duration-200 hover:-translate-y-0.5 hover:border-indigo-300 hover:shadow-sm cursor-pointer"
                       >
                         <div>
                           <div className="relative aspect-video w-full overflow-hidden bg-slate-100">
                             <EventBanner
                               src={ev.bannerUrl}
                               alt={ev.title}
-                              className="w-full h-full transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.035]"
+                              className="w-full h-full transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.02]"
                             />
                             <div className="absolute top-3 left-3 flex items-center gap-1.5">
                               <span className="px-2.5 py-1 text-[11px] font-semibold bg-white/95 text-slate-900 rounded-md shadow-xs">
@@ -1028,7 +1048,7 @@ export function UserLayout({
                                   e.stopPropagation();
                                   toggleSaveEvent(ev.id);
                                 }}
-                                className={`p-1.5 rounded-md shadow-xs cursor-pointer transition-all duration-200 hover:scale-105 ${
+                                className={`p-1.5 rounded-md shadow-xs cursor-pointer transition-colors ${
                                   isSaved
                                     ? 'bg-indigo-600 text-white'
                                     : 'bg-white/95 text-slate-600 hover:text-indigo-600'
@@ -1055,11 +1075,11 @@ export function UserLayout({
                               </span>
                             </div>
 
-                            <h3 className="mt-2.5 text-lg font-bold text-slate-900 leading-snug line-clamp-2 group-hover:text-indigo-700 transition-colors duration-200">
+                            <h3 className="mt-2 text-base font-bold text-slate-900 leading-snug line-clamp-2 group-hover:text-indigo-700 transition-colors">
                               {ev.title}
                             </h3>
 
-                            <div className="mt-3.5 space-y-1.5 text-xs text-slate-500">
+                            <div className="mt-3 space-y-1.5 text-xs text-slate-500">
                               <div className="flex items-center gap-2">
                                 <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                                 <span className="truncate">{ev.location}</span>
@@ -1075,7 +1095,7 @@ export function UserLayout({
                         </div>
 
                         <div className="px-5 pb-5 pt-1">
-                          <div className="mb-4">
+                          <div className="mb-3.5">
                             <AnimatedProgressBar
                               percent={fillPercent}
                               barClassName={fillPercent >= 90 ? 'bg-amber-500' : 'bg-indigo-600'}
@@ -1088,7 +1108,7 @@ export function UserLayout({
                                 <BadgeCheck className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
                               )}
                             </span>
-                            <span className="text-xs font-semibold text-indigo-700 whitespace-nowrap shrink-0 inline-flex items-center gap-1 transition-transform duration-200 group-hover:translate-x-0.5">
+                            <span className="text-xs font-semibold text-indigo-600 whitespace-nowrap shrink-0 inline-flex items-center gap-1">
                               {myReg ? 'Xem trạng thái →' : 'Đăng ký ngay →'}
                             </span>
                           </div>
@@ -1100,33 +1120,33 @@ export function UserLayout({
               )}
             </section>
 
-            {/* Public Admin Contact & Conversion Section (Always accessible without login) */}
+            {/* Clean Light-Surface SaaS Admin Contact Section */}
             <RevealBlock>
               <section
                 id="lien-he-admin"
-                className="bg-indigo-950 text-white rounded-2xl p-6 sm:p-10 scroll-mt-20"
+                className="bg-white border border-slate-200/80 rounded-2xl p-6 sm:p-8 scroll-mt-20"
               >
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
-                  <div className="lg:col-span-7 space-y-4">
-                    <div className="inline-flex items-center gap-2 text-xs font-semibold text-indigo-200 bg-white/10 px-3 py-1 rounded-md">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-center">
+                  <div className="lg:col-span-7 space-y-3">
+                    <div className="inline-flex items-center gap-1.5 text-xs font-medium text-indigo-700 bg-indigo-50/80 border border-indigo-200/60 px-2.5 py-1 rounded-md">
                       <Phone className="w-3.5 h-3.5" />
-                      <span>Thông tin liên hệ trực tiếp Ban quản trị</span>
+                      <span>Thông tin liên hệ Ban quản trị</span>
                     </div>
-                    <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-balance">
+                    <h2 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight text-balance">
                       Cần tư vấn tổ chức sự kiện hoặc hỗ trợ tham gia?
                     </h2>
-                    <p className="text-sm text-indigo-200/90 leading-relaxed max-w-xl">
-                      Khách hàng chưa tạo tài khoản vẫn có thể liên hệ trực tiếp với Quản trị viên
-                      của <strong>{publicContact.organizationName}</strong> qua điện thoại hoặc email
-                      bên cạnh để được tư vấn gói dịch vụ và lịch tổ chức.
+                    <p className="text-sm text-slate-600 leading-relaxed max-w-xl">
+                      Khách tham khảo chưa đăng ký tài khoản vẫn có thể liên hệ trực tiếp với Quản
+                      trị viên của <strong>{publicContact.organizationName}</strong> qua điện thoại
+                      hoặc email để được tư vấn gói dịch vụ phù hợp.
                     </p>
 
                     {!currentUser && (
-                      <div className="pt-2 flex flex-wrap gap-3">
+                      <div className="pt-2 flex flex-wrap gap-2.5">
                         <button
                           type="button"
                           onClick={() => onOpenAuth('register', 'organizer')}
-                          className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-indigo-950 bg-white hover:bg-indigo-50 rounded-xl transition-colors cursor-pointer"
+                          className="inline-flex items-center gap-2 h-10 px-4 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors cursor-pointer"
                         >
                           <Building2 className="w-4 h-4" />
                           <span>Tạo tài khoản Khách hàng Tổ chức</span>
@@ -1134,7 +1154,7 @@ export function UserLayout({
                         <button
                           type="button"
                           onClick={() => onOpenAuth('login', 'user')}
-                          className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl transition-colors cursor-pointer"
+                          className="inline-flex items-center gap-2 h-10 px-4 text-sm font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200/90 rounded-lg transition-colors cursor-pointer"
                         >
                           <LogIn className="w-4 h-4" />
                           <span>Đăng nhập hệ thống</span>
@@ -1143,33 +1163,33 @@ export function UserLayout({
                     )}
                   </div>
 
-                  <div className="lg:col-span-5 bg-white text-slate-900 rounded-2xl p-6 space-y-4">
-                    <div className="border-b border-slate-100 pb-3">
-                      <div className="text-xs font-medium text-slate-500">
+                  <div className="lg:col-span-5 bg-slate-50/70 border border-slate-200/80 rounded-xl p-5 space-y-3">
+                    <div className="border-b border-slate-200/70 pb-3">
+                      <div className="text-[11px] font-medium text-slate-500">
                         Đại diện Ban quản trị (Admin)
                       </div>
-                      <div className="mt-0.5 text-base font-bold text-slate-900">
+                      <div className="mt-0.5 text-sm font-bold text-slate-900">
                         {publicContact.adminName}
                       </div>
                     </div>
 
-                    <div className="space-y-3 text-sm">
+                    <div className="space-y-2 text-xs">
                       <a
                         href={`tel:${publicContact.phone.replace(/\s+/g, '')}`}
-                        className="flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-50 hover:bg-indigo-50 transition-colors"
+                        className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg bg-white border border-slate-200/80 hover:border-indigo-300 transition-colors"
                       >
-                        <span className="inline-flex items-center gap-2.5 text-slate-700 font-medium">
-                          <Phone className="w-4 h-4 text-indigo-600 shrink-0" />
+                        <span className="inline-flex items-center gap-2 text-slate-600 font-medium">
+                          <Phone className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
                           <span>Di động trực tiếp</span>
                         </span>
-                        <strong className="font-bold text-indigo-700 tabular-nums">
+                        <strong className="font-semibold text-indigo-700 tabular-nums">
                           {publicContact.phone}
                         </strong>
                       </a>
 
-                      <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-50">
-                        <span className="inline-flex items-center gap-2.5 text-slate-700 font-medium">
-                          <Phone className="w-4 h-4 text-slate-500 shrink-0" />
+                      <div className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg bg-white border border-slate-200/80">
+                        <span className="inline-flex items-center gap-2 text-slate-600 font-medium">
+                          <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                           <span>Tổng đài tư vấn</span>
                         </span>
                         <strong className="font-semibold text-slate-900 tabular-nums">
@@ -1179,10 +1199,10 @@ export function UserLayout({
 
                       <a
                         href={`mailto:${publicContact.email}`}
-                        className="flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-50 hover:bg-indigo-50 transition-colors"
+                        className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg bg-white border border-slate-200/80 hover:border-indigo-300 transition-colors"
                       >
-                        <span className="inline-flex items-center gap-2.5 text-slate-700 font-medium">
-                          <Mail className="w-4 h-4 text-indigo-600 shrink-0" />
+                        <span className="inline-flex items-center gap-2 text-slate-600 font-medium">
+                          <Mail className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
                           <span>Email Admin</span>
                         </span>
                         <strong className="font-semibold text-indigo-700 truncate">
@@ -1190,8 +1210,8 @@ export function UserLayout({
                         </strong>
                       </a>
 
-                      <div className="flex items-start gap-2.5 pt-1 text-xs text-slate-500">
-                        <MapPin className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+                      <div className="flex items-start gap-2 pt-1 text-[11px] text-slate-500">
+                        <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
                         <span>
                           {publicContact.officeAddress} · {publicContact.workingHours}
                         </span>
