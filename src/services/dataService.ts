@@ -35,68 +35,13 @@ import type {
   UserRole,
 } from '../types';
 
-const STORAGE_KEYS = {
-  USERS: 'eventflow_users_v2',
-  EVENTS: 'eventflow_events_v2',
-  REGISTRATIONS: 'eventflow_registrations_v2',
-  FEEDBACKS: 'eventflow_feedbacks_v2',
-  SESSION_UID: 'eventflow_session_uid_v2',
-};
-
-const LOCAL_BUS_EVENT = 'eventflow:local-store-updated';
-
-function emitLocalUpdate() {
-  window.dispatchEvent(new CustomEvent(LOCAL_BUS_EVENT));
-}
-
-function readLocal<T>(key: string, fallback: T): T {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return fallback;
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
+function requireFirebase() {
+  if (!isFirebaseConfigured || !auth || !db) {
+    throw new Error(
+      'Kết nối Firebase chưa sẵn sàng. Vui lòng kiểm tra cấu hình dự án quan-ly-su-kien-86a89.'
+    );
   }
-}
-
-function writeLocal<T>(key: string, value: T) {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch (err) {
-    console.warn('Không thể lưu localStorage:', err);
-  }
-}
-
-interface LocalUserRecord extends AppUser {
-  password?: string;
-}
-
-function ensureDemoAccountsInLocal() {
-  const users = readLocal<LocalUserRecord[]>(STORAGE_KEYS.USERS, []);
-  if (users.length === 0) {
-    const now = new Date().toISOString();
-    const initialUsers: LocalUserRecord[] = [
-      {
-        uid: 'demo-admin-01',
-        fullName: 'Nguyễn Minh Quản Trị',
-        email: 'admin@eventflow.vn',
-        phone: '0900000001',
-        role: 'admin',
-        password: 'DemoAdmin@2026',
-        createdAt: now,
-      },
-      {
-        uid: 'demo-user-01',
-        fullName: 'Trần Thu Hà',
-        email: 'user@eventflow.vn',
-        phone: '0901234567',
-        role: 'user',
-        password: 'DemoUser@2026',
-        createdAt: now,
-      },
-    ];
-    writeLocal(STORAGE_KEYS.USERS, initialUsers);
-  }
+  return { auth, db };
 }
 
 function determineRole(email: string, existingUsersCount: number): UserRole {
@@ -117,14 +62,18 @@ function normalizeEventDoc(id: string, raw: Record<string, unknown>): EventItem 
     endTime: String(raw.endTime ?? new Date().toISOString()),
     maxSlots: Number(raw.maxSlots ?? 50),
     registeredCount: Number(raw.registeredCount ?? 0),
+    checkedInCount: Number(raw.checkedInCount ?? 0),
     status: (raw.status as EventStatus) || 'upcoming',
-    category: (raw.category as EventItem['category']) || 'Công nghệ',
+    category: String(raw.category ?? 'Hội nghị công nghệ'),
     price: Number(raw.price ?? 0),
     vipPrice: raw.vipPrice ? Number(raw.vipPrice) : undefined,
-    organizer: String(raw.organizer ?? 'EventFlow Organizer'),
+    organizer: String(raw.organizer ?? 'EventFlow Enterprise'),
+    organizerVerified: raw.organizerVerified !== false,
+    featured: Boolean(raw.featured),
     speakers: Array.isArray(raw.speakers) ? (raw.speakers as EventItem['speakers']) : [],
     agenda: Array.isArray(raw.agenda) ? (raw.agenda as EventItem['agenda']) : [],
-    rules: String(raw.rules ?? 'Vui lòng mang theo vé điện tử QR Code khi tham dự.'),
+    faqs: Array.isArray(raw.faqs) ? (raw.faqs as EventItem['faqs']) : [],
+    rules: String(raw.rules ?? 'Vui lòng mang theo mã QR vé điện tử khi tham dự.'),
     createdAt: String(raw.createdAt ?? new Date().toISOString()),
   };
 }
@@ -182,65 +131,41 @@ async function safeGetExistingUsersCount(): Promise<number> {
 }
 
 export function subscribeAuthUser(callback: (user: AppUser | null) => void): () => void {
-  if (isFirebaseConfigured && auth && db) {
-    const firebaseAuth = auth;
-    const firestore = db;
-    return onAuthStateChanged(firebaseAuth, async (fbUser) => {
-      if (!fbUser) {
-        callback(null);
-        return;
-      }
-      const email = fbUser.email || '';
-      const fallbackProfile: AppUser = {
-        uid: fbUser.uid,
-        fullName: fbUser.displayName || email.split('@')[0] || 'Thành viên',
-        email,
-        phone: '',
-        role: email.toLowerCase().includes('admin') ? 'admin' : 'user',
-        createdAt: new Date().toISOString(),
-      };
-      try {
-        const userRef = doc(firestore, 'users', fbUser.uid);
-        const snap = await getDoc(userRef);
-        if (snap.exists()) {
-          callback(snap.data() as AppUser);
-        } else {
-          const existingCount = await safeGetExistingUsersCount();
-          const role = determineRole(email, existingCount);
-          const profile: AppUser = { ...fallbackProfile, role };
-          try {
-            await setDoc(userRef, profile);
-          } catch {
-            // Ignore if rules block auto-write
-          }
-          callback(profile);
-        }
-      } catch {
-        callback(fallbackProfile);
-      }
-    });
-  }
-
-  ensureDemoAccountsInLocal();
-  const notify = () => {
-    const sessionUid = localStorage.getItem(STORAGE_KEYS.SESSION_UID);
-    if (!sessionUid) {
+  const { auth: firebaseAuth, db: firestore } = requireFirebase();
+  return onAuthStateChanged(firebaseAuth, async (fbUser) => {
+    if (!fbUser) {
       callback(null);
       return;
     }
-    const users = readLocal<LocalUserRecord[]>(STORAGE_KEYS.USERS, []);
-    const found = users.find((u) => u.uid === sessionUid) || null;
-    if (found) {
-      const { password: _pw, ...safeUser } = found;
-      callback(safeUser);
-    } else {
-      callback(null);
+    const email = fbUser.email || '';
+    const fallbackProfile: AppUser = {
+      uid: fbUser.uid,
+      fullName: fbUser.displayName || email.split('@')[0] || 'Thành viên',
+      email,
+      phone: '',
+      role: email.toLowerCase().includes('admin') ? 'admin' : 'user',
+      createdAt: new Date().toISOString(),
+    };
+    try {
+      const userRef = doc(firestore, 'users', fbUser.uid);
+      const snap = await getDoc(userRef);
+      if (snap.exists()) {
+        callback(snap.data() as AppUser);
+      } else {
+        const existingCount = await safeGetExistingUsersCount();
+        const role = determineRole(email, existingCount);
+        const profile: AppUser = { ...fallbackProfile, role };
+        try {
+          await setDoc(userRef, profile);
+        } catch {
+          // Ignore if Firestore rules restrict profile auto-write
+        }
+        callback(profile);
+      }
+    } catch {
+      callback(fallbackProfile);
     }
-  };
-
-  notify();
-  window.addEventListener(LOCAL_BUS_EVENT, notify);
-  return () => window.removeEventListener(LOCAL_BUS_EVENT, notify);
+  });
 }
 
 export async function registerAccount(params: {
@@ -249,6 +174,7 @@ export async function registerAccount(params: {
   phone: string;
   password: string;
 }): Promise<AppUser> {
+  const { auth: firebaseAuth, db: firestore } = requireFirebase();
   const email = params.email.trim().toLowerCase();
   const fullName = params.fullName.trim();
   const phone = params.phone.trim();
@@ -257,191 +183,126 @@ export async function registerAccount(params: {
     throw new Error('Vui lòng nhập đầy đủ họ tên, email và mật khẩu từ 6 ký tự.');
   }
 
-  if (isFirebaseConfigured && auth && db) {
+  try {
+    const cred = await createUserWithEmailAndPassword(firebaseAuth, email, params.password);
+    const existingCount = await safeGetExistingUsersCount();
+    const role = determineRole(email, existingCount);
+    const profile: AppUser = {
+      uid: cred.user.uid,
+      fullName,
+      email,
+      phone,
+      role,
+      createdAt: new Date().toISOString(),
+    };
     try {
-      const cred = await createUserWithEmailAndPassword(auth, email, params.password);
-      const existingCount = await safeGetExistingUsersCount();
-      const role = determineRole(email, existingCount);
-      const profile: AppUser = {
-        uid: cred.user.uid,
-        fullName,
-        email,
-        phone,
-        role,
-        createdAt: new Date().toISOString(),
-      };
-      try {
-        await setDoc(doc(db, 'users', cred.user.uid), profile);
-      } catch {
-        // Ignore if rules block profile write
-      }
-      return profile;
-    } catch (err) {
-      throw new Error(mapFirebaseAuthError(err));
+      await setDoc(doc(firestore, 'users', cred.user.uid), profile);
+    } catch {
+      // Ignore if Firestore rules block profile write
     }
+    return profile;
+  } catch (err) {
+    throw new Error(mapFirebaseAuthError(err));
   }
-
-  ensureDemoAccountsInLocal();
-  const users = readLocal<LocalUserRecord[]>(STORAGE_KEYS.USERS, []);
-  if (users.some((u) => u.email.toLowerCase() === email)) {
-    throw new Error('Email này đã tồn tại trong hệ thống.');
-  }
-
-  const nonDemoUsers = users.filter((u) => !u.uid.startsWith('demo-'));
-  const role = determineRole(email, nonDemoUsers.length);
-  const newUser: LocalUserRecord = {
-    uid: `user-${Date.now()}`,
-    fullName,
-    email,
-    phone,
-    role,
-    password: params.password,
-    createdAt: new Date().toISOString(),
-  };
-
-  writeLocal(STORAGE_KEYS.USERS, [...users, newUser]);
-  localStorage.setItem(STORAGE_KEYS.SESSION_UID, newUser.uid);
-  emitLocalUpdate();
-
-  const { password: _pw, ...safeUser } = newUser;
-  return safeUser;
 }
 
 export async function loginAccount(emailInput: string, password: string): Promise<AppUser> {
+  const { auth: firebaseAuth, db: firestore } = requireFirebase();
   const email = emailInput.trim().toLowerCase();
   if (!email || !password) {
     throw new Error('Vui lòng nhập email và mật khẩu.');
   }
 
-  if (isFirebaseConfigured && auth && db) {
+  try {
+    const cred = await signInWithEmailAndPassword(firebaseAuth, email, password);
+    const fallbackProfile: AppUser = {
+      uid: cred.user.uid,
+      fullName: email.split('@')[0],
+      email,
+      phone: '',
+      role: email.toLowerCase().includes('admin') ? 'admin' : 'user',
+      createdAt: new Date().toISOString(),
+    };
     try {
-      const cred = await signInWithEmailAndPassword(auth, email, password);
-      const fallbackProfile: AppUser = {
-        uid: cred.user.uid,
-        fullName: email.split('@')[0],
-        email,
-        phone: '',
-        role: email.toLowerCase().includes('admin') ? 'admin' : 'user',
-        createdAt: new Date().toISOString(),
-      };
-      try {
-        const userSnap = await getDoc(doc(db, 'users', cred.user.uid));
-        if (userSnap.exists()) {
-          return userSnap.data() as AppUser;
-        }
-        const existingCount = await safeGetExistingUsersCount();
-        const role = determineRole(email, existingCount);
-        const profile: AppUser = { ...fallbackProfile, role };
-        try {
-          await setDoc(doc(db, 'users', cred.user.uid), profile);
-        } catch {
-          // Ignore
-        }
-        return profile;
-      } catch {
-        return fallbackProfile;
+      const userSnap = await getDoc(doc(firestore, 'users', cred.user.uid));
+      if (userSnap.exists()) {
+        return userSnap.data() as AppUser;
       }
-    } catch (err) {
-      throw new Error(mapFirebaseAuthError(err));
+      const existingCount = await safeGetExistingUsersCount();
+      const role = determineRole(email, existingCount);
+      const profile: AppUser = { ...fallbackProfile, role };
+      try {
+        await setDoc(doc(firestore, 'users', cred.user.uid), profile);
+      } catch {
+        // Ignore
+      }
+      return profile;
+    } catch {
+      return fallbackProfile;
     }
+  } catch (err) {
+    throw new Error(mapFirebaseAuthError(err));
   }
-
-  ensureDemoAccountsInLocal();
-  const users = readLocal<LocalUserRecord[]>(STORAGE_KEYS.USERS, []);
-  const found = users.find((u) => u.email.toLowerCase() === email);
-  if (!found || (found.password && found.password !== password)) {
-    throw new Error('Email hoặc mật khẩu không chính xác.');
-  }
-  localStorage.setItem(STORAGE_KEYS.SESSION_UID, found.uid);
-  emitLocalUpdate();
-
-  const { password: _pw, ...safeUser } = found;
-  return safeUser;
 }
 
 export async function loginAsDemo(role: UserRole): Promise<AppUser> {
+  const { auth: firebaseAuth, db: firestore } = requireFirebase();
   const demoEmail = role === 'admin' ? 'admin@eventflow.vn' : 'user@eventflow.vn';
   const demoPassword = role === 'admin' ? 'DemoAdmin@2026' : 'DemoUser@2026';
   const demoName = role === 'admin' ? 'Nguyễn Minh Quản Trị' : 'Trần Thu Hà';
   const demoPhone = role === 'admin' ? '0900000001' : '0901234567';
 
-  if (isFirebaseConfigured && auth && db) {
+  try {
+    return await loginAccount(demoEmail, demoPassword);
+  } catch {
     try {
-      return await loginAccount(demoEmail, demoPassword);
-    } catch {
+      const cred = await createUserWithEmailAndPassword(firebaseAuth, demoEmail, demoPassword);
+      const profile: AppUser = {
+        uid: cred.user.uid,
+        fullName: demoName,
+        email: demoEmail,
+        phone: demoPhone,
+        role,
+        createdAt: new Date().toISOString(),
+      };
       try {
-        const cred = await createUserWithEmailAndPassword(auth, demoEmail, demoPassword);
-        const profile: AppUser = {
-          uid: cred.user.uid,
-          fullName: demoName,
-          email: demoEmail,
-          phone: demoPhone,
-          role,
-          createdAt: new Date().toISOString(),
-        };
-        try {
-          await setDoc(doc(db, 'users', cred.user.uid), profile);
-        } catch {
-          // Ignore
-        }
-        return profile;
-      } catch (createErr) {
-        throw new Error(mapFirebaseAuthError(createErr));
+        await setDoc(doc(firestore, 'users', cred.user.uid), profile);
+      } catch {
+        // Ignore
       }
+      return profile;
+    } catch (createErr) {
+      throw new Error(mapFirebaseAuthError(createErr));
     }
   }
-
-  ensureDemoAccountsInLocal();
-  const users = readLocal<LocalUserRecord[]>(STORAGE_KEYS.USERS, []);
-  const target = users.find((u) => u.email === demoEmail) || users.find((u) => u.role === role);
-  if (!target) {
-    throw new Error('Không tìm thấy tài khoản demo.');
-  }
-  localStorage.setItem(STORAGE_KEYS.SESSION_UID, target.uid);
-  emitLocalUpdate();
-  const { password: _pw, ...safeUser } = target;
-  return safeUser;
 }
 
 export async function logoutAccount(): Promise<void> {
-  if (isFirebaseConfigured && auth) {
-    await signOut(auth);
-    return;
-  }
-  localStorage.removeItem(STORAGE_KEYS.SESSION_UID);
-  emitLocalUpdate();
+  const { auth: firebaseAuth } = requireFirebase();
+  await signOut(firebaseAuth);
 }
 
 export function subscribeEvents(
   callback: (events: EventItem[]) => void,
   onPermissionError?: (msg: string) => void
 ): () => void {
-  if (isFirebaseConfigured && db) {
-    const q = query(collection(db, 'events'), orderBy('createdAt', 'desc'));
-    return onSnapshot(
-      q,
-      (snapshot) => {
-        const list = snapshot.docs.map((d) =>
-          normalizeEventDoc(d.id, d.data() as Record<string, unknown>)
-        );
-        callback(list);
-      },
-      (err) => {
-        onPermissionError?.(
-          err instanceof Error ? err.message : 'Không đủ quyền đọc collection events.'
-        );
-        callback([]);
-      }
-    );
-  }
-
-  const notify = () => {
-    const events = readLocal<EventItem[]>(STORAGE_KEYS.EVENTS, []);
-    callback(events);
-  };
-  notify();
-  window.addEventListener(LOCAL_BUS_EVENT, notify);
-  return () => window.removeEventListener(LOCAL_BUS_EVENT, notify);
+  const { db: firestore } = requireFirebase();
+  const q = query(collection(firestore, 'events'), orderBy('createdAt', 'desc'));
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const list = snapshot.docs.map((d) =>
+        normalizeEventDoc(d.id, d.data() as Record<string, unknown>)
+      );
+      callback(list);
+    },
+    (err) => {
+      onPermissionError?.(
+        err instanceof Error ? err.message : 'Không đủ quyền đọc collection events.'
+      );
+      callback([]);
+    }
+  );
 }
 
 export function subscribeRegistrations(
@@ -449,101 +310,69 @@ export function subscribeRegistrations(
   callback: (registrations: RegistrationItem[]) => void,
   onPermissionError?: (msg: string) => void
 ): () => void {
-  if (isFirebaseConfigured && db) {
-    const q =
-      options.role === 'admin'
-        ? query(collection(db, 'registrations'), orderBy('registeredAt', 'desc'))
-        : query(collection(db, 'registrations'), where('userId', '==', options.userId));
+  const { db: firestore } = requireFirebase();
+  const q =
+    options.role === 'admin'
+      ? query(collection(firestore, 'registrations'), orderBy('registeredAt', 'desc'))
+      : query(collection(firestore, 'registrations'), where('userId', '==', options.userId));
 
-    return onSnapshot(
-      q,
-      (snapshot) => {
-        const list = snapshot.docs
-          .map((d) => normalizeRegistrationDoc(d.id, d.data() as Record<string, unknown>))
-          .sort((a, b) => b.registeredAt.localeCompare(a.registeredAt));
-        callback(list);
-      },
-      (err) => {
-        onPermissionError?.(
-          err instanceof Error ? err.message : 'Không đủ quyền đọc collection registrations.'
-        );
-        callback([]);
-      }
-    );
-  }
-
-  const notify = () => {
-    const regs = readLocal<RegistrationItem[]>(STORAGE_KEYS.REGISTRATIONS, []);
-    const filtered =
-      options.role === 'admin' ? regs : regs.filter((r) => r.userId === options.userId);
-    callback(filtered);
-  };
-  notify();
-  window.addEventListener(LOCAL_BUS_EVENT, notify);
-  return () => window.removeEventListener(LOCAL_BUS_EVENT, notify);
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const list = snapshot.docs
+        .map((d) => normalizeRegistrationDoc(d.id, d.data() as Record<string, unknown>))
+        .sort((a, b) => b.registeredAt.localeCompare(a.registeredAt));
+      callback(list);
+    },
+    (err) => {
+      onPermissionError?.(
+        err instanceof Error ? err.message : 'Không đủ quyền đọc collection registrations.'
+      );
+      callback([]);
+    }
+  );
 }
 
 export function subscribeUsers(
   callback: (users: AppUser[]) => void,
   onPermissionError?: (msg: string) => void
 ): () => void {
-  if (isFirebaseConfigured && db) {
-    const q = query(collection(db, 'users'), orderBy('createdAt', 'desc'));
-    return onSnapshot(
-      q,
-      (snapshot) => {
-        const list = snapshot.docs.map((d) => d.data() as AppUser);
-        callback(list);
-      },
-      (err) => {
-        onPermissionError?.(
-          err instanceof Error ? err.message : 'Không đủ quyền đọc collection users.'
-        );
-        callback([]);
-      }
-    );
-  }
-
-  ensureDemoAccountsInLocal();
-  const notify = () => {
-    const users = readLocal<LocalUserRecord[]>(STORAGE_KEYS.USERS, []).map(
-      ({ password: _pw, ...safe }) => safe
-    );
-    callback(users);
-  };
-  notify();
-  window.addEventListener(LOCAL_BUS_EVENT, notify);
-  return () => window.removeEventListener(LOCAL_BUS_EVENT, notify);
+  const { db: firestore } = requireFirebase();
+  const q = query(collection(firestore, 'users'), orderBy('createdAt', 'desc'));
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const list = snapshot.docs.map((d) => d.data() as AppUser);
+      callback(list);
+    },
+    (err) => {
+      onPermissionError?.(
+        err instanceof Error ? err.message : 'Không đủ quyền đọc collection users.'
+      );
+      callback([]);
+    }
+  );
 }
 
 export function subscribeFeedbacks(
   callback: (feedbacks: FeedbackItem[]) => void,
   onPermissionError?: (msg: string) => void
 ): () => void {
-  if (isFirebaseConfigured && db) {
-    const q = query(collection(db, 'feedbacks'), orderBy('createdAt', 'desc'));
-    return onSnapshot(
-      q,
-      (snapshot) => {
-        const list = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }) as FeedbackItem);
-        callback(list);
-      },
-      (err) => {
-        onPermissionError?.(
-          err instanceof Error ? err.message : 'Không đủ quyền đọc collection feedbacks.'
-        );
-        callback([]);
-      }
-    );
-  }
-
-  const notify = () => {
-    const fbs = readLocal<FeedbackItem[]>(STORAGE_KEYS.FEEDBACKS, []);
-    callback(fbs);
-  };
-  notify();
-  window.addEventListener(LOCAL_BUS_EVENT, notify);
-  return () => window.removeEventListener(LOCAL_BUS_EVENT, notify);
+  const { db: firestore } = requireFirebase();
+  const q = query(collection(firestore, 'feedbacks'), orderBy('createdAt', 'desc'));
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const list = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }) as FeedbackItem);
+      callback(list);
+    },
+    (err) => {
+      onPermissionError?.(
+        err instanceof Error ? err.message : 'Không đủ quyền đọc collection feedbacks.'
+      );
+      callback([]);
+    }
+  );
 }
 
 export async function seedSampleData(): Promise<{
@@ -552,56 +381,38 @@ export async function seedSampleData(): Promise<{
   registrationsCount: number;
   feedbacksCount: number;
 }> {
+  const { db: firestore } = requireFirebase();
   const { users, events, registrations, feedbacks } = buildSeedData();
 
-  if (isFirebaseConfigured && db) {
-    try {
-      const batch = writeBatch(db);
-      for (const u of users) {
-        batch.set(doc(db, 'users', u.uid), u, { merge: true });
-      }
-      for (const ev of events) {
-        batch.set(doc(db, 'events', ev.id), ev);
-      }
-      for (const reg of registrations) {
-        batch.set(doc(db, 'registrations', reg.id), reg);
-      }
-      for (const fb of feedbacks) {
-        batch.set(doc(db, 'feedbacks', fb.id), fb);
-      }
-      await batch.commit();
-      return {
-        usersCount: users.length,
-        eventsCount: events.length,
-        registrationsCount: registrations.length,
-        feedbacksCount: feedbacks.length,
-      };
-    } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, 'users+events+registrations+feedbacks');
+  try {
+    const batch = writeBatch(firestore);
+    for (const u of users) {
+      batch.set(doc(firestore, 'users', u.uid), u, { merge: true });
     }
-  }
-
-  const existingLocalUsers = readLocal<LocalUserRecord[]>(STORAGE_KEYS.USERS, []);
-  const mergedUsers = [...existingLocalUsers];
-  for (const seedUser of users) {
-    if (!mergedUsers.some((u) => u.uid === seedUser.uid)) {
-      mergedUsers.push(seedUser);
+    for (const ev of events) {
+      batch.set(doc(firestore, 'events', ev.id), ev);
     }
+    for (const reg of registrations) {
+      batch.set(doc(firestore, 'registrations', reg.id), reg);
+    }
+    for (const fb of feedbacks) {
+      batch.set(doc(firestore, 'feedbacks', fb.id), fb);
+    }
+    await batch.commit();
+    return {
+      usersCount: users.length,
+      eventsCount: events.length,
+      registrationsCount: registrations.length,
+      feedbacksCount: feedbacks.length,
+    };
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, 'users+events+registrations+feedbacks');
+    throw err;
   }
-  writeLocal(STORAGE_KEYS.USERS, mergedUsers);
-  writeLocal(STORAGE_KEYS.EVENTS, events);
-  writeLocal(STORAGE_KEYS.REGISTRATIONS, registrations);
-  writeLocal(STORAGE_KEYS.FEEDBACKS, feedbacks);
-  emitLocalUpdate();
-  return {
-    usersCount: users.length,
-    eventsCount: events.length,
-    registrationsCount: registrations.length,
-    feedbacksCount: feedbacks.length,
-  };
 }
 
 export async function createEvent(input: EventFormInput): Promise<EventItem> {
+  const { db: firestore } = requireFirebase();
   const newId = `evt-${Date.now()}`;
   const eventDoc: EventItem = {
     id: newId,
@@ -613,30 +424,28 @@ export async function createEvent(input: EventFormInput): Promise<EventItem> {
     endTime: new Date(input.endTime).toISOString(),
     maxSlots: Number(input.maxSlots) || 50,
     registeredCount: 0,
+    checkedInCount: 0,
     status: input.status,
     category: input.category,
     price: Number(input.price) || 0,
     ...(input.vipPrice && input.vipPrice > 0 ? { vipPrice: Number(input.vipPrice) } : {}),
-    organizer: input.organizer.trim() || 'Ban tổ chức EventFlow',
+    organizer: input.organizer.trim() || 'EventFlow Enterprise',
+    organizerVerified: input.organizerVerified !== false,
+    featured: Boolean(input.featured),
     speakers: input.speakers.filter((s) => s.name.trim()),
     agenda: input.agenda.filter((a) => a.time.trim() || a.title.trim()),
+    faqs: input.faqs.filter((f) => f.question.trim() && f.answer.trim()),
     rules: input.rules.trim(),
     createdAt: new Date().toISOString(),
   };
 
-  if (isFirebaseConfigured && db) {
-    try {
-      await setDoc(doc(db, 'events', newId), eventDoc);
-      return eventDoc;
-    } catch (err) {
-      handleFirestoreError(err, OperationType.CREATE, `events/${newId}`);
-    }
+  try {
+    await setDoc(doc(firestore, 'events', newId), eventDoc);
+    return eventDoc;
+  } catch (err) {
+    handleFirestoreError(err, OperationType.CREATE, `events/${newId}`);
+    throw err;
   }
-
-  const events = readLocal<EventItem[]>(STORAGE_KEYS.EVENTS, []);
-  writeLocal(STORAGE_KEYS.EVENTS, [eventDoc, ...events]);
-  emitLocalUpdate();
-  return eventDoc;
 }
 
 export async function duplicateEvent(source: EventItem): Promise<EventItem> {
@@ -653,13 +462,17 @@ export async function duplicateEvent(source: EventItem): Promise<EventItem> {
     price: source.price,
     vipPrice: source.vipPrice,
     organizer: source.organizer,
+    organizerVerified: source.organizerVerified,
+    featured: false,
     speakers: source.speakers,
     agenda: source.agenda,
+    faqs: source.faqs || [],
     rules: source.rules,
   });
 }
 
 export async function updateEvent(id: string, input: Partial<EventFormInput>): Promise<void> {
+  const { db: firestore } = requireFirebase();
   const updates: Record<string, unknown> = {
     ...(input.title !== undefined ? { title: input.title.trim() } : {}),
     ...(input.description !== undefined ? { description: input.description.trim() } : {}),
@@ -675,56 +488,40 @@ export async function updateEvent(id: string, input: Partial<EventFormInput>): P
       ? { vipPrice: input.vipPrice > 0 ? Number(input.vipPrice) : 0 }
       : {}),
     ...(input.organizer !== undefined ? { organizer: input.organizer.trim() } : {}),
+    ...(input.organizerVerified !== undefined
+      ? { organizerVerified: input.organizerVerified }
+      : {}),
+    ...(input.featured !== undefined ? { featured: input.featured } : {}),
     ...(input.speakers !== undefined
       ? { speakers: input.speakers.filter((s) => s.name.trim()) }
       : {}),
     ...(input.agenda !== undefined
       ? { agenda: input.agenda.filter((a) => a.time.trim() || a.title.trim()) }
       : {}),
+    ...(input.faqs !== undefined
+      ? { faqs: input.faqs.filter((f) => f.question.trim() && f.answer.trim()) }
+      : {}),
     ...(input.rules !== undefined ? { rules: input.rules.trim() } : {}),
   };
 
-  if (isFirebaseConfigured && db) {
-    try {
-      await updateDoc(doc(db, 'events', id), updates);
-      return;
-    } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `events/${id}`);
-    }
+  try {
+    await updateDoc(doc(firestore, 'events', id), updates);
+  } catch (err) {
+    handleFirestoreError(err, OperationType.UPDATE, `events/${id}`);
   }
-
-  const events = readLocal<EventItem[]>(STORAGE_KEYS.EVENTS, []);
-  writeLocal(
-    STORAGE_KEYS.EVENTS,
-    events.map((ev) => (ev.id === id ? { ...ev, ...updates } : ev))
-  );
-  emitLocalUpdate();
 }
 
 export async function deleteEvent(id: string): Promise<void> {
-  if (isFirebaseConfigured && db) {
-    try {
-      await deleteDoc(doc(db, 'events', id));
-      return;
-    } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, `events/${id}`);
-    }
+  const { db: firestore } = requireFirebase();
+  try {
+    await deleteDoc(doc(firestore, 'events', id));
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, `events/${id}`);
   }
-
-  const events = readLocal<EventItem[]>(STORAGE_KEYS.EVENTS, []);
-  const regs = readLocal<RegistrationItem[]>(STORAGE_KEYS.REGISTRATIONS, []);
-  writeLocal(
-    STORAGE_KEYS.EVENTS,
-    events.filter((ev) => ev.id !== id)
-  );
-  writeLocal(
-    STORAGE_KEYS.REGISTRATIONS,
-    regs.filter((r) => r.eventId !== id)
-  );
-  emitLocalUpdate();
 }
 
 export async function createRegistration(input: RegistrationInput): Promise<RegistrationItem> {
+  const { db: firestore } = requireFirebase();
   const newId = `reg-${Date.now()}`;
   const ticketCode = generateTicketCode();
   const regDoc: RegistrationItem = {
@@ -744,88 +541,73 @@ export async function createRegistration(input: RegistrationInput): Promise<Regi
     checkedInAt: null,
   };
 
-  if (isFirebaseConfigured && db) {
-    const firestore = db;
-    try {
-      // Kiểm tra trùng lặp đăng ký trên cùng sự kiện
-      const dupSnap = await getDocs(
-        query(
-          collection(firestore, 'registrations'),
-          where('userId', '==', input.userId)
-        )
+  try {
+    const dupSnap = await getDocs(
+      query(collection(firestore, 'registrations'), where('userId', '==', input.userId))
+    );
+    const alreadyRegistered = dupSnap.docs.some((d) => {
+      const data = d.data() as RegistrationItem;
+      return data.eventId === input.eventId && data.status !== 'cancelled';
+    });
+    if (alreadyRegistered) {
+      throw new Error(
+        'Bạn đã đăng ký sự kiện này trước đó rồi. Vui lòng kiểm tra mục Sự kiện của tôi.'
       );
-      const alreadyRegistered = dupSnap.docs.some((d) => {
-        const data = d.data() as RegistrationItem;
-        return data.eventId === input.eventId && data.status !== 'cancelled';
-      });
-      if (alreadyRegistered) {
-        throw new Error('Bạn đã đăng ký sự kiện này trước đó rồi. Vui lòng kiểm tra mục Sự kiện của tôi.');
-      }
-
-      // Sử dụng Firestore Transaction để kiểm tra và cập nhật chỗ trống nguyên tử
-      await runTransaction(firestore, async (transaction) => {
-        const eventRef = doc(firestore, 'events', input.eventId);
-        const eventSnap = await transaction.get(eventRef);
-        if (!eventSnap.exists()) {
-          throw new Error('Sự kiện không tồn tại hoặc đã bị xóa.');
-        }
-        const evData = eventSnap.data() as EventItem;
-        if (evData.status === 'cancelled' || evData.status === 'completed') {
-          throw new Error('Sự kiện này hiện đã đóng đăng ký.');
-        }
-        if ((evData.registeredCount || 0) >= (evData.maxSlots || 0)) {
-          throw new Error('Rất tiếc, sự kiện đã hết chỗ trống.');
-        }
-
-        transaction.update(eventRef, {
-          registeredCount: (evData.registeredCount || 0) + 1,
-        });
-        transaction.set(doc(firestore, 'registrations', newId), regDoc);
-      });
-
-      return regDoc;
-    } catch (err) {
-      if (
-        err instanceof Error &&
-        (err.message.includes('đã đăng ký') ||
-          err.message.includes('hết chỗ') ||
-          err.message.includes('đã đóng') ||
-          err.message.includes('không tồn tại'))
-      ) {
-        throw err;
-      }
-      handleFirestoreError(err, OperationType.CREATE, `registrations/${newId}`);
     }
-  }
 
-  const regs = readLocal<RegistrationItem[]>(STORAGE_KEYS.REGISTRATIONS, []);
-  if (regs.some((r) => r.eventId === input.eventId && r.userId === input.userId && r.status !== 'cancelled')) {
-    throw new Error('Bạn đã đăng ký sự kiện này trước đó rồi.');
-  }
-  const events = readLocal<EventItem[]>(STORAGE_KEYS.EVENTS, []);
-  const targetEvent = events.find((ev) => ev.id === input.eventId);
-  if (!targetEvent || targetEvent.registeredCount >= targetEvent.maxSlots) {
-    throw new Error('Sự kiện đã hết chỗ trống.');
-  }
+    await runTransaction(firestore, async (transaction) => {
+      const eventRef = doc(firestore, 'events', input.eventId);
+      const eventSnap = await transaction.get(eventRef);
+      if (!eventSnap.exists()) {
+        throw new Error('Sự kiện không tồn tại hoặc đã bị xóa.');
+      }
+      const evData = eventSnap.data() as EventItem;
+      if (
+        evData.status === 'cancelled' ||
+        evData.status === 'completed' ||
+        evData.status === 'paused'
+      ) {
+        throw new Error('Sự kiện này hiện đang tạm đóng hoặc đã kết thúc đăng ký.');
+      }
+      if ((evData.registeredCount || 0) >= (evData.maxSlots || 0)) {
+        throw new Error('Rất tiếc, sự kiện đã hết chỗ trống.');
+      }
 
-  writeLocal(STORAGE_KEYS.REGISTRATIONS, [regDoc, ...regs]);
-  writeLocal(
-    STORAGE_KEYS.EVENTS,
-    events.map((ev) =>
-      ev.id === input.eventId ? { ...ev, registeredCount: ev.registeredCount + 1 } : ev
-    )
-  );
-  emitLocalUpdate();
-  return regDoc;
+      transaction.update(eventRef, {
+        registeredCount: (evData.registeredCount || 0) + 1,
+      });
+      transaction.set(doc(firestore, 'registrations', newId), regDoc);
+    });
+
+    return regDoc;
+  } catch (err) {
+    if (
+      err instanceof Error &&
+      (err.message.includes('đã đăng ký') ||
+        err.message.includes('hết chỗ') ||
+        err.message.includes('tạm đóng') ||
+        err.message.includes('không tồn tại'))
+    ) {
+      throw err;
+    }
+    handleFirestoreError(err, OperationType.CREATE, `registrations/${newId}`);
+    throw err;
+  }
 }
 
 export async function updateRegistrationStatus(
   registration: RegistrationItem,
   nextStatus: RegistrationStatus
 ): Promise<void> {
+  const { db: firestore } = requireFirebase();
   const wasActive = registration.status !== 'cancelled';
   const willBeActive = nextStatus !== 'cancelled';
-  const delta = wasActive === willBeActive ? 0 : willBeActive ? 1 : -1;
+  const regDelta = wasActive === willBeActive ? 0 : willBeActive ? 1 : -1;
+
+  const wasAttended = registration.status === 'attended';
+  const willBeAttended = nextStatus === 'attended';
+  const checkInDelta = wasAttended === willBeAttended ? 0 : willBeAttended ? 1 : -1;
+
   const checkedInAt =
     nextStatus === 'attended'
       ? registration.checkedInAt || new Date().toISOString()
@@ -833,58 +615,37 @@ export async function updateRegistrationStatus(
       ? null
       : registration.checkedInAt ?? null;
 
-  if (isFirebaseConfigured && db) {
-    const firestore = db;
-    try {
-      await runTransaction(firestore, async (transaction) => {
-        const regRef = doc(firestore, 'registrations', registration.id);
-        const eventRef = doc(firestore, 'events', registration.eventId);
+  try {
+    await runTransaction(firestore, async (transaction) => {
+      const regRef = doc(firestore, 'registrations', registration.id);
+      const eventRef = doc(firestore, 'events', registration.eventId);
 
-        let nextEventCount: number | null = null;
-        if (delta !== 0) {
-          const eventSnap = await transaction.get(eventRef);
-          if (eventSnap.exists()) {
-            const evData = eventSnap.data() as EventItem;
-            nextEventCount = Math.max(0, (evData.registeredCount || 0) + delta);
+      const eventUpdates: Record<string, number> = {};
+      if (regDelta !== 0 || checkInDelta !== 0) {
+        const eventSnap = await transaction.get(eventRef);
+        if (eventSnap.exists()) {
+          const evData = eventSnap.data() as EventItem;
+          if (regDelta !== 0) {
+            eventUpdates.registeredCount = Math.max(0, (evData.registeredCount || 0) + regDelta);
+          }
+          if (checkInDelta !== 0) {
+            eventUpdates.checkedInCount = Math.max(0, (evData.checkedInCount || 0) + checkInDelta);
           }
         }
+      }
 
-        transaction.update(regRef, {
-          status: nextStatus,
-          checkedInAt,
-        });
-
-        if (nextEventCount !== null) {
-          transaction.update(eventRef, {
-            registeredCount: nextEventCount,
-          });
-        }
+      transaction.update(regRef, {
+        status: nextStatus,
+        checkedInAt,
       });
-      return;
-    } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `registrations/${registration.id}`);
-    }
-  }
 
-  const regs = readLocal<RegistrationItem[]>(STORAGE_KEYS.REGISTRATIONS, []);
-  const events = readLocal<EventItem[]>(STORAGE_KEYS.EVENTS, []);
-  writeLocal(
-    STORAGE_KEYS.REGISTRATIONS,
-    regs.map((r) =>
-      r.id === registration.id ? { ...r, status: nextStatus, checkedInAt } : r
-    )
-  );
-  if (delta !== 0) {
-    writeLocal(
-      STORAGE_KEYS.EVENTS,
-      events.map((ev) =>
-        ev.id === registration.eventId
-          ? { ...ev, registeredCount: Math.max(0, ev.registeredCount + delta) }
-          : ev
-      )
-    );
+      if (Object.keys(eventUpdates).length > 0) {
+        transaction.update(eventRef, eventUpdates);
+      }
+    });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.UPDATE, `registrations/${registration.id}`);
   }
-  emitLocalUpdate();
 }
 
 export async function checkInByTicketCode(
@@ -924,6 +685,7 @@ export async function submitFeedback(params: {
   rating: number;
   comment: string;
 }): Promise<FeedbackItem> {
+  const { db: firestore } = requireFirebase();
   const fbId = `fb-${params.eventId}-${params.userId}`;
   const feedback: FeedbackItem = {
     id: fbId,
@@ -936,18 +698,11 @@ export async function submitFeedback(params: {
     createdAt: new Date().toISOString(),
   };
 
-  if (isFirebaseConfigured && db) {
-    try {
-      await setDoc(doc(db, 'feedbacks', fbId), feedback);
-      return feedback;
-    } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, `feedbacks/${fbId}`);
-    }
+  try {
+    await setDoc(doc(firestore, 'feedbacks', fbId), feedback);
+    return feedback;
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, `feedbacks/${fbId}`);
+    throw err;
   }
-
-  const list = readLocal<FeedbackItem[]>(STORAGE_KEYS.FEEDBACKS, []);
-  const filtered = list.filter((f) => f.id !== fbId);
-  writeLocal(STORAGE_KEYS.FEEDBACKS, [feedback, ...filtered]);
-  emitLocalUpdate();
-  return feedback;
 }

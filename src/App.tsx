@@ -26,6 +26,7 @@ export default function App() {
   const [portalView, setPortalView] = useState<'admin' | 'user'>('user');
 
   const [events, setEvents] = useState<EventItem[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(true);
   const [registrations, setRegistrations] = useState<RegistrationItem[]>([]);
   const [users, setUsers] = useState<AppUser[]>([]);
   const [feedbacks, setFeedbacks] = useState<FeedbackItem[]>([]);
@@ -50,6 +51,7 @@ export default function App() {
         setPortalView(user.role === 'admin' ? 'admin' : 'user');
       } else {
         setEvents([]);
+        setEventsLoading(false);
         setRegistrations([]);
         setUsers([]);
         setFeedbacks([]);
@@ -62,11 +64,17 @@ export default function App() {
     if (!authReady) return;
     if (!currentUser && !guestMode) return;
 
+    setEventsLoading(true);
+
     const handlePermissionError = (msg: string) => {
       setPermissionWarning(msg);
+      setEventsLoading(false);
     };
 
-    const unsubEvents = subscribeEvents(setEvents, handlePermissionError);
+    const unsubEvents = subscribeEvents((items) => {
+      setEvents(items);
+      setEventsLoading(false);
+    }, handlePermissionError);
     const unsubFeedbacks = subscribeFeedbacks(setFeedbacks);
 
     let unsubRegs: (() => void) | undefined;
@@ -136,6 +144,7 @@ export default function App() {
         <UserLayout
           currentUser={currentUser}
           events={events}
+          eventsLoading={eventsLoading}
           registrations={registrations}
           feedbacks={feedbacks}
           permissionWarning={permissionWarning}

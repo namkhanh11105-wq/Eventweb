@@ -12,6 +12,7 @@ import {
   YAxis,
 } from 'recharts';
 import {
+  BadgeCheck,
   Calendar,
   Check,
   CheckCircle2,
@@ -20,6 +21,7 @@ import {
   Download,
   Edit3,
   ExternalLink,
+  HelpCircle,
   Image as ImageIcon,
   LayoutDashboard,
   LogOut,
@@ -27,6 +29,7 @@ import {
   Plus,
   QrCode,
   Search,
+  Sparkles,
   Trash2,
   UserCheck,
   Users,
@@ -83,13 +86,20 @@ const SECTION_TITLES: Record<AdminSection, string> = {
   users: 'Tài khoản người dùng',
 };
 
-const CATEGORY_COLORS: Record<EventCategory, string> = {
+const CATEGORY_COLORS: Record<string, string> = {
+  'Hội nghị công nghệ': '#4F46E5',
+  'Workshop chuyên đề': '#0EA5E9',
+  'Đào tạo nội bộ': '#10B981',
+  'Gala doanh nghiệp': '#EC4899',
+  Seminar: '#F59E0B',
   'Công nghệ': '#4F46E5',
   Workshop: '#0EA5E9',
   'Âm nhạc': '#EC4899',
   'Hội thảo': '#F59E0B',
   'Thể thao': '#10B981',
 };
+
+const FALLBACK_PIE_COLORS = ['#6366F1', '#0EA5E9', '#10B981', '#F59E0B', '#EC4899'];
 
 function createEmptyForm(): EventFormInput {
   return {
@@ -99,16 +109,24 @@ function createEmptyForm(): EventFormInput {
     location: '',
     startTime: '',
     endTime: '',
-    maxSlots: 80,
+    maxSlots: 120,
     status: 'ongoing',
-    category: 'Công nghệ',
+    category: 'Hội nghị công nghệ',
     price: 0,
     vipPrice: 0,
-    organizer: 'Ban tổ chức EventFlow',
-    speakers: [{ name: '', role: '' }],
+    organizer: 'EventFlow Enterprise',
+    organizerVerified: true,
+    featured: false,
+    speakers: [{ name: '', role: '', company: '' }],
     agenda: [
       { time: '08:30 - 09:00', title: 'Đón khách & Check-in QR', speaker: '' },
       { time: '09:00 - 11:00', title: 'Phiên nội dung chính', speaker: '' },
+    ],
+    faqs: [
+      {
+        question: 'Sự kiện có xuất hóa đơn VAT cho doanh nghiệp không?',
+        answer: 'Có, ban tổ chức hỗ trợ xuất hóa đơn điện tử VAT trong vòng 3 ngày làm việc.',
+      },
     ],
     rules: 'Vui lòng mang theo mã QR vé điện tử để check-in tại quầy lễ tân.',
   };
@@ -178,32 +196,34 @@ export function AdminLayout({
     return events.slice(0, 6).map((ev) => ({
       name: ev.title.length > 16 ? `${ev.title.slice(0, 16)}…` : ev.title,
       registered: ev.registeredCount,
+      checkedIn: ev.checkedInCount ?? 0,
       maxSlots: ev.maxSlots,
     }));
   }, [events]);
 
   const categoryChartData = useMemo(() => {
-    const eventCategoryMap = new Map<string, EventCategory>();
+    const eventCategoryMap = new Map<string, string>();
     for (const ev of events) {
-      eventCategoryMap.set(ev.id, ev.category);
+      eventCategoryMap.set(ev.id, ev.category || 'Hội nghị công nghệ');
     }
-    const counts: Record<EventCategory, number> = {
-      'Công nghệ': 0,
-      Workshop: 0,
-      'Âm nhạc': 0,
-      'Hội thảo': 0,
-      'Thể thao': 0,
-    };
+    const counts = new Map<string, number>();
+    for (const cat of EVENT_CATEGORIES) {
+      counts.set(cat, 0);
+    }
     for (const r of registrations) {
       if (r.status === 'cancelled') continue;
       const cat = eventCategoryMap.get(r.eventId);
-      if (cat) counts[cat] += 1;
+      if (cat) {
+        counts.set(cat, (counts.get(cat) ?? 0) + 1);
+      }
     }
-    return EVENT_CATEGORIES.map((cat) => ({
-      name: cat,
-      value: counts[cat],
-      color: CATEGORY_COLORS[cat],
-    })).filter((d) => d.value > 0);
+    return Array.from(counts.entries())
+      .map(([name, value], idx) => ({
+        name,
+        value,
+        color: CATEGORY_COLORS[name] || FALLBACK_PIE_COLORS[idx % FALLBACK_PIE_COLORS.length],
+      }))
+      .filter((d) => d.value > 0);
   }, [events, registrations]);
 
   const filteredEvents = useMemo(() => {
@@ -288,8 +308,21 @@ export function AdminLayout({
       price: ev.price,
       vipPrice: ev.vipPrice || 0,
       organizer: ev.organizer,
-      speakers: ev.speakers.length > 0 ? ev.speakers : [{ name: '', role: '' }],
+      organizerVerified: ev.organizerVerified !== false,
+      featured: Boolean(ev.featured),
+      speakers:
+        ev.speakers.length > 0
+          ? ev.speakers.map((s) => ({
+              name: s.name,
+              role: s.role,
+              company: s.company || '',
+            }))
+          : [{ name: '', role: '', company: '' }],
       agenda: ev.agenda.length > 0 ? ev.agenda : [{ time: '', title: '', speaker: '' }],
+      faqs:
+        ev.faqs && ev.faqs.length > 0
+          ? ev.faqs
+          : [{ question: '', answer: '' }],
       rules: ev.rules,
     });
     setEventModalOpen(true);
@@ -666,6 +699,12 @@ export function AdminLayout({
                             radius={[4, 4, 0, 0]}
                           />
                           <Bar
+                            dataKey="checkedIn"
+                            name="Đã Check-in"
+                            fill="#10B981"
+                            radius={[4, 4, 0, 0]}
+                          />
+                          <Bar
                             dataKey="maxSlots"
                             name="Sức chứa"
                             fill="#CBD5E1"
@@ -806,11 +845,17 @@ export function AdminLayout({
                                 className="w-14 h-9 rounded-md shrink-0"
                               />
                               <div className="min-w-0">
-                                <div className="font-semibold text-slate-900 line-clamp-1">
-                                  {ev.title}
+                                <div className="font-semibold text-slate-900 line-clamp-1 flex items-center gap-1.5">
+                                  <span className="truncate">{ev.title}</span>
+                                  {ev.featured && (
+                                    <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                                  )}
                                 </div>
-                                <div className="text-xs text-slate-500 truncate max-w-[220px]">
-                                  {ev.location}
+                                <div className="text-xs text-slate-500 truncate max-w-[220px] flex items-center gap-1">
+                                  {ev.organizerVerified !== false && (
+                                    <BadgeCheck className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                                  )}
+                                  <span className="truncate">{ev.location}</span>
                                 </div>
                               </div>
                             </div>
@@ -835,11 +880,12 @@ export function AdminLayout({
                                 handleQuickEventStatus(ev.id, e.target.value as EventStatus)
                               }
                               className={`px-2.5 py-1.5 text-xs font-semibold bg-white border border-slate-200 rounded-md focus:outline-none focus:border-indigo-600 cursor-pointer ${
-                                EVENT_STATUS_META[ev.status].textClass
+                                EVENT_STATUS_META[ev.status]?.textClass || 'text-slate-700'
                               }`}
                             >
-                              <option value="ongoing">Đang mở đăng ký</option>
+                              <option value="ongoing">Mở đăng ký</option>
                               <option value="upcoming">Sắp diễn ra</option>
+                              <option value="paused">Tạm đóng</option>
                               <option value="completed">Đã kết thúc</option>
                               <option value="cancelled">Đã hủy</option>
                             </select>
@@ -1396,12 +1442,38 @@ export function AdminLayout({
                     }
                     className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-600"
                   >
-                    <option value="ongoing">Đang mở đăng ký</option>
+                    <option value="ongoing">Mở đăng ký</option>
                     <option value="upcoming">Sắp diễn ra</option>
+                    <option value="paused">Tạm đóng</option>
                     <option value="completed">Đã kết thúc</option>
                     <option value="cancelled">Đã hủy</option>
                   </select>
                 </div>
+              </div>
+
+              <div className="flex flex-wrap gap-6 p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+                <label className="inline-flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(formState.featured)}
+                    onChange={(e) =>
+                      setFormState((s) => ({ ...s, featured: e.target.checked }))
+                    }
+                    className="w-4 h-4 accent-indigo-600 rounded"
+                  />
+                  <span>Đánh dấu sự kiện nổi bật (Spotlight Hero)</span>
+                </label>
+                <label className="inline-flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formState.organizerVerified !== false}
+                    onChange={(e) =>
+                      setFormState((s) => ({ ...s, organizerVerified: e.target.checked }))
+                    }
+                    className="w-4 h-4 accent-indigo-600 rounded"
+                  />
+                  <span>Huy hiệu Đơn vị tổ chức đã xác thực</span>
+                </label>
               </div>
 
               {/* Speakers Builder */}
@@ -1415,7 +1487,7 @@ export function AdminLayout({
                     onClick={() =>
                       setFormState((s) => ({
                         ...s,
-                        speakers: [...s.speakers, { name: '', role: '' }],
+                        speakers: [...s.speakers, { name: '', role: '', company: '' }],
                       }))
                     }
                     className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 cursor-pointer"
@@ -1435,7 +1507,7 @@ export function AdminLayout({
                         setFormState((s) => ({ ...s, speakers: next }));
                       }}
                       placeholder="Tên diễn giả"
-                      className="sm:col-span-5 px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-md"
+                      className="sm:col-span-4 px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-md"
                     />
                     <input
                       type="text"
@@ -1445,8 +1517,19 @@ export function AdminLayout({
                         next[idx] = { ...next[idx], role: e.target.value };
                         setFormState((s) => ({ ...s, speakers: next }));
                       }}
-                      placeholder="Chức danh / Đơn vị"
-                      className="sm:col-span-6 px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-md"
+                      placeholder="Chức danh"
+                      className="sm:col-span-4 px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-md"
+                    />
+                    <input
+                      type="text"
+                      value={sp.company || ''}
+                      onChange={(e) => {
+                        const next = [...formState.speakers];
+                        next[idx] = { ...next[idx], company: e.target.value };
+                        setFormState((s) => ({ ...s, speakers: next }));
+                      }}
+                      placeholder="Doanh nghiệp / Đơn vị"
+                      className="sm:col-span-3 px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-md"
                     />
                     <button
                       type="button"
@@ -1530,6 +1613,68 @@ export function AdminLayout({
                       }
                       className="sm:col-span-1 p-1.5 text-slate-400 hover:text-rose-600 cursor-pointer"
                       aria-label="Xóa mốc giờ"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              {/* FAQ Builder */}
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-800 inline-flex items-center gap-1.5">
+                    <HelpCircle className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>Câu hỏi thường gặp (FAQ)</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFormState((s) => ({
+                        ...s,
+                        faqs: [...s.faqs, { question: '', answer: '' }],
+                      }))
+                    }
+                    className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 cursor-pointer"
+                  >
+                    + Thêm câu hỏi
+                  </button>
+                </div>
+
+                {formState.faqs.map((faq, idx) => (
+                  <div key={idx} className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-start">
+                    <input
+                      type="text"
+                      value={faq.question}
+                      onChange={(e) => {
+                        const next = [...formState.faqs];
+                        next[idx] = { ...next[idx], question: e.target.value };
+                        setFormState((s) => ({ ...s, faqs: next }));
+                      }}
+                      placeholder="Câu hỏi..."
+                      className="sm:col-span-5 px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-md"
+                    />
+                    <input
+                      type="text"
+                      value={faq.answer}
+                      onChange={(e) => {
+                        const next = [...formState.faqs];
+                        next[idx] = { ...next[idx], answer: e.target.value };
+                        setFormState((s) => ({ ...s, faqs: next }));
+                      }}
+                      placeholder="Câu trả lời..."
+                      className="sm:col-span-6 px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-md"
+                    />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setFormState((s) => ({
+                          ...s,
+                          faqs: s.faqs.filter((_, i) => i !== idx),
+                        }))
+                      }
+                      className="sm:col-span-1 p-1.5 text-slate-400 hover:text-rose-600 cursor-pointer"
+                      aria-label="Xóa câu hỏi"
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>

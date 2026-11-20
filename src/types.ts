@@ -9,9 +9,14 @@ export interface AppUser {
   createdAt: string;
 }
 
-export type EventCategory = 'Công nghệ' | 'Workshop' | 'Âm nhạc' | 'Hội thảo' | 'Thể thao';
+export type EventCategory =
+  | 'Hội nghị công nghệ'
+  | 'Workshop chuyên đề'
+  | 'Đào tạo nội bộ'
+  | 'Gala doanh nghiệp'
+  | 'Seminar';
 
-export type EventStatus = 'upcoming' | 'ongoing' | 'completed' | 'cancelled';
+export type EventStatus = 'ongoing' | 'upcoming' | 'paused' | 'completed' | 'cancelled';
 
 export interface AgendaItem {
   time: string;
@@ -22,6 +27,12 @@ export interface AgendaItem {
 export interface SpeakerInfo {
   name: string;
   role: string;
+  company?: string;
+}
+
+export interface FaqItem {
+  question: string;
+  answer: string;
 }
 
 export interface EventItem {
@@ -34,13 +45,17 @@ export interface EventItem {
   endTime: string;
   maxSlots: number;
   registeredCount: number;
+  checkedInCount?: number;
   status: EventStatus;
-  category: EventCategory;
+  category: EventCategory | string;
   price: number;
   vipPrice?: number;
   organizer: string;
+  organizerVerified?: boolean;
+  featured?: boolean;
   speakers: SpeakerInfo[];
   agenda: AgendaItem[];
+  faqs?: FaqItem[];
   rules: string;
   createdAt: string;
 }
@@ -86,12 +101,15 @@ export interface EventFormInput {
   endTime: string;
   maxSlots: number;
   status: EventStatus;
-  category: EventCategory;
+  category: EventCategory | string;
   price: number;
   vipPrice?: number;
   organizer: string;
+  organizerVerified?: boolean;
+  featured?: boolean;
   speakers: SpeakerInfo[];
   agenda: AgendaItem[];
+  faqs: FaqItem[];
   rules: string;
 }
 

@@ -6,11 +6,19 @@ import type {
 } from '../types';
 
 export const EVENT_CATEGORIES: EventCategory[] = [
-  'Công nghệ',
-  'Workshop',
-  'Âm nhạc',
-  'Hội thảo',
-  'Thể thao',
+  'Hội nghị công nghệ',
+  'Workshop chuyên đề',
+  'Đào tạo nội bộ',
+  'Gala doanh nghiệp',
+  'Seminar',
+];
+
+export const ENTERPRISE_PARTNERS = [
+  { name: 'TechViet Enterprise', sector: 'Hạ tầng Cloud & AI' },
+  { name: 'Saigon Innovation Hub', sector: 'Đổi mới sáng tạo' },
+  { name: 'FinScale Group', sector: 'Tài chính số' },
+  { name: 'DesignCraft Studio', sector: 'Trải nghiệm sản phẩm' },
+  { name: 'Mekong Ventures', sector: 'Quỹ đầu tư mạo hiểm' },
 ];
 
 export function formatDateTimeVN(isoString: string): string {
@@ -43,19 +51,6 @@ export function formatShortDateVN(isoString: string): string {
   }
 }
 
-export function formatTimeOnlyVN(isoString: string): string {
-  try {
-    const date = new Date(isoString);
-    if (Number.isNaN(date.getTime())) return '';
-    return new Intl.DateTimeFormat('vi-VN', {
-      hour: '2-digit',
-      minute: '2-digit',
-    }).format(date);
-  } catch {
-    return '';
-  }
-}
-
 export function formatCurrencyVN(amount?: number): string {
   if (!amount || amount <= 0) return 'Miễn phí';
   return `${new Intl.NumberFormat('vi-VN').format(amount)} đ`;
@@ -85,15 +80,20 @@ export const EVENT_STATUS_META: Record<
   EventStatus,
   { label: string; textClass: string; bgClass: string }
 > = {
+  ongoing: {
+    label: 'Mở đăng ký',
+    textClass: 'text-emerald-700',
+    bgClass: 'bg-emerald-50 border-emerald-200',
+  },
   upcoming: {
     label: 'Sắp diễn ra',
     textClass: 'text-indigo-700',
     bgClass: 'bg-indigo-50 border-indigo-200',
   },
-  ongoing: {
-    label: 'Đang mở đăng ký',
-    textClass: 'text-emerald-700',
-    bgClass: 'bg-emerald-50 border-emerald-200',
+  paused: {
+    label: 'Tạm đóng',
+    textClass: 'text-amber-700',
+    bgClass: 'bg-amber-50 border-amber-200',
   },
   completed: {
     label: 'Đã kết thúc',
