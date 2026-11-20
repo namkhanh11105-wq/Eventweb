@@ -1,0 +1,137 @@
+import { useEffect, useState } from 'react';
+import { CheckCircle2, AlertCircle, X } from 'lucide-react';
+import { AuthScreen } from './components/AuthScreen';
+import { UserLayout } from './components/UserLayout';
+import { AdminLayout } from './components/AdminLayout';
+import {
+  logoutAccount,
+  subscribeAuthUser,
+  subscribeEvents,
+  subscribeRegistrations,
+  subscribeUsers,
+} from './services/dataService';
+import type { AppUser, EventItem, RegistrationItem } from './types';
+
+interface ToastState {
+  id: number;
+  message: string;
+  type: 'success' | 'error';
+}
+
+export default function App() {
+  const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [guestMode, setGuestMode] = useState(false);
+  const [portalView, setPortalView] = useState<'admin' | 'user'>('user');
+
+  const [events, setEvents] = useState<EventItem[]>([]);
+  const [registrations, setRegistrations] = useState<RegistrationItem[]>([]);
+  const [users, setUsers] = useState<AppUser[]>([]);
+  const [toast, setToast] = useState<ToastState | null>(null);
+
+  function showToast(message: string, type: 'success' | 'error' = 'success') {
+    const id = Date.now();
+    setToast({ id, message, type });
+    window.setTimeout(() => {
+      setToast((prev) => (prev?.id === id ? null : prev));
+    }, 4000);
+  }
+
+  useEffect(() => {
+    const unsubAuth = subscribeAuthUser((user) => {
+      setCurrentUser(user);
+      setAuthReady(true);
+      if (user) {
+        setGuestMode(false);
+        setPortalView(user.role === 'admin' ? 'admin' : 'user');
+      }
+    });
+    return () => unsubAuth();
+  }, []);
+
+  useEffect(() => {
+    const unsubEvents = subscribeEvents(setEvents);
+    const unsubRegs = subscribeRegistrations(setRegistrations);
+    const unsubUsers = subscribeUsers(setUsers);
+    return () => {
+      unsubEvents();
+      unsubRegs();
+      unsubUsers();
+    };
+  }, []);
+
+  async function handleLogout() {
+    try {
+      await logoutAccount();
+      setGuestMode(false);
+      setPortalView('user');
+      showToast('Đã đăng xuất khỏi hệ thống.');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Lỗi khi đăng xuất.', 'error');
+    }
+  }
+
+  return (
+    <>
+      {!authReady ? (
+        <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
+          <div className="bg-white border border-slate-200 rounded-xl px-6 py-5 text-sm font-medium text-slate-600">
+            Đang khởi tạo hệ thống EventFlow...
+          </div>
+        </div>
+      ) : !currentUser && !guestMode ? (
+        <AuthScreen
+          onSuccess={(msg) => showToast(msg, 'success')}
+          onBrowseGuest={() => setGuestMode(true)}
+        />
+      ) : currentUser?.role === 'admin' && portalView === 'admin' ? (
+        <AdminLayout
+          currentUser={currentUser}
+          events={events}
+          registrations={registrations}
+          users={users}
+          onSwitchToUser={() => setPortalView('user')}
+          onLogout={handleLogout}
+          onNotify={showToast}
+        />
+      ) : (
+        <UserLayout
+          currentUser={currentUser}
+          events={events}
+          registrations={registrations}
+          onSwitchToAdmin={
+            currentUser?.role === 'admin' ? () => setPortalView('admin') : undefined
+          }
+          onOpenAuth={() => setGuestMode(false)}
+          onLogout={handleLogout}
+          onNotify={showToast}
+        />
+      )}
+
+      {/* Toast notification */}
+      {toast && (
+        <div
+          role="status"
+          className={`fixed bottom-5 right-5 z-50 max-w-sm flex items-start gap-3 px-4 py-3 rounded-xl border shadow-lg bg-white ${
+            toast.type === 'error' ? 'border-rose-200' : 'border-indigo-200'
+          }`}
+        >
+          {toast.type === 'error' ? (
+            <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+          ) : (
+            <CheckCircle2 className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" />
+          )}
+          <p className="text-sm font-medium text-slate-800">{toast.message}</p>
+          <button
+            type="button"
+            aria-label="Đóng thông báo"
+            onClick={() => setToast(null)}
+            className="p-0.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+    </>
+  );
+}

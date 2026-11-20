@@ -1,0 +1,6 @@
+{
+  "name": "EventFlow - Hệ thống Quản lý Sự kiện",
+  "description": "Nền tảng quản lý sự kiện, đăng ký tham dự và thống kê trực quan với React, TypeScript, Tailwind CSS và Firebase.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
