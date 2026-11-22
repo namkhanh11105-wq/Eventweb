@@ -11,11 +11,13 @@ export interface AppUser {
 }
 
 export type EventCategory =
-  | 'Hội nghị công nghệ'
-  | 'Workshop chuyên đề'
+  | 'Hoạt động ngoại khóa / Teambuilding'
+  | 'Hội thảo / Workshop'
+  | 'Tiệc Gala / Ra mắt sản phẩm'
   | 'Đào tạo nội bộ'
-  | 'Gala doanh nghiệp'
-  | 'Seminar';
+  | 'Sự kiện văn hóa / Nghệ thuật / Ca nhạc'
+  | 'Hoạt động tình nguyện / Cộng đồng'
+  | 'Khác';
 
 export type EventStatus = 'ongoing' | 'upcoming' | 'paused' | 'completed' | 'cancelled';
 

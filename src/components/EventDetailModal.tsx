@@ -209,6 +209,7 @@ export function EventDetailModal({
           <EventBanner
             src={activeEvent.bannerUrl}
             alt={activeEvent.title}
+            category={activeEvent.category}
             className="w-full h-full"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/25 to-transparent" />

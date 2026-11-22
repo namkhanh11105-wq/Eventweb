@@ -50,24 +50,120 @@ export const DEFAULT_EVENT_BANNERS: BannerPreset[] = [
 ];
 
 export const EVENT_CATEGORIES: EventCategory[] = [
-  'Hội nghị công nghệ',
-  'Workshop chuyên đề',
+  'Hoạt động ngoại khóa / Teambuilding',
+  'Hội thảo / Workshop',
+  'Tiệc Gala / Ra mắt sản phẩm',
   'Đào tạo nội bộ',
-  'Gala doanh nghiệp',
-  'Seminar',
+  'Sự kiện văn hóa / Nghệ thuật / Ca nhạc',
+  'Hoạt động tình nguyện / Cộng đồng',
+  'Khác',
 ];
+
+export const STANDARD_EVENT_CATEGORIES: EventCategory[] = EVENT_CATEGORIES.filter(
+  (c) => c !== 'Khác'
+);
+
+const LEGACY_CATEGORY_MAP: Record<string, EventCategory> = {
+  'Hội nghị công nghệ': 'Hội thảo / Workshop',
+  'Workshop chuyên đề': 'Hội thảo / Workshop',
+  Seminar: 'Hội thảo / Workshop',
+  'Gala doanh nghiệp': 'Tiệc Gala / Ra mắt sản phẩm',
+};
+
+export function normalizeEventCategory(category: string): EventCategory | string {
+  const trimmed = String(category || '').trim();
+  if (!trimmed) return 'Hội thảo / Workshop';
+  if (LEGACY_CATEGORY_MAP[trimmed]) return LEGACY_CATEGORY_MAP[trimmed];
+  return trimmed;
+}
+
+export function matchesEventCategoryFilter(
+  eventCategory: string,
+  filterCategory: string
+): boolean {
+  if (!filterCategory || filterCategory === 'all') return true;
+  const raw = String(eventCategory || '').trim();
+  const normalized = normalizeEventCategory(raw);
+
+  if (filterCategory === 'Khác') {
+    if (raw === 'Khác') return true;
+    return !(STANDARD_EVENT_CATEGORIES as string[]).includes(normalized);
+  }
+
+  return raw === filterCategory || normalized === filterCategory;
+}
+
+export interface EventCategoryStyleMeta {
+  badgeClass: string;
+  dotClass: string;
+  fallbackGradient: string;
+}
+
+export function getEventCategoryMeta(category: string): EventCategoryStyleMeta {
+  const normalized = normalizeEventCategory(category);
+  switch (normalized) {
+    case 'Hoạt động ngoại khóa / Teambuilding':
+      return {
+        badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200/80',
+        dotClass: 'bg-emerald-500',
+        fallbackGradient: 'from-emerald-600 via-teal-600 to-cyan-700',
+      };
+    case 'Hội thảo / Workshop':
+      return {
+        badgeClass: 'bg-indigo-50 text-indigo-700 border-indigo-200/80',
+        dotClass: 'bg-indigo-500',
+        fallbackGradient: 'from-indigo-600 via-blue-600 to-slate-800',
+      };
+    case 'Tiệc Gala / Ra mắt sản phẩm':
+      return {
+        badgeClass: 'bg-rose-50 text-rose-700 border-rose-200/80',
+        dotClass: 'bg-rose-500',
+        fallbackGradient: 'from-rose-600 via-orange-500 to-amber-600',
+      };
+    case 'Đào tạo nội bộ':
+      return {
+        badgeClass: 'bg-sky-50 text-sky-700 border-sky-200/80',
+        dotClass: 'bg-sky-500',
+        fallbackGradient: 'from-sky-600 via-indigo-600 to-slate-800',
+      };
+    case 'Sự kiện văn hóa / Nghệ thuật / Ca nhạc':
+      return {
+        badgeClass: 'bg-amber-50 text-amber-800 border-amber-200/80',
+        dotClass: 'bg-amber-500',
+        fallbackGradient: 'from-amber-500 via-rose-500 to-indigo-700',
+      };
+    case 'Hoạt động tình nguyện / Cộng đồng':
+      return {
+        badgeClass: 'bg-teal-50 text-teal-700 border-teal-200/80',
+        dotClass: 'bg-teal-500',
+        fallbackGradient: 'from-teal-600 via-emerald-600 to-sky-700',
+      };
+    default:
+      return {
+        badgeClass: 'bg-slate-100 text-slate-700 border-slate-200',
+        dotClass: 'bg-slate-500',
+        fallbackGradient: 'from-slate-800 via-indigo-900 to-rose-900',
+      };
+  }
+}
 
 export type ServiceFilterType =
   | 'all'
+  | 'teambuilding'
   | 'workshop'
   | 'gala'
-  | 'internal';
+  | 'internal'
+  | 'culture'
+  | 'community';
 
 export const SERVICE_FILTER_TABS: { key: ServiceFilterType; label: string }[] = [
   { key: 'all', label: 'Tất cả loại hình' },
+  { key: 'teambuilding', label: 'Ngoại khóa / Teambuilding' },
   { key: 'workshop', label: 'Hội thảo / Workshop' },
-  { key: 'gala', label: 'Ra mắt / Gala' },
-  { key: 'internal', label: 'Sự kiện nội bộ' },
+  { key: 'gala', label: 'Tiệc Gala / Ra mắt' },
+  { key: 'internal', label: 'Đào tạo nội bộ' },
+  { key: 'culture', label: 'Văn hóa / Ca nhạc' },
+  { key: 'community', label: 'Tình nguyện / Cộng đồng' },
 ];
 
 export interface SystemServiceOption {
@@ -88,61 +184,61 @@ export const SYSTEM_SERVICE_CATALOG: SystemServiceOption[] = [
     key: 'av_stage',
     name: 'Âm thanh, Ánh sáng & Màn hình LED',
     shortName: 'Âm thanh & LED',
-    summary: 'Hệ thống PA hội trường, micro không dây, ánh sáng sân khấu và kỹ thuật viên trực.',
+    summary: 'Hệ thống PA hội trường hoặc loa di động ngoài trời, micro không dây và kỹ thuật viên trực.',
     recommendationHint: 'Phổ biến',
-    quantityPlaceholder: 'Ví dụ: Hội trường 150 khách, 1 LED P3',
+    quantityPlaceholder: 'Ví dụ: Hội trường 150 khách, 1 LED P3 hoặc loa di động',
     notePlaceholder: 'Yêu cầu micro cài áo, ánh sáng sân khấu, test kỹ thuật...',
-    quantityChips: ['Gói 100 khách + 2 mic', '1 LED P3 + 4 micro', 'Hội trường 300+ khách'],
-    noteChips: ['Có 2 micro cài áo', 'Chạy thử trước 1 ngày', 'Hỗ trợ livestream'],
-    eventTypes: ['workshop', 'gala', 'internal'],
+    quantityChips: ['Gói 100 khách + 2 mic', 'Âm thanh di động ngoài trời', '1 LED P3 + 4 micro'],
+    noteChips: ['Có 2 micro cài áo', 'Chạy thử trước 1 ngày', 'Hỗ trợ pin/điện ngoài trời'],
+    eventTypes: ['teambuilding', 'workshop', 'gala', 'internal', 'culture', 'community'],
   },
   {
     key: 'mc_coordinator',
     name: 'MC & Điều phối chương trình',
     shortName: 'MC điều phối',
-    summary: 'MC song ngữ/chuyên nghiệp, điều phối kịch bản timeline và hỗ trợ diễn giả.',
+    summary: 'MC song ngữ/chuyên nghiệp hoặc MC hoạt náo Teambuilding, điều phối kịch bản timeline.',
     recommendationHint: 'Khuyên dùng > 50 khách',
-    quantityPlaceholder: 'Ví dụ: 1 MC + 1 điều phối hậu trường',
-    notePlaceholder: 'Ngôn ngữ dẫn (Việt / Song ngữ), phong cách trang trọng hay trẻ trung...',
-    quantityChips: ['1 MC chuyên nghiệp', '1 MC song ngữ Anh–Việt', '1 MC + 2 điều phối'],
-    noteChips: ['Dẫn song ngữ Anh–Việt', 'Phong cách trang trọng', 'Kèm duyệt kịch bản trước'],
-    eventTypes: ['workshop', 'gala'],
+    quantityPlaceholder: 'Ví dụ: 1 MC hoạt náo + 2 điều phối trò chơi',
+    notePlaceholder: 'Ngôn ngữ dẫn (Việt / Song ngữ), phong cách trang trọng hay hoạt náo...',
+    quantityChips: ['1 MC chuyên nghiệp', '1 MC hoạt náo Teambuilding', '1 MC song ngữ Anh–Việt'],
+    noteChips: ['Hoạt náo tương tác đội nhóm', 'Phong cách trang trọng', 'Kèm duyệt kịch bản trước'],
+    eventTypes: ['teambuilding', 'workshop', 'gala', 'culture'],
   },
   {
     key: 'teabreak_catering',
     name: 'Tiệc Tea-break & Catering',
     shortName: 'Tiệc Tea-break',
-    summary: 'Bàn tiệc trà giữa giờ, bánh ngọt, cà phê và phục vụ theo số lượng khách.',
+    summary: 'Bàn tiệc trà giữa giờ, bánh ngọt, cà phê và nước uống phục vụ theo số lượng khách.',
     recommendationHint: 'Tăng trải nghiệm',
     quantityPlaceholder: 'Ví dụ: 100 suất, phục vụ 1 hoặc 2 lượt',
     notePlaceholder: 'Ghi chú khẩu vị, món chay, menu ít ngọt hoặc giờ phục vụ...',
     quantityChips: ['50 suất', '100 suất', '200 suất'],
     noteChips: ['Menu ít ngọt', 'Cà phê máy & nước ép', 'Có lựa chọn món chay'],
-    eventTypes: ['workshop', 'gala', 'internal'],
+    eventTypes: ['workshop', 'gala', 'internal', 'community'],
   },
   {
     key: 'checkin_staff',
-    name: 'Nhân sự Lễ tân & Check-in QR',
-    shortName: 'Nhân sự Check-in QR',
-    summary: 'Đội ngũ đón khách, quét mã QR E-Ticket và cấp phát thẻ đeo đại biểu.',
+    name: 'Nhân sự Lễ tân, Điều phối & Check-in QR',
+    shortName: 'Điều phối & Check-in',
+    summary: 'Đội ngũ đón khách, điều phối hoạt động/trạm chơi, quét mã QR E-Ticket và cấp phát bộ kit.',
     recommendationHint: 'Tiêu chuẩn',
-    quantityPlaceholder: 'Ví dụ: 2 Lễ tân + 2 Check-in QR',
-    notePlaceholder: 'Yêu cầu trang phục, quầy VIP riêng, cấp phát thẻ đeo hoặc quà...',
-    quantityChips: ['2 Lễ tân + 2 Check-in QR', '4 nhân sự', '6 nhân sự + làn VIP'],
-    noteChips: ['Có máy quét QR', 'Cấp thẻ đeo & bộ kit', 'Đón khách VIP riêng'],
-    eventTypes: ['workshop', 'gala', 'internal'],
+    quantityPlaceholder: 'Ví dụ: 2 Lễ tân + 2 Điều phối Check-in QR',
+    notePlaceholder: 'Yêu cầu trang phục, chia đội Teambuilding, quầy VIP hoặc phát áo/quà...',
+    quantityChips: ['2 Lễ tân + 2 Check-in QR', '4 nhân sự điều phối', '6 nhân sự + làn VIP'],
+    noteChips: ['Có máy quét QR', 'Hỗ trợ điều phối trạm/đội', 'Đón khách VIP riêng'],
+    eventTypes: ['teambuilding', 'workshop', 'gala', 'internal', 'culture', 'community'],
   },
   {
     key: 'media_pr',
     name: 'Truyền thông, Quay phim & Chụp ảnh',
     shortName: 'Quay chụp & Media',
-    summary: 'Nhiếp ảnh sự kiện, quay recap highlight và truyền thông trước/sau chương trình.',
+    summary: 'Nhiếp ảnh sự kiện, quay recap highlight năng động và truyền thông trước/sau chương trình.',
     recommendationHint: 'Tạo dấu ấn',
     quantityPlaceholder: 'Ví dụ: 2 máy ảnh + 1 quay phim',
-    notePlaceholder: 'Yêu cầu video recap, thời hạn trả ảnh nhanh, phỏng vấn khách mời...',
+    notePlaceholder: 'Yêu cầu video recap, thời hạn trả ảnh nhanh, flycam ngoài trời...',
     quantityChips: ['Chụp ảnh + Video Recap', '2 máy ảnh + 1 quay 4K', '1 thợ ảnh toàn buổi'],
-    noteChips: ['Trả ảnh chọn lọc trong 24h', 'Video recap 60–90 giây', 'Phỏng vấn diễn giả / VIP'],
-    eventTypes: ['gala', 'workshop'],
+    noteChips: ['Trả ảnh chọn lọc trong 24h', 'Video recap 60–90 giây', 'Ghi hình hoạt động tập thể'],
+    eventTypes: ['teambuilding', 'workshop', 'gala', 'culture', 'community'],
   },
   {
     key: 'backdrop_booth',
@@ -151,10 +247,10 @@ export const SYSTEM_SERVICE_CATALOG: SystemServiceOption[] = [
     summary: 'Thiết kế, thi công backdrop, standee định hướng và bàn tiếp đón chuẩn thương hiệu.',
     recommendationHint: 'Ấn tượng đầu tiên',
     quantityPlaceholder: 'Ví dụ: 1 Backdrop 4x2.5m + 4 Standee',
-    notePlaceholder: 'Kích thước sảnh, bục chụp ảnh, màu sắc nhận diện thương hiệu...',
+    notePlaceholder: 'Kích thước sảnh/sân khấu, bục chụp ảnh, màu sắc nhận diện thương hiệu...',
     quantityChips: ['Backdrop 4x2.5m + 2 Standee', 'Backdrop 6x3m + Photo Booth', '2 Standee + Bàn đón khách'],
     noteChips: ['Thi công hoàn thiện từ tối hôm trước', 'Theo bộ nhận diện thương hiệu', 'Kèm thảm đỏ & bục chụp ảnh'],
-    eventTypes: ['gala', 'internal'],
+    eventTypes: ['gala', 'internal', 'culture', 'community'],
   },
 ];
 
@@ -163,15 +259,42 @@ export interface ServiceComboPreset {
   label: string;
   subtitle: string;
   badge: string;
+  suggestedCategories: EventCategory[];
   services: Record<string, { quantityOrScope: string; clientNote: string }>;
 }
 
 export const SERVICE_COMBO_PRESETS: ServiceComboPreset[] = [
   {
+    id: 'teambuilding',
+    label: 'Combo Ngoại khóa / Teambuilding',
+    subtitle: 'Âm thanh di động • MC hoạt náo • Nhân sự điều phối & Quay chụp',
+    badge: '4 hạng mục',
+    suggestedCategories: ['Hoạt động ngoại khóa / Teambuilding'],
+    services: {
+      av_stage: {
+        quantityOrScope: 'Âm thanh di động ngoài trời + 2 mic',
+        clientNote: 'Loa công suất lớn khu vực sân bãi • Hỗ trợ pin/điện ngoài trời',
+      },
+      mc_coordinator: {
+        quantityOrScope: '1 MC hoạt náo Teambuilding',
+        clientNote: 'Hoạt náo tương tác đội nhóm • Kèm duyệt kịch bản trước',
+      },
+      checkin_staff: {
+        quantityOrScope: '4 nhân sự điều phối',
+        clientNote: 'Có máy quét QR • Hỗ trợ điều phối trạm/đội',
+      },
+      media_pr: {
+        quantityOrScope: 'Chụp ảnh + Video Recap',
+        clientNote: 'Ghi hình hoạt động tập thể • Trả ảnh chọn lọc trong 24h',
+      },
+    },
+  },
+  {
     id: 'workshop',
     label: 'Combo Hội thảo / Workshop',
     subtitle: 'Âm thanh LED • Tea-break • Check-in QR',
     badge: '3 hạng mục',
+    suggestedCategories: ['Hội thảo / Workshop'],
     services: {
       av_stage: {
         quantityOrScope: 'Gói 100 khách + 2 mic',
@@ -183,23 +306,24 @@ export const SERVICE_COMBO_PRESETS: ServiceComboPreset[] = [
       },
       checkin_staff: {
         quantityOrScope: '2 Lễ tân + 2 Check-in QR',
-        clientNote: 'Có máy quét QR • Cấp thẻ đeo & bộ kit',
+        clientNote: 'Có máy quét QR • Đón khách & cấp thẻ đeo',
       },
     },
   },
   {
     id: 'gala',
-    label: 'Combo Ra mắt / Gala',
+    label: 'Combo Tiệc Gala / Ra mắt',
     subtitle: 'Trọn gói sân khấu, MC, Backdrop, Media & Tiệc',
     badge: '5 hạng mục',
+    suggestedCategories: ['Tiệc Gala / Ra mắt sản phẩm'],
     services: {
       av_stage: {
-        quantityOrScope: 'Hội trường 300+ khách',
-        clientNote: 'Chạy thử trước 1 ngày • Hỗ trợ ánh sáng sân khấu',
+        quantityOrScope: '1 LED P3 + 4 micro',
+        clientNote: 'Chạy thử trước 1 ngày • Ánh sáng sân khấu chuyên nghiệp',
       },
       mc_coordinator: {
-        quantityOrScope: '1 MC + 2 điều phối',
-        clientNote: 'Dẫn song ngữ Anh–Việt • Kèm duyệt kịch bản trước',
+        quantityOrScope: '1 MC song ngữ Anh–Việt',
+        clientNote: 'Phong cách trang trọng • Kèm duyệt kịch bản trước',
       },
       backdrop_booth: {
         quantityOrScope: 'Backdrop 6x3m + Photo Booth',
@@ -216,18 +340,52 @@ export const SERVICE_COMBO_PRESETS: ServiceComboPreset[] = [
     },
   },
   {
-    id: 'compact',
-    label: 'Combo Sự kiện gọn nhẹ',
-    subtitle: 'Nhân sự Check-in QR • Backdrop đón khách',
-    badge: '2 hạng mục',
+    id: 'culture',
+    label: 'Combo Văn hóa / Nghệ thuật / Ca nhạc',
+    subtitle: 'Sân khấu ánh sáng • MC • Backdrop • Quay chụp & Check-in',
+    badge: '5 hạng mục',
+    suggestedCategories: ['Sự kiện văn hóa / Nghệ thuật / Ca nhạc'],
     services: {
-      checkin_staff: {
-        quantityOrScope: '2 Lễ tân + 2 Check-in QR',
-        clientNote: 'Có máy quét QR',
+      av_stage: {
+        quantityOrScope: '1 LED P3 + 4 micro',
+        clientNote: 'Hệ thống âm thanh biểu diễn & ánh sáng sân khấu đa điểm',
+      },
+      mc_coordinator: {
+        quantityOrScope: '1 MC chuyên nghiệp',
+        clientNote: 'Kèm duyệt kịch bản trước • Điều phối tiết mục biểu diễn',
       },
       backdrop_booth: {
-        quantityOrScope: '2 Standee + Bàn đón khách',
-        clientNote: 'Theo bộ nhận diện thương hiệu',
+        quantityOrScope: 'Backdrop 6x3m + Photo Booth',
+        clientNote: 'Theo bộ nhận diện thương hiệu • Khu vực check-in khán giả',
+      },
+      media_pr: {
+        quantityOrScope: '2 máy ảnh + 1 quay 4K',
+        clientNote: 'Video recap 60–90 giây • Ghi hình toàn bộ tiết mục nổi bật',
+      },
+      checkin_staff: {
+        quantityOrScope: '6 nhân sự + làn VIP',
+        clientNote: 'Có máy quét QR • Phân luồng khán giả và khách mời VIP',
+      },
+    },
+  },
+  {
+    id: 'community',
+    label: 'Combo Tình nguyện / Cộng đồng',
+    subtitle: 'Âm thanh di động • Điều phối hiện trường • Ghi hình lan tỏa',
+    badge: '3 hạng mục',
+    suggestedCategories: ['Hoạt động tình nguyện / Cộng đồng'],
+    services: {
+      av_stage: {
+        quantityOrScope: 'Âm thanh di động ngoài trời + 2 mic',
+        clientNote: 'Hỗ trợ pin/điện ngoài trời • Gọn nhẹ dễ di chuyển',
+      },
+      checkin_staff: {
+        quantityOrScope: '4 nhân sự điều phối',
+        clientNote: 'Có máy quét QR • Điểm danh tình nguyện viên & phát bộ kit',
+      },
+      media_pr: {
+        quantityOrScope: 'Chụp ảnh + Video Recap',
+        clientNote: 'Ghi hình hoạt động tập thể • Trả ảnh chọn lọc trong 24h',
       },
     },
   },
@@ -236,6 +394,7 @@ export const SERVICE_COMBO_PRESETS: ServiceComboPreset[] = [
     label: 'Combo Đào tạo nội bộ',
     subtitle: 'Âm thanh trình chiếu • Tiệc trà giữa giờ',
     badge: '2 hạng mục',
+    suggestedCategories: ['Đào tạo nội bộ'],
     services: {
       av_stage: {
         quantityOrScope: 'Gói 100 khách + 2 mic',
@@ -267,54 +426,108 @@ export const SERVICE_PACKAGE_HIGHLIGHTS: ServicePackageHighlight[] = [
     code: '01',
     tag: 'Gói chủ lực',
     eventType: 'workshop',
-    suggestedCategory: 'Hội nghị công nghệ',
+    suggestedCategory: 'Hội thảo / Workshop',
     serviceKeys: ['av_stage', 'mc_coordinator', 'checkin_staff', 'teabreak_catering'],
-    title: 'Hội nghị & Seminar Chuyên đề',
+    title: 'Hội thảo & Workshop Chuyên đề',
     scale: '80 – 500+ đại biểu',
-    idealFor: 'Hội thảo công nghệ, ra mắt sản phẩm, diễn đàn ngành',
+    idealFor: 'Hội thảo công nghệ, workshop thực hành, diễn đàn ngành',
     description:
       'Tổ chức trọn gói từ điều phối diễn giả, quản lý lịch trình đa phiên đến tiếp đón hàng trăm đại biểu.',
     included: [
       'Sân khấu, màn hình LED & Âm thanh ánh sáng',
       'Quản lý đại biểu, diễn giả & khách mời VIP',
       'Check-in mã QR tốc độ cao tại sảnh đón khách',
-      'Kịch bản điều phối & MC dẫn chương trình',
+      'Tiệc Tea-break & MC dẫn chương trình',
     ],
   },
   {
     code: '02',
-    tag: 'Tương tác chuyên sâu',
-    eventType: 'internal',
-    suggestedCategory: 'Workshop chuyên đề',
-    serviceKeys: ['av_stage', 'teabreak_catering', 'checkin_staff'],
-    title: 'Workshop & Đào tạo Nội bộ',
-    scale: '20 – 150 học viên',
-    idealFor: 'Đào tạo doanh nghiệp, workshop thực hành, bootcamp',
+    tag: 'Gắn kết đội ngũ',
+    eventType: 'teambuilding',
+    suggestedCategory: 'Hoạt động ngoại khóa / Teambuilding',
+    serviceKeys: ['av_stage', 'mc_coordinator', 'checkin_staff', 'media_pr'],
+    title: 'Hoạt động Ngoại khóa & Teambuilding',
+    scale: '30 – 500+ thành viên',
+    idealFor: 'Company trip, ngày hội thể thao, hoạt động gắn kết ngoài trời',
     description:
-      'Không gian tương tác thực hành, kiểm soát sĩ số theo phòng và theo dõi tỷ lệ tham dự thực tế.',
+      'Triển khai âm thanh di động ngoài trời, MC hoạt náo khuấy động không khí cùng đội ngũ điều phối trạm chơi.',
     included: [
-      'Tiệc Tea-break & phục vụ đồ uống giữa giờ',
-      'Hệ thống trình chiếu, micro & hỗ trợ kỹ thuật',
-      'Thống kê người tham gia & xuất danh sách CSV',
-      'Khu vực đón tiếp & cấp phát tài liệu',
+      'Hệ thống âm thanh di động công suất lớn ngoài trời',
+      'MC hoạt náo chuyên nghiệp dẫn dắt trò chơi gắn kết',
+      'Nhân sự điều phối chia đội & điểm danh QR nhanh',
+      'Quay chụp khoảnh khắc năng động & video recap',
     ],
   },
   {
     code: '03',
     tag: 'Sự kiện trang trọng',
     eventType: 'gala',
-    suggestedCategory: 'Gala doanh nghiệp',
+    suggestedCategory: 'Tiệc Gala / Ra mắt sản phẩm',
     serviceKeys: ['av_stage', 'mc_coordinator', 'backdrop_booth', 'media_pr', 'teabreak_catering'],
-    title: 'Gala Doanh nghiệp & Vinh danh',
+    title: 'Tiệc Gala & Ra mắt Sản phẩm',
     scale: '100 – 1.000+ khách mời',
-    idealFor: 'Year End Party, lễ kỷ niệm, tri ân đối tác',
+    idealFor: 'Year End Party, lễ ra mắt sản phẩm, tri ân đối tác',
     description:
       'Điều phối kịch bản trang trọng, phân khu khách mời VIP/Đối tác và đội ngũ lễ tân đón tiếp.',
     included: [
-      'MC song ngữ & Kịch bản nghệ thuật chi tiết',
-      'Quay phim, chụp ảnh highlight & truyền thông',
+      'MC song ngữ & Kịch bản ra mắt/vinh danh chi tiết',
+      'Quay phim, chụp ảnh highlight 4K & truyền thông',
       'Danh sách khách mời VIP & phân luồng RSVP riêng',
       'Thiết kế Backdrop & khu vực check-in thương hiệu',
+    ],
+  },
+  {
+    code: '04',
+    tag: 'Phát triển năng lực',
+    eventType: 'internal',
+    suggestedCategory: 'Đào tạo nội bộ',
+    serviceKeys: ['av_stage', 'teabreak_catering', 'checkin_staff'],
+    title: 'Đào tạo Nội bộ Doanh nghiệp',
+    scale: '20 – 150 học viên',
+    idealFor: 'Onboarding nhân sự, đào tạo kỹ năng, bootcamp nội bộ',
+    description:
+      'Không gian tương tác chuyên sâu, kiểm soát sĩ số điểm danh theo buổi và phục vụ tea-break giữa giờ.',
+    included: [
+      'Hệ thống trình chiếu, micro & hỗ trợ kỹ thuật',
+      'Tiệc Tea-break & phục vụ đồ uống giữa giờ',
+      'Điểm danh QR & xuất danh sách báo cáo CSV',
+      'Bàn đón tiếp & cấp phát bộ tài liệu học viên',
+    ],
+  },
+  {
+    code: '05',
+    tag: 'Biểu diễn & Thưởng lãm',
+    eventType: 'culture',
+    suggestedCategory: 'Sự kiện văn hóa / Nghệ thuật / Ca nhạc',
+    serviceKeys: ['av_stage', 'mc_coordinator', 'backdrop_booth', 'media_pr', 'checkin_staff'],
+    title: 'Sự kiện Văn hóa, Nghệ thuật & Ca nhạc',
+    scale: '100 – 1.500+ khán giả',
+    idealFor: 'Đêm nhạc acoustic, triển lãm nghệ thuật, lễ hội văn hóa',
+    description:
+      'Tối ưu chất lượng âm thanh ánh sáng biểu diễn, phân luồng check-in khán giả nhanh và ghi hình 4K.',
+    included: [
+      'Âm thanh sân khấu biểu diễn & hệ thống ánh sáng',
+      'Kiểm soát vé QR nhiều làn & phân khu khách mời',
+      'Backdrop Photo Booth & khu vực trưng bày',
+      'Đội ngũ quay chụp highlight và truyền thông sự kiện',
+    ],
+  },
+  {
+    code: '06',
+    tag: 'Lan tỏa giá trị',
+    eventType: 'community',
+    suggestedCategory: 'Hoạt động tình nguyện / Cộng đồng',
+    serviceKeys: ['av_stage', 'checkin_staff', 'media_pr', 'teabreak_catering'],
+    title: 'Hoạt động Tình nguyện & Cộng đồng',
+    scale: '30 – 400+ tình nguyện viên',
+    idealFor: 'Chiến dịch thiện nguyện, trồng cây, hiến máu, ngày hội cộng đồng',
+    description:
+      'Giải pháp gọn nhẹ, linh hoạt tại hiện trường giúp điểm danh tình nguyện viên và ghi lại hành trình ý nghĩa.',
+    included: [
+      'Loa di động gọn nhẹ phục vụ điều phối hiện trường',
+      'Nhân sự điểm danh QR & cấp phát áo/bộ kit',
+      'Nước uống & suất ăn nhẹ tiếp sức tình nguyện viên',
+      'Chụp ảnh phóng sự & dựng clip truyền thông cộng đồng',
     ],
   },
 ];

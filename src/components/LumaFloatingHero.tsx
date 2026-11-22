@@ -2,6 +2,7 @@ import { useEffect, useRef, type CSSProperties, type MouseEvent } from 'react';
 import { ArrowRight, Calendar, MapPin, Sparkles } from 'lucide-react';
 import { EventBanner } from './EventBanner';
 import { canUsePointer3D } from './MotionPrimitives';
+import { matchesEventCategoryFilter } from '../utils/formatters';
 import type { EventItem } from '../types';
 
 interface FloatingCardSpec {
@@ -25,7 +26,7 @@ const FLOATING_CARDS: FloatingCardSpec[] = [
     title: 'Workshop Sáng tạo',
     subtitle: 'Thiết kế & Thực hành · T7',
     imageUrl: '/src/assets/images/event_design_workshop_1795132977362.jpg',
-    matchCategory: 'Workshop chuyên đề',
+    matchCategory: 'Hội thảo / Workshop',
     positionClass: 'top-4 left-2 xl:left-6',
     sizeClass: 'w-48 xl:w-52',
     floatClass: 'ef-float-a',
@@ -36,10 +37,10 @@ const FLOATING_CARDS: FloatingCardSpec[] = [
   },
   {
     id: 'picnic',
-    title: 'Dã ngoại Cộng đồng',
-    subtitle: 'Công viên · Giao lưu ngoài trời',
+    title: 'Teambuilding Ngoài trời',
+    subtitle: 'Công viên · Gắn kết đội ngũ',
     imageUrl: '/src/assets/images/outdoor_picnic_gathering_1795317964164.jpg',
-    matchCategory: 'Đào tạo nội bộ',
+    matchCategory: 'Hoạt động ngoại khóa / Teambuilding',
     positionClass: 'top-[40%] -left-2 xl:left-2',
     sizeClass: 'w-44 xl:w-48',
     floatClass: 'ef-float-b',
@@ -50,10 +51,10 @@ const FLOATING_CARDS: FloatingCardSpec[] = [
   },
   {
     id: 'tech-summit',
-    title: 'Hội nghị Công nghệ',
+    title: 'Hội thảo Công nghệ',
     subtitle: 'AI & Cloud · 350+ khách',
     imageUrl: '/src/assets/images/event_tech_summit_1795132976833.jpg',
-    matchCategory: 'Hội nghị công nghệ',
+    matchCategory: 'Hội thảo / Workshop',
     positionClass: 'bottom-4 left-6 xl:left-12',
     sizeClass: 'w-52 xl:w-56',
     floatClass: 'ef-float-c',
@@ -67,7 +68,7 @@ const FLOATING_CARDS: FloatingCardSpec[] = [
     title: 'Đêm nhạc Acoustic',
     subtitle: 'Sân khấu mở · 19:30',
     imageUrl: '/src/assets/images/event_music_festival_1795132976683.jpg',
-    matchCategory: 'Gala doanh nghiệp',
+    matchCategory: 'Sự kiện văn hóa / Nghệ thuật / Ca nhạc',
     positionClass: 'top-4 right-2 xl:right-6',
     sizeClass: 'w-48 xl:w-52',
     floatClass: 'ef-float-b',
@@ -78,10 +79,10 @@ const FLOATING_CARDS: FloatingCardSpec[] = [
   },
   {
     id: 'rooftop-party',
-    title: 'Tiệc tối Rooftop',
+    title: 'Tiệc Gala Rooftop',
     subtitle: 'Gala & Networking VIP',
     imageUrl: '/src/assets/images/evening_social_party_1795317965105.jpg',
-    matchCategory: 'Gala doanh nghiệp',
+    matchCategory: 'Tiệc Gala / Ra mắt sản phẩm',
     positionClass: 'top-[41%] -right-2 xl:right-2',
     sizeClass: 'w-44 xl:w-48',
     floatClass: 'ef-float-c',
@@ -92,10 +93,10 @@ const FLOATING_CARDS: FloatingCardSpec[] = [
   },
   {
     id: 'startup-seminar',
-    title: 'Seminar Kết nối',
-    subtitle: 'Sản phẩm & Khởi nghiệp',
+    title: 'Hoạt động Cộng đồng',
+    subtitle: 'Lan tỏa & Kết nối',
     imageUrl: '/src/assets/images/event_startup_demo_1795132977076.jpg',
-    matchCategory: 'Seminar',
+    matchCategory: 'Hoạt động tình nguyện / Cộng đồng',
     positionClass: 'bottom-4 right-6 xl:right-12',
     sizeClass: 'w-52 xl:w-56',
     floatClass: 'ef-float-a',
@@ -192,7 +193,7 @@ export function LumaFloatingHero({
       <div className="ef-hero-3d-stage hidden lg:block">
         {FLOATING_CARDS.map((card) => {
           const matchedEvent = card.matchCategory
-            ? publicEvents.find((e) => e.category === card.matchCategory)
+            ? publicEvents.find((e) => matchesEventCategoryFilter(e.category, card.matchCategory!))
             : undefined;
           const displayTitle = matchedEvent ? matchedEvent.title : card.title;
           const displaySub = matchedEvent ? matchedEvent.location : card.subtitle;
@@ -295,7 +296,7 @@ export function LumaFloatingHero({
       <div className="relative z-20 mt-8 sm:mt-10 grid grid-cols-2 gap-2.5 sm:grid-cols-4 sm:gap-3 lg:hidden">
         {FLOATING_CARDS.slice(0, 4).map((card, idx) => {
           const matchedEvent = card.matchCategory
-            ? publicEvents.find((e) => e.category === card.matchCategory)
+            ? publicEvents.find((e) => matchesEventCategoryFilter(e.category, card.matchCategory!))
             : undefined;
           const displayTitle = matchedEvent ? matchedEvent.title : card.title;
           const displaySub = matchedEvent ? matchedEvent.location : card.subtitle;

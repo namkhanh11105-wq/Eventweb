@@ -12,7 +12,6 @@ import {
   CheckCircle2,
   ClipboardList,
   Copy,
-  Image as ImageIcon,
   Layers,
   Loader2,
   LogIn,
@@ -39,6 +38,7 @@ import { AccountMenuDropdown } from './AccountMenuDropdown';
 import { ContactPage } from './ContactPage';
 import { EventBanner } from './EventBanner';
 import { EventDetailPage } from './EventDetailPage';
+import { EventImagePicker } from './EventImagePicker';
 import {
   EventServiceSelector,
   type ServiceSelectionItem,
@@ -57,12 +57,13 @@ import {
 import { PublicFooter } from './PublicFooter';
 import { ServicesPage } from './ServicesPage';
 import {
-  DEFAULT_EVENT_BANNERS,
   ENTERPRISE_PARTNERS,
   EVENT_CATEGORIES,
   EVENT_STATUS_META,
   formatDateTimeVN,
   formatShortDateVN,
+  getEventCategoryMeta,
+  matchesEventCategoryFilter,
   PLANNING_STATUS_META,
   REGISTRATION_STATUS_META,
   SERVICE_STATUS_META,
@@ -171,6 +172,7 @@ export function UserLayout({
   // Create event organization request state (Tab 2 of Sự kiện của tôi)
   const [reqTitle, setReqTitle] = useState('');
   const [reqCategory, setReqCategory] = useState<string>(EVENT_CATEGORIES[0]);
+  const [reqCustomCategory, setReqCustomCategory] = useState('');
   const [reqOrganizerName, setReqOrganizerName] = useState(
     currentUser?.organization || currentUser?.fullName || ''
   );
@@ -181,7 +183,7 @@ export function UserLayout({
   const [reqLocation, setReqLocation] = useState('');
   const [reqMaxSlots, setReqMaxSlots] = useState(100);
   const [reqDescription, setReqDescription] = useState('');
-  const [reqBannerUrl, setReqBannerUrl] = useState(DEFAULT_EVENT_BANNERS[0].url);
+  const [reqBannerUrl, setReqBannerUrl] = useState('');
   const [reqSelectedServices, setReqSelectedServices] = useState<
     Record<string, ServiceSelectionItem>
   >(() => {
@@ -228,11 +230,14 @@ export function UserLayout({
       }
       setReqSelectedServices(next);
     }
-    if (
-      preset.suggestedCategory &&
-      (EVENT_CATEGORIES as readonly string[]).includes(preset.suggestedCategory)
-    ) {
-      setReqCategory(preset.suggestedCategory);
+    if (preset.suggestedCategory) {
+      if ((EVENT_CATEGORIES as readonly string[]).includes(preset.suggestedCategory)) {
+        setReqCategory(preset.suggestedCategory);
+        setReqCustomCategory('');
+      } else {
+        setReqCategory('Khác');
+        setReqCustomCategory(preset.suggestedCategory);
+      }
     }
     setBookingPackageLabel(preset.packageTitle || null);
   }
@@ -445,7 +450,7 @@ export function UserLayout({
     const q = searchQuery.trim().toLowerCase();
     return publicEvents.filter((ev) => {
       if (statusFilter !== 'all' && ev.status !== statusFilter) return false;
-      if (categoryFilter !== 'all' && ev.category !== categoryFilter) return false;
+      if (!matchesEventCategoryFilter(ev.category, categoryFilter)) return false;
       if (!q) return true;
       return (
         ev.title.toLowerCase().includes(q) ||
@@ -476,7 +481,9 @@ export function UserLayout({
 
   function handleHeroCardSelect(matchCategory?: string) {
     if (matchCategory) {
-      const matched = publicEvents.find((e) => e.category === matchCategory);
+      const matched = publicEvents.find((e) =>
+        matchesEventCategoryFilter(e.category, matchCategory)
+      );
       if (matched) {
         smoothOpenEventDetail(matched.id);
         return;
@@ -562,6 +569,18 @@ export function UserLayout({
       return;
     }
 
+    if (reqCategory === 'Khác' && !reqCustomCategory.trim()) {
+      failRequestValidation(
+        'Vui lòng nhập tên loại hình sự kiện cụ thể khi chọn mục "Khác".'
+      );
+      return;
+    }
+
+    const resolvedCategory =
+      reqCategory === 'Khác'
+        ? reqCustomCategory.trim()
+        : reqCategory || EVENT_CATEGORIES[0];
+
     const safeMaxSlots = Number(reqMaxSlots);
     if (!Number.isFinite(safeMaxSlots) || safeMaxSlots < 10) {
       failRequestValidation('Quy mô khách dự kiến cần tối thiểu 10 người.');
@@ -603,13 +622,13 @@ export function UserLayout({
     try {
       await createOrganizerEventRequest({
         title: reqTitle.trim(),
-        category: reqCategory || EVENT_CATEGORIES[0],
+        category: resolvedCategory,
         startTime: reqStartTime,
         endTime: reqEndTime,
         location: reqLocation.trim(),
         maxSlots: Math.round(safeMaxSlots),
         description: reqDescription.trim(),
-        bannerUrl: reqBannerUrl.trim() || DEFAULT_EVENT_BANNERS[0].url,
+        bannerUrl: reqBannerUrl.trim(),
         organizerName:
           reqOrganizerName.trim() || reqClientName.trim() || currentUser.fullName || 'Thành viên EventFlow',
         clientUserId: currentUser.uid || '',
@@ -621,8 +640,10 @@ export function UserLayout({
 
       setReqFormError(null);
       setReqTitle('');
+      setReqCustomCategory('');
       setReqLocation('');
       setReqDescription('');
+      setReqBannerUrl('');
       setReqCustomServiceName('');
       setBookingPackageLabel(null);
       setReqSelectedServices(createDefaultSelectedServices());
@@ -1279,14 +1300,24 @@ export function UserLayout({
                           <EventBanner
                             src={featuredEvent.bannerUrl}
                             alt={featuredEvent.title}
+                            category={featuredEvent.category}
                             className="w-full h-full transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:scale-[1.04]"
                           />
                         </div>
                         <div className="lg:col-span-6 p-6 sm:p-8 flex flex-col justify-between gap-5">
                           <div>
                             <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                              <span className="font-semibold text-rose-600">
-                                {featuredEvent.category}
+                              <span
+                                className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 font-semibold border rounded-full ${
+                                  getEventCategoryMeta(featuredEvent.category).badgeClass
+                                }`}
+                              >
+                                <span
+                                  className={`w-1.5 h-1.5 rounded-full ${
+                                    getEventCategoryMeta(featuredEvent.category).dotClass
+                                  }`}
+                                />
+                                <span>{featuredEvent.category}</span>
                               </span>
                               <span
                                 className={`inline-flex items-center px-2.5 py-0.5 rounded-full border font-semibold ${
@@ -1521,6 +1552,7 @@ export function UserLayout({
                                   <EventBanner
                                     src={ev.bannerUrl}
                                     alt={ev.title}
+                                    category={ev.category}
                                     className="w-full h-full transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:scale-[1.05]"
                                   />
                                   <div className="absolute top-3 left-3">
@@ -1563,8 +1595,17 @@ export function UserLayout({
 
                                 <div className="p-5">
                                   <div className="flex items-center justify-between gap-2 text-xs">
-                                    <span className="font-semibold text-rose-600 truncate">
-                                      {ev.category}
+                                    <span
+                                      className={`inline-flex items-center gap-1.5 px-2 py-0.5 text-[11px] font-semibold border rounded-md truncate max-w-[70%] ${
+                                        getEventCategoryMeta(ev.category).badgeClass
+                                      }`}
+                                    >
+                                      <span
+                                        className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                                          getEventCategoryMeta(ev.category).dotClass
+                                        }`}
+                                      />
+                                      <span className="truncate">{ev.category}</span>
                                     </span>
                                     <span className="text-slate-500 tabular-nums shrink-0">
                                       {formatShortDateVN(ev.startTime)}
@@ -2081,7 +2122,7 @@ export function UserLayout({
                               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                                 <div className="sm:col-span-2">
                                   <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                                    Tên sự kiện dự kiến
+                                    Tên sự kiện dự kiến <span className="text-rose-500">*</span>
                                   </label>
                                   <input
                                     type="text"
@@ -2109,6 +2150,23 @@ export function UserLayout({
                                   </select>
                                 </div>
                               </div>
+
+                              {reqCategory === 'Khác' && (
+                                <div className="animate-ef-fade-in">
+                                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                                    Nhập tên loại hình sự kiện cụ thể{' '}
+                                    <span className="text-rose-500">*</span>
+                                  </label>
+                                  <input
+                                    type="text"
+                                    required
+                                    value={reqCustomCategory}
+                                    onChange={(e) => setReqCustomCategory(e.target.value)}
+                                    placeholder="Ví dụ: Ngày hội Gia đình, Giải chạy Marathon, Triển lãm Sản phẩm..."
+                                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-slate-900"
+                                  />
+                                </div>
+                              )}
 
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div>
@@ -2221,59 +2279,25 @@ export function UserLayout({
                                 />
                               </div>
 
-                              {/* Banner URL & Preset Picker */}
-                              <div>
-                                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                                  Ảnh minh họa sự kiện (URL hoặc chọn mẫu)
-                                </label>
-                                <div className="relative">
-                                  <ImageIcon className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                                  <input
-                                    type="text"
-                                    required
-                                    value={reqBannerUrl}
-                                    onChange={(e) => setReqBannerUrl(e.target.value)}
-                                    className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:border-slate-900"
-                                  />
-                                </div>
-                                <div className="mt-2.5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2.5">
-                                  {DEFAULT_EVENT_BANNERS.map((preset) => {
-                                    const selected = reqBannerUrl === preset.url;
-                                    return (
-                                      <button
-                                        key={preset.id}
-                                        type="button"
-                                        onClick={() => setReqBannerUrl(preset.url)}
-                                        className={`relative rounded-lg overflow-hidden border text-left cursor-pointer ${
-                                          selected
-                                            ? 'border-slate-900 ring-2 ring-slate-900/15'
-                                            : 'border-slate-200'
-                                        }`}
-                                      >
-                                        <img
-                                          src={preset.url}
-                                          alt={preset.label}
-                                          className="w-full h-14 sm:h-12 object-cover"
-                                        />
-                                        <div className="px-2 py-1 text-[11px] sm:text-[10px] font-medium text-slate-700 truncate bg-white">
-                                          {preset.label}
-                                        </div>
-                                        {selected && (
-                                          <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-slate-900 text-white flex items-center justify-center">
-                                            <Check className="w-2.5 h-2.5" />
-                                          </span>
-                                        )}
-                                      </button>
-                                    );
-                                  })}
-                                </div>
-                              </div>
+                              {/* Upload Device Image (<250KB Canvas) or Direct Image URL + 16:9 Live Preview */}
+                              <EventImagePicker
+                                value={reqBannerUrl}
+                                onChange={setReqBannerUrl}
+                                eventTitle={reqTitle}
+                                eventCategory={
+                                  reqCategory === 'Khác' ? reqCustomCategory : reqCategory
+                                }
+                                accentColor="slate"
+                              />
 
                               {/* Enhanced Services Selector with Combo Presets & Quick Chips */}
                               <EventServiceSelector
                                 selectedServices={reqSelectedServices}
                                 customServiceName={reqCustomServiceName}
                                 expectedGuestCount={reqMaxSlots}
+                                selectedCategory={
+                                  reqCategory === 'Khác' ? reqCustomCategory : reqCategory
+                                }
                                 onChangeSelectedServices={setReqSelectedServices}
                                 onChangeCustomServiceName={setReqCustomServiceName}
                               />
@@ -2405,6 +2429,7 @@ export function UserLayout({
                                           <EventBanner
                                             src={ev.bannerUrl}
                                             alt={ev.title}
+                                            category={ev.category}
                                             className="w-full h-full"
                                           />
                                         </div>
@@ -2418,8 +2443,17 @@ export function UserLayout({
                                                 >
                                                   Duyệt từ Admin: {planMeta.label}
                                                 </span>
-                                                <span className="px-2.5 py-1 font-medium bg-slate-100 text-slate-700 rounded-md">
-                                                  {ev.category}
+                                                <span
+                                                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 font-semibold border rounded-md ${
+                                                    getEventCategoryMeta(ev.category).badgeClass
+                                                  }`}
+                                                >
+                                                  <span
+                                                    className={`w-1.5 h-1.5 rounded-full ${
+                                                      getEventCategoryMeta(ev.category).dotClass
+                                                    }`}
+                                                  />
+                                                  <span>{ev.category}</span>
                                                 </span>
                                                 <span
                                                   className={`px-2.5 py-1 font-medium border rounded-md ${

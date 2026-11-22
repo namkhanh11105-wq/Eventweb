@@ -206,7 +206,13 @@ export function ServicesPage({
           {filteredPackages.map((pkg, idx) => {
             const isWide = filteredPackages.length > 1 && idx === 0;
             const colClass =
-              filteredPackages.length === 1 ? 'lg:col-span-7' : isWide ? 'lg:col-span-7' : 'lg:col-span-5';
+              filteredPackages.length === 1
+                ? 'lg:col-span-7'
+                : idx === 0
+                ? 'lg:col-span-7'
+                : idx === 1
+                ? 'lg:col-span-5'
+                : 'lg:col-span-6';
             const pkgIconCfg = SERVICE_ICON_MAP[pkg.serviceKeys[0]] || SERVICE_ICON_MAP.av_stage;
             const PkgIcon = pkgIconCfg.icon;
             return (
@@ -282,7 +288,13 @@ export function ServicesPage({
 
           {/* Custom Enterprise Contrast Tile */}
           <RevealBlock
-            className={filteredPackages.length === 1 ? 'lg:col-span-5' : 'lg:col-span-7'}
+            className={
+              filteredPackages.length === 1
+                ? 'lg:col-span-5'
+                : filteredPackages.length % 2 === 0
+                ? 'lg:col-span-12'
+                : 'lg:col-span-6'
+            }
             delayMs={filteredPackages.length * 60}
           >
             <div
@@ -302,7 +314,7 @@ export function ServicesPage({
                     <Sparkles className="w-4 h-4" />
                   </span>
                   <span className="text-xs font-semibold text-orange-300">
-                    04. Tùy chỉnh theo yêu cầu doanh nghiệp
+                    0{filteredPackages.length + 1}. Tùy chỉnh theo yêu cầu doanh nghiệp
                   </span>
                 </div>
                 <h3 className="text-xl sm:text-2xl font-bold tracking-tight">

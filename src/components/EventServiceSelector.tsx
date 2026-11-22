@@ -3,9 +3,12 @@ import {
   Camera,
   Check,
   Coffee,
+  Compass,
   Frame,
+  HeartHandshake,
   Layers,
   Mic2,
+  Music,
   Presentation,
   QrCode,
   RotateCcw,
@@ -13,7 +16,6 @@ import {
   Users,
   Volume2,
   X,
-  Zap,
 } from 'lucide-react';
 import { handleSpotlightMove } from './MotionPrimitives';
 import {
@@ -32,6 +34,7 @@ interface EventServiceSelectorProps {
   selectedServices: Record<string, ServiceSelectionItem>;
   customServiceName: string;
   expectedGuestCount: number;
+  selectedCategory?: string;
   onChangeSelectedServices: (
     updater: (
       prev: Record<string, ServiceSelectionItem>
@@ -61,12 +64,16 @@ function getServiceIcon(key: string) {
 
 function getComboIcon(comboId: string) {
   switch (comboId) {
+    case 'teambuilding':
+      return Compass;
     case 'workshop':
       return Presentation;
     case 'gala':
       return Sparkles;
-    case 'compact':
-      return Zap;
+    case 'culture':
+      return Music;
+    case 'community':
+      return HeartHandshake;
     case 'training':
       return Users;
     default:
@@ -78,6 +85,7 @@ export function EventServiceSelector({
   selectedServices,
   customServiceName,
   expectedGuestCount,
+  selectedCategory,
   onChangeSelectedServices,
   onChangeCustomServiceName,
 }: EventServiceSelectorProps) {
@@ -247,10 +255,14 @@ export function EventServiceSelector({
           )}
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
           {SERVICE_COMBO_PRESETS.map((preset, idx) => {
             const ComboIcon = getComboIcon(preset.id);
             const isActive = activeComboId === preset.id;
+            const isCategoryMatch =
+              Boolean(selectedCategory) &&
+              preset.suggestedCategories.some((c) => c === selectedCategory);
+
             return (
               <div
                 key={preset.id}
@@ -264,6 +276,8 @@ export function EventServiceSelector({
                   className={`group w-full h-full text-left p-3 rounded-xl border cursor-pointer flex flex-col justify-between gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 active:scale-[0.98] ${
                     isActive
                       ? 'ef-spotlight-card-dark bg-slate-950 border-slate-950 text-white shadow-sm'
+                      : isCategoryMatch
+                      ? 'ef-spotlight-card bg-indigo-50/45 border-indigo-300 hover:border-indigo-400 text-slate-900'
                       : 'ef-spotlight-card bg-white border-slate-200 hover:border-indigo-200 text-slate-900'
                   }`}
                 >
@@ -272,20 +286,29 @@ export function EventServiceSelector({
                       className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
                         isActive
                           ? 'bg-white/15 text-amber-300'
+                          : isCategoryMatch
+                          ? 'bg-indigo-600 text-white'
                           : 'bg-indigo-50 text-indigo-600 group-hover:bg-indigo-100'
                       }`}
                     >
                       <ComboIcon className="w-3.5 h-3.5" />
                     </span>
-                    <span
-                      className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md tabular-nums whitespace-nowrap shrink-0 ${
-                        isActive
-                          ? 'bg-white/15 text-slate-100'
-                          : 'bg-slate-100 text-slate-600'
-                      }`}
-                    >
-                      {preset.badge}
-                    </span>
+                    <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                      {isCategoryMatch && !isActive && (
+                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-indigo-100 text-indigo-700 whitespace-nowrap shrink-0">
+                          Gợi ý phù hợp
+                        </span>
+                      )}
+                      <span
+                        className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md tabular-nums whitespace-nowrap shrink-0 ${
+                          isActive
+                            ? 'bg-white/15 text-slate-100'
+                            : 'bg-slate-100 text-slate-600'
+                        }`}
+                      >
+                        {preset.badge}
+                      </span>
+                    </div>
                   </div>
 
                   <div>

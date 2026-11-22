@@ -14,7 +14,6 @@ import {
   ExternalLink,
   Globe,
   HelpCircle,
-  Image as ImageIcon,
   LayoutDashboard,
   Loader2,
   Lock,
@@ -63,6 +62,7 @@ import {
 } from '../services/dataService';
 import { AccountMenuDropdown } from './AccountMenuDropdown';
 import { EventBanner } from './EventBanner';
+import { EventImagePicker } from './EventImagePicker';
 import {
   AnimatedModal,
   AnimatedNumber,
@@ -72,17 +72,20 @@ import {
   useSlidingIndicator,
 } from './MotionPrimitives';
 import {
-  DEFAULT_EVENT_BANNERS,
   EVENT_CATEGORIES,
   EVENT_STATUS_META,
   exportRegistrationsToCSV,
   formatDateTimeVN,
   formatShortDateVN,
+  getEventCategoryMeta,
   GUEST_RSVP_META,
   GUEST_TYPE_OPTIONS,
+  matchesEventCategoryFilter,
+  normalizeEventCategory,
   PLANNING_STATUS_META,
   REGISTRATION_STATUS_META,
   SERVICE_STATUS_META,
+  STANDARD_EVENT_CATEGORIES,
   SYSTEM_SERVICE_CATALOG,
   toDatetimeLocalValue,
 } from '../utils/formatters';
@@ -131,20 +134,22 @@ const SECTION_TITLES: Record<AdminSection, string> = {
 };
 
 const CATEGORY_COLORS: Record<string, string> = {
-  'Hội nghị công nghệ': '#4F46E5',
-  'Workshop chuyên đề': '#0EA5E9',
-  'Đào tạo nội bộ': '#10B981',
-  'Gala doanh nghiệp': '#EC4899',
-  Seminar: '#F59E0B',
+  'Hoạt động ngoại khóa / Teambuilding': '#10B981',
+  'Hội thảo / Workshop': '#4F46E5',
+  'Tiệc Gala / Ra mắt sản phẩm': '#EC4899',
+  'Đào tạo nội bộ': '#0EA5E9',
+  'Sự kiện văn hóa / Nghệ thuật / Ca nhạc': '#F59E0B',
+  'Hoạt động tình nguyện / Cộng đồng': '#14B8A6',
+  Khác: '#64748B',
 };
 
-const FALLBACK_PIE_COLORS = ['#6366F1', '#0EA5E9', '#10B981', '#F59E0B', '#EC4899'];
+const FALLBACK_PIE_COLORS = ['#6366F1', '#0EA5E9', '#10B981', '#F59E0B', '#EC4899', '#14B8A6', '#64748B'];
 
 function createEmptyForm(): EventFormInput {
   return {
     title: '',
     description: '',
-    bannerUrl: DEFAULT_EVENT_BANNERS[0].url,
+    bannerUrl: '',
     location: '',
     startTime: '',
     endTime: '',
@@ -152,7 +157,7 @@ function createEmptyForm(): EventFormInput {
     status: 'ongoing',
     planningStatus: 'confirmed',
     isPublic: true,
-    category: 'Hội nghị công nghệ',
+    category: EVENT_CATEGORIES[0],
     organizer: 'EventFlow Enterprise',
     organizerVerified: true,
     featured: false,
@@ -218,7 +223,7 @@ export function AdminLayout({
 
   // Events list filters
   const [eventSearch, setEventSearch] = useState('');
-  const [eventCategoryFilter, setEventCategoryFilter] = useState<'all' | EventCategory>('all');
+  const [eventCategoryFilter, setEventCategoryFilter] = useState<'all' | string>('all');
   const [eventPlanningFilter, setEventPlanningFilter] = useState<'all' | PlanningStatus>('all');
 
   // Per-Event Detail Workspace state (3 isolated tabs per selected event)
@@ -296,6 +301,7 @@ export function AdminLayout({
   const [eventModalOpen, setEventModalOpen] = useState(false);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [formState, setFormState] = useState<EventFormInput>(createEmptyForm);
+  const [customCategory, setCustomCategory] = useState('');
   const [savingEvent, setSavingEvent] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
 
@@ -362,7 +368,7 @@ export function AdminLayout({
   const categoryChartData = useMemo(() => {
     const eventCategoryMap = new Map<string, string>();
     for (const ev of events) {
-      eventCategoryMap.set(ev.id, ev.category || 'Hội nghị công nghệ');
+      eventCategoryMap.set(ev.id, normalizeEventCategory(ev.category || EVENT_CATEGORIES[0]));
     }
     const counts = new Map<string, number>();
     for (const cat of EVENT_CATEGORIES) {
@@ -387,13 +393,14 @@ export function AdminLayout({
   const filteredEvents = useMemo(() => {
     const q = eventSearch.trim().toLowerCase();
     return events.filter((ev) => {
-      if (eventCategoryFilter !== 'all' && ev.category !== eventCategoryFilter) return false;
+      if (!matchesEventCategoryFilter(ev.category, eventCategoryFilter)) return false;
       if (eventPlanningFilter !== 'all' && ev.planningStatus !== eventPlanningFilter) return false;
       if (!q) return true;
       return (
         ev.title.toLowerCase().includes(q) ||
         ev.location.toLowerCase().includes(q) ||
         ev.organizer.toLowerCase().includes(q) ||
+        ev.category.toLowerCase().includes(q) ||
         (ev.clientName || '').toLowerCase().includes(q)
       );
     });
@@ -448,6 +455,7 @@ export function AdminLayout({
     end.setHours(17, 0, 0, 0);
 
     setEditingEventId(null);
+    setCustomCategory('');
     setFormState({
       ...createEmptyForm(),
       startTime: toDatetimeLocalValue(start.toISOString()),
@@ -457,11 +465,16 @@ export function AdminLayout({
   }
 
   function openEditModal(ev: EventItem) {
+    const rawCat = String(ev.category || '').trim();
+    const normalizedCat = normalizeEventCategory(rawCat);
+    const isStandard = (STANDARD_EVENT_CATEGORIES as string[]).includes(normalizedCat);
+
     setEditingEventId(ev.id);
+    setCustomCategory(isStandard ? '' : rawCat === 'Khác' ? '' : rawCat);
     setFormState({
       title: ev.title,
       description: ev.description,
-      bannerUrl: ev.bannerUrl,
+      bannerUrl: ev.bannerUrl || '',
       location: ev.location,
       startTime: toDatetimeLocalValue(ev.startTime),
       endTime: toDatetimeLocalValue(ev.endTime),
@@ -469,7 +482,7 @@ export function AdminLayout({
       status: ev.status,
       planningStatus: ev.planningStatus || 'confirmed',
       isPublic: ev.isPublic,
-      category: ev.category,
+      category: isStandard ? normalizedCat : 'Khác',
       organizer: ev.organizer,
       organizerVerified: ev.organizerVerified !== false,
       featured: Boolean(ev.featured),
@@ -492,13 +505,30 @@ export function AdminLayout({
   async function handleSaveEvent(e: FormEvent) {
     e.preventDefault();
     if (savingEvent) return;
+
+    if (formState.category === 'Khác' && !customCategory.trim()) {
+      onNotify('Vui lòng nhập tên loại hình sự kiện khi chọn mục "Khác".', 'error');
+      return;
+    }
+
+    const resolvedCategory =
+      formState.category === 'Khác'
+        ? customCategory.trim()
+        : formState.category || EVENT_CATEGORIES[0];
+
+    const payload: EventFormInput = {
+      ...formState,
+      category: resolvedCategory,
+      bannerUrl: (formState.bannerUrl || '').trim(),
+    };
+
     setSavingEvent(true);
     try {
       if (editingEventId) {
-        await updateEvent(editingEventId, formState);
+        await updateEvent(editingEventId, payload);
         onNotify('Đã cập nhật thông tin sự kiện.');
       } else {
-        await createEvent(formState);
+        await createEvent(payload);
         onNotify('Đã tạo sự kiện mới thành công.');
       }
       setEventModalOpen(false);
@@ -1457,9 +1487,7 @@ export function AdminLayout({
                   <select
                     aria-label="Lọc danh mục sự kiện"
                     value={eventCategoryFilter}
-                    onChange={(e) =>
-                      setEventCategoryFilter(e.target.value as 'all' | EventCategory)
-                    }
+                    onChange={(e) => setEventCategoryFilter(e.target.value)}
                     className="px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-600"
                   >
                     <option value="all">Tất cả danh mục</option>
@@ -1508,6 +1536,7 @@ export function AdminLayout({
                             <EventBanner
                               src={ev.bannerUrl}
                               alt={ev.title}
+                              category={ev.category}
                               className="w-16 h-12 rounded-lg shrink-0"
                             />
                             <div className="min-w-0 flex-1">
@@ -1546,6 +1575,13 @@ export function AdminLayout({
                                 className={`inline-block px-2 py-0.5 font-semibold rounded border ${planMeta.bgClass} ${planMeta.textClass}`}
                               >
                                 {planMeta.label}
+                              </span>
+                              <span
+                                className={`inline-block px-2 py-0.5 font-medium rounded border ${
+                                  getEventCategoryMeta(ev.category).badgeClass
+                                }`}
+                              >
+                                {ev.category}
                               </span>
                               <span className="inline-flex items-center gap-1 text-slate-500">
                                 {ev.isPublic ? (
@@ -1687,6 +1723,7 @@ export function AdminLayout({
                                 <EventBanner
                                   src={ev.bannerUrl}
                                   alt={ev.title}
+                                  category={ev.category}
                                   className="w-14 h-9 rounded-md shrink-0"
                                 />
                                 <div className="min-w-0">
@@ -1705,16 +1742,24 @@ export function AdminLayout({
                                       <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
                                     )}
                                   </button>
-                                  <div className="text-xs text-slate-500 truncate max-w-[240px] flex items-center gap-1.5">
+                                  <div className="mt-0.5 text-xs text-slate-500 flex flex-wrap items-center gap-1.5">
                                     {ev.clientName ? (
-                                      <span className="text-indigo-700 font-medium">
+                                      <span className="text-indigo-700 font-medium truncate max-w-[140px]">
                                         Yêu cầu từ: {ev.clientName}
                                       </span>
                                     ) : (
-                                      <span>{ev.organizer}</span>
+                                      <span className="truncate max-w-[140px]">{ev.organizer}</span>
                                     )}
                                     <span>·</span>
-                                    <span>{formatShortDateVN(ev.startTime)}</span>
+                                    <span className="shrink-0">{formatShortDateVN(ev.startTime)}</span>
+                                    <span>·</span>
+                                    <span
+                                      className={`inline-block px-1.5 py-0.5 text-[10px] font-semibold rounded border truncate max-w-[155px] ${
+                                        getEventCategoryMeta(ev.category).badgeClass
+                                      }`}
+                                    >
+                                      {ev.category}
+                                    </span>
                                   </div>
                                 </div>
                               </div>
@@ -1902,12 +1947,22 @@ export function AdminLayout({
                   <EventBanner
                     src={workspaceEvent.bannerUrl}
                     alt={workspaceEvent.title}
+                    category={workspaceEvent.category}
                     className="w-full sm:w-44 h-28 rounded-xl shrink-0"
                   />
                   <div className="min-w-0 space-y-1.5">
                     <div className="flex flex-wrap items-center gap-2 text-xs">
-                      <span className="font-semibold text-indigo-600">
-                        {workspaceEvent.category}
+                      <span
+                        className={`inline-flex items-center gap-1.5 px-2 py-0.5 font-semibold border rounded-md ${
+                          getEventCategoryMeta(workspaceEvent.category).badgeClass
+                        }`}
+                      >
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full ${
+                            getEventCategoryMeta(workspaceEvent.category).dotClass
+                          }`}
+                        />
+                        <span>{workspaceEvent.category}</span>
                       </span>
                       <span className="text-slate-300">·</span>
                       <span className="text-slate-600">{workspaceEvent.organizer}</span>
@@ -3416,7 +3471,7 @@ export function AdminLayout({
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                    Danh mục
+                    Loại hình sự kiện
                   </label>
                   <select
                     value={formState.category}
@@ -3434,6 +3489,22 @@ export function AdminLayout({
                 </div>
               </div>
 
+              {formState.category === 'Khác' && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                    Nhập tên loại hình sự kiện cụ thể <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={customCategory}
+                    onChange={(e) => setCustomCategory(e.target.value)}
+                    placeholder="Ví dụ: Ngày hội Gia đình, Giải chạy Marathon, Triển lãm Sản phẩm..."
+                    className="w-full px-3.5 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-600"
+                  />
+                </div>
+              )}
+
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                   Mô tả chi tiết
@@ -3448,54 +3519,15 @@ export function AdminLayout({
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                  Ảnh bìa sự kiện (URL hoặc chọn nhanh mẫu có sẵn)
-                </label>
-                <div className="relative">
-                  <ImageIcon className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    required
-                    value={formState.bannerUrl}
-                    onChange={(e) => setFormState((s) => ({ ...s, bannerUrl: e.target.value }))}
-                    placeholder="https://..."
-                    className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-600"
-                  />
-                </div>
-
-                <div className="mt-2.5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
-                  {DEFAULT_EVENT_BANNERS.map((preset) => {
-                    const selected = formState.bannerUrl === preset.url;
-                    return (
-                      <button
-                        key={preset.id}
-                        type="button"
-                        onClick={() => setFormState((s) => ({ ...s, bannerUrl: preset.url }))}
-                        className={`group relative rounded-lg overflow-hidden border text-left cursor-pointer transition-all ${
-                          selected
-                            ? 'border-indigo-600 ring-2 ring-indigo-600/20'
-                            : 'border-slate-200 hover:border-slate-300'
-                        }`}
-                      >
-                        <img
-                          src={preset.url}
-                          alt={preset.label}
-                          className="w-full h-12 object-cover"
-                        />
-                        <div className="px-1.5 py-1 text-[10px] font-medium text-slate-700 truncate bg-white">
-                          {preset.label}
-                        </div>
-                        {selected && (
-                          <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-indigo-600 text-white flex items-center justify-center">
-                            <Check className="w-2.5 h-2.5" />
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+              <EventImagePicker
+                value={formState.bannerUrl}
+                onChange={(nextUrl) => setFormState((s) => ({ ...s, bannerUrl: nextUrl }))}
+                eventTitle={formState.title}
+                eventCategory={
+                  formState.category === 'Khác' ? customCategory : formState.category
+                }
+                accentColor="indigo"
+              />
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>

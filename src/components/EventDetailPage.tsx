@@ -301,7 +301,7 @@ export function EventDetailPage({
       <article className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden">
         {/* Hero Cover Banner */}
         <div className="relative aspect-[16/10] sm:aspect-[16/6] min-h-[240px] w-full bg-slate-100 overflow-hidden">
-          <EventBanner src={event.bannerUrl} alt={event.title} className="w-full h-full" />
+          <EventBanner src={event.bannerUrl} alt={event.title} category={event.category} className="w-full h-full" />
           <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/35 to-transparent" />
 
           <div className="absolute bottom-0 inset-x-0 p-4 sm:p-8 text-white">
