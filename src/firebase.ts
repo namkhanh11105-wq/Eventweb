@@ -85,8 +85,13 @@ export function handleFirestoreError(
   path: string | null,
   rethrow = true
 ): void {
+  const errorCode =
+    typeof error === 'object' && error !== null && 'code' in error
+      ? String((error as { code?: unknown }).code ?? '')
+      : '';
+  const errorMessage = error instanceof Error ? error.message : String(error);
   const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
+    error: errorMessage,
     operationType,
     path,
     authInfo: {
@@ -97,11 +102,16 @@ export function handleFirestoreError(
   };
   console.error('Firestore Error:', JSON.stringify(errInfo));
   if (rethrow) {
-    if (errInfo.error.toLowerCase().includes('permission') || errInfo.error.toLowerCase().includes('insufficient')) {
+    const combined = `${errorCode} ${errorMessage}`.toLowerCase();
+    if (
+      combined.includes('permission-denied') ||
+      combined.includes('permission') ||
+      combined.includes('insufficient')
+    ) {
       throw new Error(
-        `Không đủ quyền thao tác Firestore (${path ?? 'unknown'}). Vui lòng kiểm tra Firestore Security Rules trong Firebase Console.`
+        `Lỗi phân quyền Firestore (permission-denied) tại "${path ?? 'dữ liệu'}". Vui lòng kiểm tra lại Firestore Security Rules trong Firebase Console (dự án quan-ly-su-kien-86a89).`
       );
     }
-    throw error instanceof Error ? error : new Error(errInfo.error);
+    throw error instanceof Error ? error : new Error(errorMessage);
   }
 }

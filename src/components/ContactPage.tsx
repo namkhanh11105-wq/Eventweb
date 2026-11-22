@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import {
+  AlertCircle,
   CheckCircle2,
   ChevronDown,
   Clock,
@@ -42,15 +43,19 @@ export function ContactPage({
   const [message, setMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submittedId, setSubmittedId] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    setSubmitError(null);
     const cleanName = fullName.trim();
     const cleanContact = contactInfo.trim();
     const cleanMessage = message.trim();
 
     if (!cleanName || !cleanContact || !cleanMessage) {
-      onNotify('Vui lòng điền đầy đủ họ tên, SĐT/Email và nội dung cần tư vấn.', 'error');
+      const msg = 'Vui lòng điền đầy đủ họ tên, SĐT/Email và nội dung cần tư vấn.';
+      setSubmitError(msg);
+      onNotify(msg, 'error');
       return;
     }
 
@@ -58,7 +63,9 @@ export function ContactPage({
     const digitsOnly = cleanContact.replace(/[^\d]/g, '');
     const looksLikePhone = digitsOnly.length >= 8 && digitsOnly.length <= 15;
     if (!looksLikeEmail && !looksLikePhone) {
-      onNotify('Vui lòng nhập đúng định dạng Số điện thoại hoặc Email liên hệ.', 'error');
+      const msg = 'Vui lòng nhập đúng định dạng Số điện thoại hoặc Email liên hệ.';
+      setSubmitError(msg);
+      onNotify(msg, 'error');
       return;
     }
 
@@ -73,12 +80,13 @@ export function ContactPage({
       });
       setSubmittedId(saved.id);
       setMessage('');
+      setSubmitError(null);
       onNotify('Đã gửi yêu cầu tư vấn lên Cloud Firestore. Ban quản trị sẽ phản hồi sớm.');
     } catch (err) {
-      onNotify(
-        err instanceof Error ? err.message : 'Không thể gửi yêu cầu liên hệ.',
-        'error'
-      );
+      const msg =
+        err instanceof Error ? err.message : 'Không thể gửi yêu cầu liên hệ lên Cloud Firestore.';
+      setSubmitError(msg);
+      onNotify(msg, 'error');
     } finally {
       setSubmitting(false);
     }
@@ -247,6 +255,18 @@ export function ContactPage({
               </div>
             ) : (
               <form onSubmit={handleSubmit} className="space-y-4">
+                {submitError && (
+                  <div
+                    role="alert"
+                    className="flex items-start gap-2.5 p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-800 leading-relaxed animate-ef-fade-in"
+                  >
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                    <div>
+                      <div className="font-semibold text-rose-900">Không thể ghi dữ liệu lên Cloud Firestore</div>
+                      <p className="mt-0.5">{submitError}</p>
+                    </div>
+                  </div>
+                )}
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                     Họ và tên <span className="text-rose-500">*</span>

@@ -11,7 +11,6 @@ import {
   Sparkles,
   Ticket,
   User,
-  Users,
 } from 'lucide-react';
 import { loginAccount, loginAsDemo, registerAccount } from '../services/dataService';
 import { triggerPageProgress } from './MotionPrimitives';
@@ -19,7 +18,6 @@ import type { PublicContactInfo, UserRole } from '../types';
 
 interface AuthScreenProps {
   mode: 'login' | 'register';
-  initialRegisterRole?: 'user' | 'organizer';
   publicContact: PublicContactInfo;
   onSwitchMode: (nextMode: 'login' | 'register') => void;
   onSuccess: (message: string) => void;
@@ -28,13 +26,11 @@ interface AuthScreenProps {
 
 export function AuthScreen({
   mode,
-  initialRegisterRole = 'user',
   publicContact,
   onSwitchMode,
   onSuccess,
   onBackPublic,
 }: AuthScreenProps) {
-  const [registerRole, setRegisterRole] = useState<'user' | 'organizer'>(initialRegisterRole);
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [organization, setOrganization] = useState('');
@@ -45,10 +41,6 @@ export function AuthScreen({
   const [error, setError] = useState<string | null>(null);
   const [isSwitching, setIsSwitching] = useState(false);
   const switchTimerRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    setRegisterRole(initialRegisterRole);
-  }, [initialRegisterRole]);
 
   useEffect(() => {
     setError(null);
@@ -96,23 +88,24 @@ export function AuthScreen({
     try {
       if (mode === 'login') {
         const user = await loginAccount(email, password);
-        onSuccess(`Chào mừng ${user.fullName} quay trở lại.`);
+        onSuccess(
+          user.role === 'admin'
+            ? `Chào mừng Quản trị viên ${user.fullName}.`
+            : `Chào mừng ${user.fullName} quay trở lại.`
+        );
       } else {
         const user = await registerAccount({
           fullName,
           email,
           phone,
           password,
-          role: registerRole,
           organization,
         });
-        const roleText =
+        onSuccess(
           user.role === 'admin'
-            ? 'Quản trị viên'
-            : user.role === 'organizer'
-            ? 'Khách hàng đặt tổ chức sự kiện'
-            : 'Người tham gia sự kiện';
-        onSuccess(`Đăng ký thành công với vai trò ${roleText}.`);
+            ? 'Đăng ký thành công tài khoản Quản trị viên.'
+            : 'Đăng ký tài khoản thành công. Bạn có thể tham gia hoặc gửi yêu cầu tổ chức sự kiện ngay.'
+        );
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Không thể xử lý yêu cầu.');
@@ -127,11 +120,7 @@ export function AuthScreen({
     try {
       const user = await loginAsDemo(role);
       const label =
-        user.role === 'admin'
-          ? 'Demo Quản trị viên (Admin)'
-          : user.role === 'organizer'
-          ? 'Demo Khách hàng Tổ chức'
-          : 'Demo Người tham gia';
+        user.role === 'admin' ? 'Demo Quản trị viên (Admin)' : 'Demo Người dùng (User)';
       onSuccess(`Đã đăng nhập nhanh (${label}).`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Không thể đăng nhập tài khoản demo.');
@@ -240,7 +229,7 @@ export function AuthScreen({
       <main className="relative z-10 my-8 flex items-center justify-center">
         <div
           className={`w-full transition-[opacity,transform] duration-150 ease-out motion-reduce:transition-none motion-reduce:transform-none ${
-            mode === 'register' ? 'max-w-[30rem]' : 'max-w-[26rem]'
+            mode === 'register' ? 'max-w-[29rem]' : 'max-w-[26rem]'
           } ${
             isSwitching
               ? 'opacity-0 scale-[0.982] pointer-events-none'
@@ -258,8 +247,8 @@ export function AuthScreen({
               </h1>
               <p className="mt-1.5 text-sm text-slate-500">
                 {mode === 'login'
-                  ? 'Truy cập không gian sự kiện, vé QR hoặc cổng điều phối của bạn.'
-                  : 'Chọn vai trò phù hợp để bắt đầu tham gia hoặc tổ chức sự kiện.'}
+                  ? 'Truy cập sự kiện đã đăng ký, mã QR và yêu cầu tổ chức sự kiện.'
+                  : 'Một tài khoản thống nhất để vừa tham gia vừa đặt tổ chức sự kiện.'}
               </p>
             </div>
 
@@ -275,50 +264,6 @@ export function AuthScreen({
             <form onSubmit={handleSubmit} className="mt-6 space-y-4">
               {mode === 'register' && (
                 <>
-                  {/* Role Selector */}
-                  <div>
-                    <span className="block text-xs font-semibold text-slate-700 mb-2">
-                      Vai trò sử dụng
-                    </span>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                      <button
-                        type="button"
-                        onClick={() => setRegisterRole('user')}
-                        className={`p-3 rounded-2xl border text-left transition-all duration-150 cursor-pointer ${
-                          registerRole === 'user'
-                            ? 'border-slate-900 bg-slate-900/5 ring-2 ring-slate-900/10'
-                            : 'border-slate-200/90 bg-white hover:border-slate-300'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
-                          <Users className="w-4 h-4 text-rose-500 shrink-0" />
-                          <span>Người tham gia</span>
-                        </div>
-                        <p className="mt-1 text-[11px] text-slate-500 leading-snug">
-                          Đăng ký sự kiện &amp; lưu mã QR.
-                        </p>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setRegisterRole('organizer')}
-                        className={`p-3 rounded-2xl border text-left transition-all duration-150 cursor-pointer ${
-                          registerRole === 'organizer'
-                            ? 'border-slate-900 bg-slate-900/5 ring-2 ring-slate-900/10'
-                            : 'border-slate-200/90 bg-white hover:border-slate-300'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
-                          <Building2 className="w-4 h-4 text-orange-500 shrink-0" />
-                          <span>Khách hàng tổ chức</span>
-                        </div>
-                        <p className="mt-1 text-[11px] text-slate-500 leading-snug">
-                          Đặt tổ chức sự kiện &amp; dịch vụ.
-                        </p>
-                      </button>
-                    </div>
-                  </div>
-
                   {/* Full Name & Phone */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                     <div>
@@ -364,27 +309,25 @@ export function AuthScreen({
                     </div>
                   </div>
 
-                  {registerRole === 'organizer' && (
-                    <div className="animate-ef-fade-in">
-                      <label
-                        htmlFor="auth-org"
-                        className="block text-xs font-semibold text-slate-700 mb-1.5"
-                      >
-                        Tên doanh nghiệp / Đơn vị (tùy chọn)
-                      </label>
-                      <div className="relative">
-                        <Building2 className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                        <input
-                          id="auth-org"
-                          type="text"
-                          value={organization}
-                          onChange={(e) => setOrganization(e.target.value)}
-                          placeholder="Công ty Cổ phần TechNova..."
-                          className={inputClass}
-                        />
-                      </div>
+                  <div>
+                    <label
+                      htmlFor="auth-org"
+                      className="block text-xs font-semibold text-slate-700 mb-1.5"
+                    >
+                      Đơn vị / Công ty (tùy chọn)
+                    </label>
+                    <div className="relative">
+                      <Building2 className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                      <input
+                        id="auth-org"
+                        type="text"
+                        value={organization}
+                        onChange={(e) => setOrganization(e.target.value)}
+                        placeholder="Công ty / Tổ chức của bạn..."
+                        className={inputClass}
+                      />
                     </div>
-                  )}
+                  </div>
                 </>
               )}
 
@@ -449,40 +392,31 @@ export function AuthScreen({
               </button>
             </form>
 
-            {/* Quick Demo Login Strip on Login Page */}
+            {/* Quick Demo Login Strip on Login Page (2 unified roles) */}
             {mode === 'login' && (
               <div className="mt-6 pt-5 border-t border-slate-100">
                 <div className="flex items-center justify-center gap-1.5 text-[11px] font-medium text-slate-400 mb-2.5">
                   <Sparkles className="w-3 h-3 text-orange-400" />
-                  <span>Hoặc trải nghiệm nhanh 3 vai trò Demo</span>
+                  <span>Hoặc trải nghiệm nhanh tài khoản Demo</span>
                 </div>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 gap-2.5">
                   <button
                     type="button"
                     disabled={submitting || demoLoading !== null}
                     onClick={() => handleDemoLogin('user')}
-                    className="inline-flex items-center justify-center gap-1 py-2 px-2 text-[11px] font-semibold text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200/80 rounded-xl transition-colors cursor-pointer disabled:opacity-60 whitespace-nowrap"
+                    className="inline-flex items-center justify-center gap-1.5 py-2.5 px-3 text-xs font-semibold text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200/80 rounded-xl transition-colors cursor-pointer disabled:opacity-60 whitespace-nowrap"
                   >
-                    <Users className="w-3 h-3 shrink-0" />
-                    <span>{demoLoading === 'user' ? '...' : 'Tham gia'}</span>
-                  </button>
-                  <button
-                    type="button"
-                    disabled={submitting || demoLoading !== null}
-                    onClick={() => handleDemoLogin('organizer')}
-                    className="inline-flex items-center justify-center gap-1 py-2 px-2 text-[11px] font-semibold text-sky-700 bg-sky-50/70 hover:bg-sky-100/80 border border-sky-200/70 rounded-xl transition-colors cursor-pointer disabled:opacity-60 whitespace-nowrap"
-                  >
-                    <Building2 className="w-3 h-3 shrink-0" />
-                    <span>{demoLoading === 'organizer' ? '...' : 'Tổ chức'}</span>
+                    <User className="w-3.5 h-3.5 shrink-0" />
+                    <span>{demoLoading === 'user' ? 'Đang vào...' : 'Người dùng'}</span>
                   </button>
                   <button
                     type="button"
                     disabled={submitting || demoLoading !== null}
                     onClick={() => handleDemoLogin('admin')}
-                    className="inline-flex items-center justify-center gap-1 py-2 px-2 text-[11px] font-semibold text-indigo-700 bg-indigo-50/70 hover:bg-indigo-100/80 border border-indigo-200/70 rounded-xl transition-colors cursor-pointer disabled:opacity-60 whitespace-nowrap"
+                    className="inline-flex items-center justify-center gap-1.5 py-2.5 px-3 text-xs font-semibold text-indigo-700 bg-indigo-50/70 hover:bg-indigo-100/80 border border-indigo-200/70 rounded-xl transition-colors cursor-pointer disabled:opacity-60 whitespace-nowrap"
                   >
-                    <ShieldCheck className="w-3 h-3 shrink-0" />
-                    <span>{demoLoading === 'admin' ? '...' : 'Admin'}</span>
+                    <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
+                    <span>{demoLoading === 'admin' ? 'Đang vào...' : 'Quản trị viên'}</span>
                   </button>
                 </div>
               </div>

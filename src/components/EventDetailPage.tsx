@@ -615,8 +615,8 @@ export function EventDetailPage({
                   Đăng nhập để đăng ký tham gia sự kiện
                 </p>
                 <p className="text-xs text-slate-600 leading-relaxed">
-                  Bạn cần đăng nhập hoặc tạo tài khoản Người tham gia để hệ thống lưu thông tin
-                  đăng ký và cấp mã QR check-in riêng.
+                  Bạn cần đăng nhập hoặc tạo tài khoản EventFlow để hệ thống lưu thông tin đăng
+                  ký và cấp mã QR check-in riêng.
                 </p>
                 <button
                   type="button"

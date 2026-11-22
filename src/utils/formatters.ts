@@ -133,12 +133,12 @@ export const PUBLIC_CONTACT_FAQS = [
   {
     question: 'Tôi cần chuẩn bị gì để gửi yêu cầu tổ chức sự kiện trên EventFlow?',
     answer:
-      'Bạn chỉ cần đăng ký tài khoản vai trò Khách hàng Tổ chức, điền tên sự kiện, thời gian, địa điểm dự kiến, quy mô chỗ ngồi và chọn các dịch vụ đi kèm. Ban quản trị sẽ tiếp nhận trực tiếp qua Cloud Firestore và phản hồi kế hoạch triển khai.',
+      'Bạn chỉ cần đăng ký 1 tài khoản EventFlow duy nhất, vào mục Sự kiện của tôi → tab Yêu cầu tổ chức, điền tên sự kiện, thời gian, địa điểm dự kiến, quy mô chỗ ngồi và chọn các dịch vụ đi kèm. Ban quản trị sẽ tiếp nhận trực tiếp qua Cloud Firestore và phản hồi kế hoạch triển khai.',
   },
   {
-    question: 'Người tham gia sự kiện có cần tạo tài khoản trước khi đăng ký không?',
+    question: 'Người dùng có cần tạo tài khoản trước khi đăng ký tham gia sự kiện không?',
     answer:
-      'Khách tham khảo có thể xem toàn bộ sự kiện công khai và thông tin dịch vụ mà không cần đăng nhập. Khi muốn đăng ký giữ chỗ, hệ thống yêu cầu đăng nhập tài khoản Người tham gia để cấp mã QR E-Ticket cá nhân và lưu lịch sử tham dự.',
+      'Khách tham khảo có thể xem toàn bộ sự kiện công khai và thông tin dịch vụ mà không cần đăng nhập. Khi muốn đăng ký giữ chỗ hoặc gửi yêu cầu tổ chức, hệ thống yêu cầu đăng nhập tài khoản để cấp mã QR E-Ticket cá nhân và lưu lịch sử trên Firestore.',
   },
   {
     question: 'Hệ thống có hỗ trợ quản lý danh sách khách mời VIP riêng không?',

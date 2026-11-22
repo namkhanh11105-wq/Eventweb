@@ -31,8 +31,8 @@ export function PublicFooter({
               <span>{publicContact.organizationName}</span>
             </button>
             <p className="mt-3 text-xs text-slate-500 leading-relaxed">
-              Nền tảng tổ chức, điều phối dịch vụ và check-in sự kiện tập trung cho Người tham gia,
-              Khách hàng doanh nghiệp và Ban quản trị.
+              Nền tảng tham gia sự kiện, đặt dịch vụ tổ chức và check-in tập trung dành cho Người
+              dùng và Ban quản trị.
             </p>
           </div>
 

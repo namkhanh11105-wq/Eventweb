@@ -10,7 +10,6 @@ import {
   doc,
   getDoc,
   getDocs,
-  limit,
   onSnapshot,
   orderBy,
   query,
@@ -52,17 +51,15 @@ function requireFirebase() {
   return { auth, db };
 }
 
-function determineRole(
-  email: string,
-  existingUsersCount: number,
-  requestedRole?: 'user' | 'organizer'
-): UserRole {
-  const lower = email.toLowerCase();
-  if (existingUsersCount === 0 || lower.includes('admin')) {
+const ADMIN_EMAIL = 'admin@eventflow.vn';
+
+function isAdminEmail(email: string): boolean {
+  return email.trim().toLowerCase() === ADMIN_EMAIL;
+}
+
+function resolveUserRole(email: string, storedRole?: unknown): UserRole {
+  if (isAdminEmail(email) || storedRole === 'admin') {
     return 'admin';
-  }
-  if (requestedRole === 'organizer' || lower.startsWith('organizer@')) {
-    return 'organizer';
   }
   return 'user';
 }
@@ -144,16 +141,6 @@ function mapFirebaseAuthError(err: unknown): string {
   return message || 'Đã xảy ra lỗi xác thực.';
 }
 
-async function safeGetExistingUsersCount(): Promise<number> {
-  if (!db) return 1;
-  try {
-    const existingSnap = await getDocs(query(collection(db, 'users'), limit(1)));
-    return existingSnap.size;
-  } catch {
-    return 1;
-  }
-}
-
 export function subscribeAuthUser(callback: (user: AppUser | null) => void): () => void {
   const { auth: firebaseAuth, db: firestore } = requireFirebase();
   return onAuthStateChanged(firebaseAuth, async (fbUser) => {
@@ -161,8 +148,8 @@ export function subscribeAuthUser(callback: (user: AppUser | null) => void): () 
       callback(null);
       return;
     }
-    const email = fbUser.email || '';
-    const fallbackRole = determineRole(email, 1);
+    const email = (fbUser.email || '').trim().toLowerCase();
+    const fallbackRole = resolveUserRole(email);
     const fallbackProfile: AppUser = {
       uid: fbUser.uid,
       fullName: fbUser.displayName || email.split('@')[0] || 'Thành viên',
@@ -176,13 +163,20 @@ export function subscribeAuthUser(callback: (user: AppUser | null) => void): () 
       const snap = await getDoc(userRef);
       if (snap.exists()) {
         const data = snap.data() as AppUser;
+        const resolvedRole = resolveUserRole(email, data.role);
+        if (isAdminEmail(email) && data.role !== 'admin') {
+          try {
+            await setDoc(userRef, { role: 'admin' }, { merge: true });
+          } catch {
+            // Ignore if rules restrict profile update
+          }
+        }
         callback({
           ...data,
-          role: data.role || fallbackRole,
+          role: resolvedRole,
         });
       } else {
-        const existingCount = await safeGetExistingUsersCount();
-        const role = determineRole(email, existingCount);
+        const role = resolveUserRole(email);
         const profile: AppUser = { ...fallbackProfile, role };
         try {
           await setDoc(userRef, profile);
@@ -202,7 +196,6 @@ export async function registerAccount(params: {
   email: string;
   phone: string;
   password: string;
-  role?: 'user' | 'organizer';
   organization?: string;
 }): Promise<AppUser> {
   const { auth: firebaseAuth, db: firestore } = requireFirebase();
@@ -217,8 +210,7 @@ export async function registerAccount(params: {
 
   try {
     const cred = await createUserWithEmailAndPassword(firebaseAuth, email, params.password);
-    const existingCount = await safeGetExistingUsersCount();
-    const role = determineRole(email, existingCount, params.role);
+    const role: UserRole = isAdminEmail(email) ? 'admin' : 'user';
     const profile: AppUser = {
       uid: cred.user.uid,
       fullName,
@@ -230,8 +222,8 @@ export async function registerAccount(params: {
     };
     try {
       await setDoc(doc(firestore, 'users', cred.user.uid), profile);
-    } catch {
-      // Ignore if Firestore rules block profile write
+    } catch (writeErr) {
+      handleFirestoreError(writeErr, OperationType.CREATE, `users/${cred.user.uid}`, false);
     }
     return profile;
   } catch (err) {
@@ -248,7 +240,7 @@ export async function loginAccount(emailInput: string, password: string): Promis
 
   try {
     const cred = await signInWithEmailAndPassword(firebaseAuth, email, password);
-    const fallbackRole = determineRole(email, 1);
+    const fallbackRole = resolveUserRole(email);
     const fallbackProfile: AppUser = {
       uid: cred.user.uid,
       fullName: email.split('@')[0],
@@ -258,15 +250,26 @@ export async function loginAccount(emailInput: string, password: string): Promis
       createdAt: new Date().toISOString(),
     };
     try {
-      const userSnap = await getDoc(doc(firestore, 'users', cred.user.uid));
+      const userRef = doc(firestore, 'users', cred.user.uid);
+      const userSnap = await getDoc(userRef);
       if (userSnap.exists()) {
-        return userSnap.data() as AppUser;
+        const data = userSnap.data() as AppUser;
+        const resolvedRole = resolveUserRole(email, data.role);
+        if (isAdminEmail(email) && data.role !== 'admin') {
+          try {
+            await setDoc(userRef, { role: 'admin' }, { merge: true });
+          } catch {
+            // Ignore
+          }
+        }
+        return {
+          ...data,
+          role: resolvedRole,
+        };
       }
-      const existingCount = await safeGetExistingUsersCount();
-      const role = determineRole(email, existingCount);
-      const profile: AppUser = { ...fallbackProfile, role };
+      const profile: AppUser = { ...fallbackProfile, role: fallbackRole };
       try {
-        await setDoc(doc(firestore, 'users', cred.user.uid), profile);
+        await setDoc(userRef, profile);
       } catch {
         // Ignore
       }
@@ -291,13 +294,6 @@ export async function loginAsDemo(role: UserRole): Promise<AppUser> {
       fullName: 'Nguyễn Minh Quản Trị',
       phone: '0900000001',
       organization: 'EventFlow Enterprise',
-    },
-    organizer: {
-      email: 'organizer@eventflow.vn',
-      password: 'DemoOrganizer@2026',
-      fullName: 'Hoàng Minh Khôi',
-      phone: '0908889999',
-      organization: 'TechNova Solutions',
     },
     user: {
       email: 'user@eventflow.vn',

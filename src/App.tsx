@@ -3,7 +3,6 @@ import { CheckCircle2, AlertCircle, X } from 'lucide-react';
 import { AuthScreen } from './components/AuthScreen';
 import { TopProgressBar, prefersReducedMotion, triggerPageProgress } from './components/MotionPrimitives';
 import { UserLayout } from './components/UserLayout';
-import { OrganizerLayout } from './components/OrganizerLayout';
 import { AdminLayout } from './components/AdminLayout';
 import {
   logoutAccount,
@@ -39,7 +38,6 @@ interface ToastState {
 
 interface AuthViewState {
   mode: 'login' | 'register';
-  role: 'user' | 'organizer';
 }
 
 export default function App() {
@@ -51,28 +49,24 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [authView, setAuthView] = useState<AuthViewState | null>(
-    initialRoute.view === 'auth'
-      ? { mode: initialRoute.mode, role: initialRoute.role }
-      : null
+    initialRoute.view === 'auth' ? { mode: initialRoute.mode } : null
   );
-  const [portalView, setPortalView] = useState<'admin' | 'organizer' | 'public'>(
-    initialRoute.view === 'admin'
-      ? 'admin'
-      : initialRoute.view === 'organizer'
-      ? 'organizer'
-      : 'public'
+  const [portalView, setPortalView] = useState<'admin' | 'public'>(
+    initialRoute.view === 'admin' ? 'admin' : 'public'
   );
   const [publicPage, setPublicPage] = useState<PublicPage>(
     initialRoute.view === 'public' ? initialRoute.page : 'discover'
+  );
+  const [myEventsTab, setMyEventsTab] = useState<'registered' | 'requests'>(
+    initialRoute.view === 'public' && initialRoute.page === 'tickets' && initialRoute.tab
+      ? initialRoute.tab
+      : 'registered'
   );
   const [selectedEventId, setSelectedEventId] = useState<string | null>(
     initialRoute.view === 'public' && initialRoute.page === 'event_detail'
       ? initialRoute.eventId
       : null
   );
-  const [organizerInitialTab, setOrganizerInitialTab] = useState<
-    'requests' | 'create' | 'public_events'
-  >('requests');
 
   const [events, setEvents] = useState<EventItem[]>([]);
   const [eventsLoading, setEventsLoading] = useState(true);
@@ -119,13 +113,21 @@ export default function App() {
     }, 4500);
   }
 
-  function navigatePublicPage(page: 'discover' | 'services' | 'contact' | 'tickets') {
+  function navigatePublicPage(
+    page: 'discover' | 'services' | 'contact' | 'tickets',
+    tab?: 'registered' | 'requests'
+  ) {
     const apply = () => {
       setAuthView(null);
       setPortalView('public');
       setPublicPage(page);
+      if (page === 'tickets' && tab) {
+        setMyEventsTab(tab);
+      }
       setSelectedEventId(null);
-      pushBrowserPath(getPathForPublicPage(page));
+      pushBrowserPath(
+        getPathForPublicPage(page, undefined, page === 'tickets' ? tab || myEventsTab : undefined)
+      );
       window.scrollTo({ top: 0, behavior: 'auto' });
     };
 
@@ -153,15 +155,10 @@ export default function App() {
     }
   }
 
-  function openAuthScreen(mode: 'login' | 'register' = 'login', role: 'user' | 'organizer' = 'user') {
+  function openAuthScreen(mode: 'login' | 'register' = 'login') {
     const apply = () => {
-      setAuthView({ mode, role });
-      const path =
-        mode === 'register'
-          ? role === 'organizer'
-            ? '/dang-ky?role=organizer'
-            : '/dang-ky'
-          : '/dang-nhap';
+      setAuthView({ mode });
+      const path = mode === 'register' ? '/dang-ky' : '/dang-nhap';
       pushBrowserPath(path);
       window.scrollTo({ top: 0, behavior: 'auto' });
     };
@@ -171,16 +168,6 @@ export default function App() {
     } else {
       apply();
     }
-  }
-
-  function switchToOrganizerPortal(tab: 'requests' | 'create' | 'public_events' = 'requests') {
-    runRootTransition(() => {
-      setAuthView(null);
-      setOrganizerInitialTab(tab);
-      setPortalView('organizer');
-      pushBrowserPath('/to-chuc');
-      window.scrollTo({ top: 0, behavior: 'auto' });
-    });
   }
 
   function switchToAdminPortal() {
@@ -197,17 +184,17 @@ export default function App() {
       triggerPageProgress();
       const next = parseRouteFromLocation(window.location.pathname, window.location.search);
       if (next.view === 'auth') {
-        setAuthView({ mode: next.mode, role: next.role });
+        setAuthView({ mode: next.mode });
       } else if (next.view === 'admin') {
         setAuthView(null);
         setPortalView(currentUser?.role === 'admin' ? 'admin' : 'public');
-      } else if (next.view === 'organizer') {
-        setAuthView(null);
-        setPortalView(currentUser?.role === 'organizer' ? 'organizer' : 'public');
       } else {
         setAuthView(null);
         setPortalView('public');
         setPublicPage(next.page);
+        if (next.page === 'tickets' && next.tab) {
+          setMyEventsTab(next.tab);
+        }
         setSelectedEventId(next.page === 'event_detail' ? next.eventId : null);
       }
     }
@@ -232,31 +219,15 @@ export default function App() {
       if (user) {
         setAuthView(null);
         if (user.role === 'admin') {
-          if (currentRoute.view === 'public' && currentRoute.page !== 'discover') {
-            setPortalView('public');
-            setPublicPage(currentRoute.page);
-            setSelectedEventId(
-              currentRoute.page === 'event_detail' ? currentRoute.eventId : null
-            );
-          } else {
-            setPortalView('admin');
-            pushBrowserPath('/quan-tri');
-          }
-        } else if (user.role === 'organizer') {
-          if (currentRoute.view === 'public' && currentRoute.page !== 'discover') {
-            setPortalView('public');
-            setPublicPage(currentRoute.page);
-            setSelectedEventId(
-              currentRoute.page === 'event_detail' ? currentRoute.eventId : null
-            );
-          } else {
-            setPortalView('organizer');
-            pushBrowserPath('/to-chuc');
-          }
+          setPortalView('admin');
+          pushBrowserPath('/quan-tri');
         } else {
           setPortalView('public');
           if (currentRoute.view === 'public') {
             setPublicPage(currentRoute.page);
+            if (currentRoute.page === 'tickets' && currentRoute.tab) {
+              setMyEventsTab(currentRoute.tab);
+            }
             setSelectedEventId(
               currentRoute.page === 'event_detail' ? currentRoute.eventId : null
             );
@@ -271,7 +242,7 @@ export default function App() {
         setRegistrations([]);
         setUsers([]);
         setContactInquiries([]);
-        if (currentRoute.view === 'admin' || currentRoute.view === 'organizer') {
+        if (currentRoute.view === 'admin') {
           setPublicPage('discover');
           setSelectedEventId(null);
           pushBrowserPath('/');
@@ -312,7 +283,7 @@ export default function App() {
       );
       if (currentUser.role === 'admin') {
         unsubUsers = subscribeUsers(setUsers, handlePermissionError);
-        unsubInquiries = subscribeContactInquiries(setContactInquiries);
+        unsubInquiries = subscribeContactInquiries(setContactInquiries, handlePermissionError);
       } else {
         setUsers([]);
         setContactInquiries([]);
@@ -339,6 +310,7 @@ export default function App() {
         setAuthView(null);
         setPortalView('public');
         setPublicPage('discover');
+        setMyEventsTab('registered');
         setSelectedEventId(null);
         setPermissionWarning(null);
         pushBrowserPath('/');
@@ -355,8 +327,6 @@ export default function App() {
     ? 'auth'
     : currentUser?.role === 'admin' && portalView === 'admin'
     ? 'admin'
-    : currentUser?.role === 'organizer' && portalView === 'organizer'
-    ? 'organizer'
     : 'public';
 
   return (
@@ -377,9 +347,8 @@ export default function App() {
       ) : authView !== null && !currentUser ? (
         <AuthScreen
           mode={authView.mode}
-          initialRegisterRole={authView.role}
           publicContact={publicContact}
-          onSwitchMode={(nextMode) => openAuthScreen(nextMode, authView.role)}
+          onSwitchMode={(nextMode) => openAuthScreen(nextMode)}
           onSuccess={(msg) => {
             triggerPageProgress();
             setAuthView(null);
@@ -400,24 +369,11 @@ export default function App() {
           onLogout={handleLogout}
           onNotify={showToast}
         />
-      ) : currentUser?.role === 'organizer' && portalView === 'organizer' ? (
-        <OrganizerLayout
-          currentUser={currentUser}
-          events={events}
-          registrations={registrations}
-          feedbacks={feedbacks}
-          publicContact={publicContact}
-          permissionWarning={permissionWarning}
-          initialTab={organizerInitialTab}
-          onViewPublicLanding={() => navigatePublicPage('discover')}
-          onNavigatePublicPage={navigatePublicPage}
-          onLogout={handleLogout}
-          onNotify={showToast}
-        />
       ) : (
         <UserLayout
           currentUser={currentUser}
           activePage={publicPage}
+          activeMyEventsTab={myEventsTab}
           selectedEventId={selectedEventId}
           events={events}
           eventsLoading={eventsLoading}
@@ -429,9 +385,6 @@ export default function App() {
           onOpenEventDetail={navigateToEventDetail}
           onSwitchToAdmin={
             currentUser?.role === 'admin' ? switchToAdminPortal : undefined
-          }
-          onSwitchToOrganizer={
-            currentUser?.role === 'organizer' ? switchToOrganizerPortal : undefined
           }
           onOpenAuth={openAuthScreen}
           onLogout={handleLogout}

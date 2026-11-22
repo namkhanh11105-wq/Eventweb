@@ -25,6 +25,7 @@ import {
   QrCode,
   Save,
   Search,
+  ShieldCheck,
   Sparkles,
   Trash2,
   UserCheck,
@@ -989,6 +990,11 @@ export function AdminLayout({
           </div>
 
           <div className="flex items-center gap-2.5 shrink-0">
+            <span className="hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-semibold whitespace-nowrap">
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span>Quản trị viên</span>
+            </span>
+
             <button
               type="button"
               disabled={seeding}
@@ -1023,7 +1029,7 @@ export function AdminLayout({
                 Hãy mở Firebase Console của dự án <strong>quan-ly-su-kien-86a89</strong> →{' '}
                 <strong>Firestore Database → Rules</strong> và cập nhật rules cho phép đọc/ghi các
                 collection <code>events</code>, <code>users</code>, <code>registrations</code>,{' '}
-                <code>feedbacks</code>, <code>site_settings</code>.
+                <code>feedbacks</code>, <code>contact_inquiries</code>, <code>site_settings</code>.
               </p>
             </div>
           )}
@@ -1039,7 +1045,7 @@ export function AdminLayout({
           {/* SECTION 1: OVERVIEW */}
           {section === 'overview' && (
             <div className="space-y-6">
-              {/* Alert banner if pending organizer requests exist */}
+              {/* Alert banner if pending event organization requests exist */}
               {stats.pendingReviewCount > 0 && (
                 <div className="rounded-xl border border-indigo-200 bg-indigo-50/70 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="flex items-start gap-3">
@@ -1049,8 +1055,8 @@ export function AdminLayout({
                         Có {stats.pendingReviewCount} yêu cầu tổ chức sự kiện mới đang chờ duyệt
                       </p>
                       <p className="text-xs text-slate-600 mt-0.5">
-                        Kiểm tra yêu cầu dịch vụ từ Khách hàng Tổ chức, phê duyệt và lên danh sách
-                        khách mời trong không gian riêng của từng sự kiện.
+                        Kiểm tra yêu cầu dịch vụ từ Người dùng, phê duyệt và lên danh sách khách
+                        mời trong không gian riêng của từng sự kiện.
                       </p>
                     </div>
                   </div>
@@ -1119,7 +1125,7 @@ export function AdminLayout({
                   </h2>
                   <p className="mt-1.5 text-sm text-slate-500 max-w-md mx-auto">
                     Nhấn nút &ldquo;Tạo dữ liệu mẫu (Seed Data)&rdquo; để đồng bộ sự kiện công khai,
-                    yêu cầu từ Khách hàng Tổ chức, dịch vụ đi kèm, khách mời và người tham gia lên
+                    yêu cầu từ Người dùng, dịch vụ đi kèm, khách mời và người tham gia lên
                     Cloud Firestore.
                   </p>
                   <button
@@ -2425,7 +2431,7 @@ export function AdminLayout({
             <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
               <div className="p-4 border-b border-slate-200 flex items-center justify-between">
                 <h2 className="text-sm font-bold text-slate-900">
-                  Danh sách tài khoản theo 3 luồng người dùng
+                  Danh sách tài khoản hệ thống (User &amp; Admin)
                 </h2>
                 <span className="text-xs text-slate-500 tabular-nums">
                   {users.length} tài khoản
@@ -2438,7 +2444,7 @@ export function AdminLayout({
                       <th className="py-3 px-4">Họ tên &amp; Đơn vị</th>
                       <th className="py-3 px-4">Email</th>
                       <th className="py-3 px-4">Số điện thoại</th>
-                      <th className="py-3 px-4">Vai trò (Luồng)</th>
+                      <th className="py-3 px-4">Vai trò</th>
                       <th className="py-3 px-4">Ngày tạo</th>
                     </tr>
                   </thead>
@@ -2461,18 +2467,10 @@ export function AdminLayout({
                         <td className="py-3 px-4">
                           <span
                             className={`text-xs font-semibold ${
-                              u.role === 'admin'
-                                ? 'text-indigo-700'
-                                : u.role === 'organizer'
-                                ? 'text-emerald-700'
-                                : 'text-slate-600'
+                              u.role === 'admin' ? 'text-indigo-700' : 'text-slate-700'
                             }`}
                           >
-                            {u.role === 'admin'
-                              ? 'Quản trị viên (Admin)'
-                              : u.role === 'organizer'
-                              ? 'Khách hàng Tổ chức (Organizer)'
-                              : 'Người tham gia (Attendee)'}
+                            {u.role === 'admin' ? 'Quản trị viên (Admin)' : 'Người dùng (User)'}
                           </span>
                         </td>
                         <td className="py-3 px-4 text-slate-500 tabular-nums whitespace-nowrap">
