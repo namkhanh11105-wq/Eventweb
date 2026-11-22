@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import {
   AlertCircle,
   Check,
@@ -48,6 +48,32 @@ export function ContactPage({
   const [submittedRecord, setSubmittedRecord] = useState<ContactInquiry | null>(null);
   const [copiedId, setCopiedId] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const lastAutoFillRef = useRef({
+    fullName: currentUser?.fullName || '',
+    contactInfo: currentUser?.phone || currentUser?.email || '',
+    email: currentUser?.email || '',
+  });
+
+  useEffect(() => {
+    const nextName = currentUser?.fullName || '';
+    const nextContact = currentUser?.phone || currentUser?.email || '';
+    const nextEmail = currentUser?.email || '';
+    const prev = lastAutoFillRef.current;
+
+    setFullName((val) => (!val.trim() || val === prev.fullName ? nextName : val));
+    setContactInfo((val) =>
+      !val.trim() || val === prev.contactInfo || (Boolean(currentUser?.phone) && val === prev.email)
+        ? nextContact
+        : val
+    );
+
+    lastAutoFillRef.current = {
+      fullName: nextName,
+      contactInfo: nextContact,
+      email: nextEmail,
+    };
+  }, [currentUser?.fullName, currentUser?.phone, currentUser?.email]);
 
   async function handleCopyInquiryId() {
     if (!submittedRecord) return;

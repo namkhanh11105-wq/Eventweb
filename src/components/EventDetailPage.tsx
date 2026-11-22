@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import {
   ArrowLeft,
   BadgeCheck,
@@ -74,6 +74,29 @@ export function EventDetailPage({
   const [guestPhone, setGuestPhone] = useState(currentUser?.phone || '');
   const [note, setNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  const lastAutoFillRef = useRef({
+    fullName: currentUser?.fullName || '',
+    email: currentUser?.email || '',
+    phone: currentUser?.phone || '',
+  });
+
+  useEffect(() => {
+    const nextName = currentUser?.fullName || '';
+    const nextEmail = currentUser?.email || '';
+    const nextPhone = currentUser?.phone || '';
+    const prev = lastAutoFillRef.current;
+
+    setGuestName((val) => (!val.trim() || val === prev.fullName ? nextName : val));
+    setGuestEmail((val) => (!val.trim() || val === prev.email ? nextEmail : val));
+    setGuestPhone((val) => (!val.trim() || val === prev.phone ? nextPhone : val));
+
+    lastAutoFillRef.current = {
+      fullName: nextName,
+      email: nextEmail,
+      phone: nextPhone,
+    };
+  }, [currentUser?.fullName, currentUser?.email, currentUser?.phone]);
 
   const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
   const [cancelling, setCancelling] = useState(false);

@@ -23,6 +23,7 @@ import {
   Plus,
   Search,
   Send,
+  Settings,
   ShieldCheck,
   Star,
   Ticket,
@@ -34,6 +35,7 @@ import {
   submitFeedback,
   updateRegistrationStatus,
 } from '../services/dataService';
+import { AccountMenuDropdown } from './AccountMenuDropdown';
 import { ContactPage } from './ContactPage';
 import { EventBanner } from './EventBanner';
 import { EventDetailPage } from './EventDetailPage';
@@ -108,6 +110,7 @@ interface UserLayoutProps {
   onConsumePendingBooking?: () => void;
   onSwitchToAdmin?: () => void;
   onOpenAuth: (mode?: 'login' | 'register') => void;
+  onOpenProfileSettings: () => void;
   onLogout: () => void;
   onNotify: (message: string, type?: 'success' | 'error') => void;
 }
@@ -133,6 +136,7 @@ export function UserLayout({
   onConsumePendingBooking,
   onSwitchToAdmin,
   onOpenAuth,
+  onOpenProfileSettings,
   onLogout,
   onNotify,
 }: UserLayoutProps) {
@@ -168,6 +172,8 @@ export function UserLayout({
   const [reqOrganizerName, setReqOrganizerName] = useState(
     currentUser?.organization || currentUser?.fullName || ''
   );
+  const [reqClientName, setReqClientName] = useState(currentUser?.fullName || '');
+  const [reqClientPhone, setReqClientPhone] = useState(currentUser?.phone || '');
   const [reqStartTime, setReqStartTime] = useState(() => defaultRequestStartDatetime(14, 8));
   const [reqEndTime, setReqEndTime] = useState(() => defaultRequestStartDatetime(14, 17));
   const [reqLocation, setReqLocation] = useState('');
@@ -247,11 +253,28 @@ export function UserLayout({
     }
   }, [openCreateRequestSignal, pendingServiceBooking, onConsumePendingBooking]);
 
+  const lastReqAutoFillRef = useRef({
+    fullName: currentUser?.fullName || '',
+    phone: currentUser?.phone || '',
+    org: currentUser?.organization || currentUser?.fullName || '',
+  });
+
   useEffect(() => {
-    if (currentUser) {
-      setReqOrganizerName((prev) => prev || currentUser.organization || currentUser.fullName);
-    }
-  }, [currentUser]);
+    const nextName = currentUser?.fullName || '';
+    const nextPhone = currentUser?.phone || '';
+    const nextOrg = currentUser?.organization || currentUser?.fullName || '';
+    const prev = lastReqAutoFillRef.current;
+
+    setReqOrganizerName((val) => (!val.trim() || val === prev.org ? nextOrg : val));
+    setReqClientName((val) => (!val.trim() || val === prev.fullName ? nextName : val));
+    setReqClientPhone((val) => (!val.trim() || val === prev.phone ? nextPhone : val));
+
+    lastReqAutoFillRef.current = {
+      fullName: nextName,
+      phone: nextPhone,
+      org: nextOrg,
+    };
+  }, [currentUser?.fullName, currentUser?.phone, currentUser?.organization]);
 
   useEffect(() => {
     return () => {
@@ -521,6 +544,11 @@ export function UserLayout({
       return;
     }
 
+    if (!reqClientName.trim()) {
+      failRequestValidation('Vui lòng nhập họ tên người liên hệ cho yêu cầu tổ chức.');
+      return;
+    }
+
     const startMs = new Date(reqStartTime).getTime();
     const endMs = new Date(reqEndTime).getTime();
     if (Number.isNaN(startMs) || Number.isNaN(endMs)) {
@@ -580,11 +608,12 @@ export function UserLayout({
         maxSlots: Math.round(safeMaxSlots),
         description: reqDescription.trim(),
         bannerUrl: reqBannerUrl.trim() || DEFAULT_EVENT_BANNERS[0].url,
-        organizerName: reqOrganizerName.trim() || currentUser.fullName || 'Thành viên EventFlow',
+        organizerName:
+          reqOrganizerName.trim() || reqClientName.trim() || currentUser.fullName || 'Thành viên EventFlow',
         clientUserId: currentUser.uid || '',
-        clientName: (currentUser.fullName ?? '').trim() || 'Thành viên EventFlow',
+        clientName: reqClientName.trim() || (currentUser.fullName ?? '').trim() || 'Thành viên EventFlow',
         clientEmail: (currentUser.email ?? '').trim(),
-        clientPhone: (currentUser.phone ?? '').trim(),
+        clientPhone: reqClientPhone.trim(),
         requestedServices: servicesPayload,
       });
 
@@ -770,35 +799,15 @@ export function UserLayout({
           {/* Zone 3: Account / Role & Auth */}
           <div className="hidden md:flex items-center gap-3 shrink-0">
             {currentUser ? (
-              <div className="flex items-center gap-2.5 pl-4 border-l border-slate-200/80">
-                <div
-                  className={`w-7 h-7 rounded-lg border text-xs font-bold flex items-center justify-center shrink-0 ${
-                    currentUser.role === 'admin'
-                      ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
-                      : 'bg-slate-100 border-slate-200/80 text-slate-700'
-                  }`}
-                >
-                  {currentUser.fullName.trim().charAt(0).toUpperCase() || 'U'}
-                </div>
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="text-xs font-semibold text-slate-900 truncate max-w-[150px]">
-                    {currentUser.fullName}
-                  </span>
-                  {currentUser.role === 'admin' && (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-semibold bg-indigo-600 text-white rounded-full whitespace-nowrap">
-                      <ShieldCheck className="w-3 h-3" />
-                      <span>Quản trị viên</span>
-                    </span>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  onClick={onLogout}
-                  className="ml-1 inline-flex items-center gap-1.5 h-8 px-2.5 text-xs font-medium text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200/80 rounded-full transition-all duration-150 active:scale-[0.98] whitespace-nowrap shrink-0 cursor-pointer"
-                >
-                  <LogOut className="w-3.5 h-3.5" />
-                  <span>Đăng xuất</span>
-                </button>
+              <div className="pl-4 border-l border-slate-200/80">
+                <AccountMenuDropdown
+                  currentUser={currentUser}
+                  variant="public"
+                  onOpenProfileSettings={onOpenProfileSettings}
+                  onOpenMyEvents={() => smoothNavigatePage('tickets')}
+                  onOpenAdminPortal={onSwitchToAdmin}
+                  onLogout={onLogout}
+                />
               </div>
             ) : (
               <div className="flex items-center gap-2 pl-4 border-l border-slate-200/80">
@@ -875,7 +884,14 @@ export function UserLayout({
             </div>
 
             {currentUser && (
-              <div className="mx-4 mt-4 p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  onOpenProfileSettings();
+                }}
+                className="mx-4 mt-4 p-3.5 rounded-2xl bg-slate-50 hover:bg-slate-100/90 border border-slate-200/80 flex items-center gap-3 text-left transition-colors cursor-pointer"
+              >
                 <div
                   className={`w-10 h-10 rounded-xl border text-sm font-bold flex items-center justify-center shrink-0 ${
                     currentUser.role === 'admin'
@@ -899,11 +915,11 @@ export function UserLayout({
                   >
                     {currentUser.role === 'admin' && <ShieldCheck className="w-3 h-3" />}
                     <span>
-                      {currentUser.role === 'admin' ? 'Quản trị viên' : 'Tài khoản thành viên'}
+                      {currentUser.role === 'admin' ? 'Quản trị viên' : 'Thành viên'}
                     </span>
                   </span>
                 </div>
-              </div>
+              </button>
             )}
 
             <nav className="p-4 space-y-1.5">
@@ -990,17 +1006,30 @@ export function UserLayout({
 
           <div className="p-4 border-t border-slate-200/80 bg-slate-50/70 space-y-2.5 shrink-0">
             {currentUser ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  onLogout();
-                }}
-                className="w-full min-h-[44px] inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-rose-700 bg-white hover:bg-rose-50 border border-rose-200/80 transition-colors cursor-pointer"
-              >
-                <LogOut className="w-4 h-4" />
-                <span>Đăng xuất tài khoản</span>
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    onOpenProfileSettings();
+                  }}
+                  className="w-full min-h-[44px] inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-slate-800 bg-white hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
+                >
+                  <Settings className="w-4 h-4 text-slate-600" />
+                  <span>Cài đặt tài khoản</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    onLogout();
+                  }}
+                  className="w-full min-h-[44px] inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-rose-700 bg-white hover:bg-rose-50 border border-rose-200/80 transition-colors cursor-pointer"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>Đăng xuất tài khoản</span>
+                </button>
+              </>
             ) : (
               <div className="grid grid-cols-2 gap-2.5">
                 <button
@@ -2022,6 +2051,34 @@ export function UserLayout({
                                       </option>
                                     ))}
                                   </select>
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                                    Họ và tên người liên hệ <span className="text-rose-500">*</span>
+                                  </label>
+                                  <input
+                                    type="text"
+                                    required
+                                    value={reqClientName}
+                                    onChange={(e) => setReqClientName(e.target.value)}
+                                    placeholder="Nguyễn Văn An"
+                                    className="w-full px-3.5 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:border-slate-900"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                                    Số điện thoại liên hệ
+                                  </label>
+                                  <input
+                                    type="tel"
+                                    value={reqClientPhone}
+                                    onChange={(e) => setReqClientPhone(e.target.value)}
+                                    placeholder="0901 234 567"
+                                    className="w-full px-3.5 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:border-slate-900 tabular-nums"
+                                  />
                                 </div>
                               </div>
 

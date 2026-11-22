@@ -1,8 +1,12 @@
 import {
   createUserWithEmailAndPassword,
+  EmailAuthProvider,
   onAuthStateChanged,
+  reauthenticateWithCredential,
   signInWithEmailAndPassword,
   signOut,
+  updatePassword,
+  updateProfile,
 } from 'firebase/auth';
 import {
   collection,
@@ -290,6 +294,11 @@ export async function registerAccount(params: {
 
   try {
     const cred = await createUserWithEmailAndPassword(firebaseAuth, email, params.password);
+    try {
+      await updateProfile(cred.user, { displayName: fullName });
+    } catch {
+      // Non-fatal if displayName update fails silently
+    }
     const role: UserRole = isAdminEmail(email) ? 'admin' : 'user';
     const profile: AppUser = {
       uid: cred.user.uid,
@@ -365,6 +374,123 @@ export async function loginAccount(emailInput: string, password: string): Promis
 export async function logoutAccount(): Promise<void> {
   const { auth: firebaseAuth } = requireFirebase();
   await signOut(firebaseAuth);
+}
+
+export async function updateUserProfileInfo(params: {
+  uid: string;
+  fullName: string;
+  phone: string;
+}): Promise<{ fullName: string; phone: string }> {
+  const { auth: firebaseAuth, db: firestore } = requireFirebase();
+  const fbUser = firebaseAuth.currentUser;
+  if (!fbUser || fbUser.uid !== params.uid) {
+    throw new Error('Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại để cập nhật hồ sơ.');
+  }
+
+  const fullName = String(params.fullName ?? '').trim();
+  const phone = String(params.phone ?? '').trim();
+
+  if (!fullName) {
+    throw new Error('Vui lòng nhập họ và tên hiển thị.');
+  }
+
+  if (phone) {
+    const digitsCount = phone.replace(/[^\d]/g, '').length;
+    if (digitsCount < 8 || digitsCount > 15) {
+      throw new Error('Số điện thoại liên hệ chưa hợp lệ (cần từ 8 đến 15 chữ số).');
+    }
+  }
+
+  try {
+    await updateProfile(fbUser, { displayName: fullName });
+  } catch (err) {
+    throw new Error(mapFirebaseAuthError(err));
+  }
+
+  const userRef = doc(firestore, 'users', fbUser.uid);
+  const nowIso = new Date().toISOString();
+  try {
+    const snap = await getDoc(userRef);
+    if (snap.exists()) {
+      await updateDoc(
+        userRef,
+        sanitizeForFirestore({
+          fullName,
+          phone,
+          updatedAt: nowIso,
+        })
+      );
+    } else {
+      const email = (fbUser.email || '').trim().toLowerCase();
+      await setDoc(
+        userRef,
+        sanitizeForFirestore({
+          uid: fbUser.uid,
+          email,
+          fullName,
+          phone,
+          role: resolveUserRole(email),
+          createdAt: nowIso,
+          updatedAt: nowIso,
+        })
+      );
+    }
+  } catch (err) {
+    handleFirestoreError(err, OperationType.UPDATE, `users/${fbUser.uid}`);
+    throw err;
+  }
+
+  return { fullName, phone };
+}
+
+export async function changeUserPassword(params: {
+  currentPassword: string;
+  newPassword: string;
+}): Promise<void> {
+  const { auth: firebaseAuth } = requireFirebase();
+  const fbUser = firebaseAuth.currentUser;
+  if (!fbUser || !fbUser.email) {
+    throw new Error('Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại.');
+  }
+
+  if (!params.currentPassword) {
+    throw new Error('Vui lòng nhập mật khẩu hiện tại.');
+  }
+  if (!params.newPassword || params.newPassword.length < 6) {
+    throw new Error('Mật khẩu mới cần có tối thiểu 6 ký tự.');
+  }
+  if (params.newPassword === params.currentPassword) {
+    throw new Error('Mật khẩu mới cần khác mật khẩu hiện tại.');
+  }
+
+  try {
+    const credential = EmailAuthProvider.credential(fbUser.email, params.currentPassword);
+    await reauthenticateWithCredential(fbUser, credential);
+    await updatePassword(fbUser, params.newPassword);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (
+      message.includes('auth/wrong-password') ||
+      message.includes('auth/invalid-credential')
+    ) {
+      throw new Error('Mật khẩu hiện tại không chính xác. Vui lòng kiểm tra lại.');
+    }
+    if (message.includes('auth/weak-password')) {
+      throw new Error('Mật khẩu mới quá yếu. Vui lòng chọn mật khẩu từ 6 ký tự trở lên.');
+    }
+    if (message.includes('auth/too-many-requests')) {
+      throw new Error('Bạn đã thử quá nhiều lần. Vui lòng đợi ít phút rồi thử lại.');
+    }
+    if (message.includes('auth/requires-recent-login')) {
+      throw new Error(
+        'Phiên đăng nhập đã hết hạn xác thực. Vui lòng đăng xuất và đăng nhập lại rồi thử lại.'
+      );
+    }
+    if (message.includes('auth/network-request-failed')) {
+      throw new Error('Lỗi kết nối mạng. Vui lòng kiểm tra đường truyền và thử lại.');
+    }
+    throw new Error(mapFirebaseAuthError(err));
+  }
 }
 
 export function subscribePublicContact(

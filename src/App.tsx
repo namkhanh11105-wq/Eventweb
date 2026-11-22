@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { CheckCircle2, AlertCircle, X } from 'lucide-react';
 import { AuthScreen } from './components/AuthScreen';
 import { TopProgressBar, prefersReducedMotion, triggerPageProgress } from './components/MotionPrimitives';
+import { ProfileSettingsModal } from './components/ProfileSettingsModal';
 import { UserLayout } from './components/UserLayout';
 import { AdminLayout } from './components/AdminLayout';
 import {
@@ -83,6 +84,7 @@ export default function App() {
   const [toast, setToast] = useState<ToastState | null>(null);
   const [isRootTransitioningOut, setIsRootTransitioningOut] = useState(false);
   const rootTransitionTimerRef = useRef<number | null>(null);
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
 
   const [pendingServiceBooking, setPendingServiceBooking] =
     useState<PreselectedServiceBooking | null>(null);
@@ -341,6 +343,7 @@ export default function App() {
   async function handleLogout() {
     try {
       await logoutAccount();
+      setProfileModalOpen(false);
       runRootTransition(() => {
         setAuthView(null);
         setPortalView('public');
@@ -403,6 +406,7 @@ export default function App() {
           publicContact={publicContact}
           permissionWarning={permissionWarning}
           onSwitchToUser={() => navigatePublicPage('discover')}
+          onOpenProfileSettings={() => setProfileModalOpen(true)}
           onLogout={handleLogout}
           onNotify={showToast}
         />
@@ -433,12 +437,21 @@ export default function App() {
             currentUser?.role === 'admin' ? switchToAdminPortal : undefined
           }
           onOpenAuth={openAuthScreen}
+          onOpenProfileSettings={() => setProfileModalOpen(true)}
           onLogout={handleLogout}
           onNotify={showToast}
         />
       )}
         </div>
       </div>
+
+      <ProfileSettingsModal
+        isOpen={profileModalOpen}
+        currentUser={currentUser}
+        onClose={() => setProfileModalOpen(false)}
+        onUserUpdated={(updatedUser) => setCurrentUser(updatedUser)}
+        onNotify={showToast}
+      />
 
       {/* Toast notification */}
       {toast && (
