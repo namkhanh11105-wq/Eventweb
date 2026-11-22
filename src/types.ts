@@ -193,3 +193,27 @@ export interface RegistrationInput {
   guestPhone: string;
   note: string;
 }
+
+export type PublicPage = 'discover' | 'services' | 'contact' | 'tickets' | 'event_detail';
+
+export type ContactInquiryStatus = 'new' | 'reviewed' | 'resolved';
+
+export interface ContactInquiry {
+  id: string;
+  fullName: string;
+  contactInfo: string;
+  topic: string;
+  message: string;
+  status: ContactInquiryStatus;
+  userId?: string;
+  createdAt: string;
+}
+
+export interface ContactInquiryInput {
+  fullName: string;
+  contactInfo: string;
+  topic: string;
+  message: string;
+  userId?: string;
+}
+

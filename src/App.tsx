@@ -7,6 +7,7 @@ import { AdminLayout } from './components/AdminLayout';
 import {
   logoutAccount,
   subscribeAuthUser,
+  subscribeContactInquiries,
   subscribeEvents,
   subscribeFeedbacks,
   subscribePublicContact,
@@ -14,11 +15,18 @@ import {
   subscribeUsers,
 } from './services/dataService';
 import { DEFAULT_PUBLIC_CONTACT } from './utils/formatters';
+import {
+  getPathForPublicPage,
+  parseRouteFromLocation,
+  pushBrowserPath,
+} from './utils/routes';
 import type {
   AppUser,
+  ContactInquiry,
   EventItem,
   FeedbackItem,
   PublicContactInfo,
+  PublicPage,
   RegistrationItem,
 } from './types';
 
@@ -34,15 +42,42 @@ interface AuthViewState {
 }
 
 export default function App() {
+  const initialRoute =
+    typeof window !== 'undefined'
+      ? parseRouteFromLocation(window.location.pathname, window.location.search)
+      : { view: 'public' as const, page: 'discover' as const };
+
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
   const [authReady, setAuthReady] = useState(false);
-  const [authView, setAuthView] = useState<AuthViewState | null>(null);
-  const [portalView, setPortalView] = useState<'admin' | 'organizer' | 'public'>('public');
+  const [authView, setAuthView] = useState<AuthViewState | null>(
+    initialRoute.view === 'auth'
+      ? { mode: initialRoute.mode, role: initialRoute.role }
+      : null
+  );
+  const [portalView, setPortalView] = useState<'admin' | 'organizer' | 'public'>(
+    initialRoute.view === 'admin'
+      ? 'admin'
+      : initialRoute.view === 'organizer'
+      ? 'organizer'
+      : 'public'
+  );
+  const [publicPage, setPublicPage] = useState<PublicPage>(
+    initialRoute.view === 'public' ? initialRoute.page : 'discover'
+  );
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(
+    initialRoute.view === 'public' && initialRoute.page === 'event_detail'
+      ? initialRoute.eventId
+      : null
+  );
+  const [organizerInitialTab, setOrganizerInitialTab] = useState<
+    'requests' | 'create' | 'public_events'
+  >('requests');
 
   const [events, setEvents] = useState<EventItem[]>([]);
   const [eventsLoading, setEventsLoading] = useState(true);
   const [registrations, setRegistrations] = useState<RegistrationItem[]>([]);
   const [users, setUsers] = useState<AppUser[]>([]);
+  const [contactInquiries, setContactInquiries] = useState<ContactInquiry[]>([]);
   const [feedbacks, setFeedbacks] = useState<FeedbackItem[]>([]);
   const [publicContact, setPublicContact] = useState<PublicContactInfo>(DEFAULT_PUBLIC_CONTACT);
   const [permissionWarning, setPermissionWarning] = useState<string | null>(null);
@@ -56,6 +91,74 @@ export default function App() {
     }, 4500);
   }
 
+  function navigatePublicPage(page: 'discover' | 'services' | 'contact' | 'tickets') {
+    setAuthView(null);
+    setPortalView('public');
+    setPublicPage(page);
+    setSelectedEventId(null);
+    pushBrowserPath(getPathForPublicPage(page));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function navigateToEventDetail(eventId: string) {
+    setAuthView(null);
+    setPortalView('public');
+    setPublicPage('event_detail');
+    setSelectedEventId(eventId);
+    pushBrowserPath(getPathForPublicPage('event_detail', eventId));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function openAuthScreen(mode: 'login' | 'register' = 'login', role: 'user' | 'organizer' = 'user') {
+    setAuthView({ mode, role });
+    const path =
+      mode === 'register'
+        ? role === 'organizer'
+          ? '/dang-ky?role=organizer'
+          : '/dang-ky'
+        : '/dang-nhap';
+    pushBrowserPath(path);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function switchToOrganizerPortal(tab: 'requests' | 'create' | 'public_events' = 'requests') {
+    setAuthView(null);
+    setOrganizerInitialTab(tab);
+    setPortalView('organizer');
+    pushBrowserPath('/to-chuc');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function switchToAdminPortal() {
+    setAuthView(null);
+    setPortalView('admin');
+    pushBrowserPath('/quan-tri');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  useEffect(() => {
+    function handlePopState() {
+      const next = parseRouteFromLocation(window.location.pathname, window.location.search);
+      if (next.view === 'auth') {
+        setAuthView({ mode: next.mode, role: next.role });
+      } else if (next.view === 'admin') {
+        setAuthView(null);
+        setPortalView(currentUser?.role === 'admin' ? 'admin' : 'public');
+      } else if (next.view === 'organizer') {
+        setAuthView(null);
+        setPortalView(currentUser?.role === 'organizer' ? 'organizer' : 'public');
+      } else {
+        setAuthView(null);
+        setPortalView('public');
+        setPublicPage(next.page);
+        setSelectedEventId(next.page === 'event_detail' ? next.eventId : null);
+      }
+    }
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [currentUser]);
+
   useEffect(() => {
     const unsubContact = subscribePublicContact(setPublicContact);
     return () => unsubContact();
@@ -66,19 +169,56 @@ export default function App() {
       setCurrentUser(user);
       setAuthReady(true);
       setPermissionWarning(null);
+
+      const currentRoute = parseRouteFromLocation(window.location.pathname, window.location.search);
+
       if (user) {
         setAuthView(null);
-        setPortalView(
-          user.role === 'admin'
-            ? 'admin'
-            : user.role === 'organizer'
-            ? 'organizer'
-            : 'public'
-        );
+        if (user.role === 'admin') {
+          if (currentRoute.view === 'public' && currentRoute.page !== 'discover') {
+            setPortalView('public');
+            setPublicPage(currentRoute.page);
+            setSelectedEventId(
+              currentRoute.page === 'event_detail' ? currentRoute.eventId : null
+            );
+          } else {
+            setPortalView('admin');
+            pushBrowserPath('/quan-tri');
+          }
+        } else if (user.role === 'organizer') {
+          if (currentRoute.view === 'public' && currentRoute.page !== 'discover') {
+            setPortalView('public');
+            setPublicPage(currentRoute.page);
+            setSelectedEventId(
+              currentRoute.page === 'event_detail' ? currentRoute.eventId : null
+            );
+          } else {
+            setPortalView('organizer');
+            pushBrowserPath('/to-chuc');
+          }
+        } else {
+          setPortalView('public');
+          if (currentRoute.view === 'public') {
+            setPublicPage(currentRoute.page);
+            setSelectedEventId(
+              currentRoute.page === 'event_detail' ? currentRoute.eventId : null
+            );
+          } else {
+            setPublicPage('discover');
+            setSelectedEventId(null);
+            pushBrowserPath('/');
+          }
+        }
       } else {
         setPortalView('public');
         setRegistrations([]);
         setUsers([]);
+        setContactInquiries([]);
+        if (currentRoute.view === 'admin' || currentRoute.view === 'organizer') {
+          setPublicPage('discover');
+          setSelectedEventId(null);
+          pushBrowserPath('/');
+        }
       }
     });
     return () => unsubAuth();
@@ -90,7 +230,6 @@ export default function App() {
     setEventsLoading(true);
 
     const handlePermissionError = (msg: string) => {
-      // Only show permission warning banner when user is signed in
       if (currentUser) {
         setPermissionWarning(msg);
       }
@@ -106,6 +245,7 @@ export default function App() {
 
     let unsubRegs: (() => void) | undefined;
     let unsubUsers: (() => void) | undefined;
+    let unsubInquiries: (() => void) | undefined;
 
     if (currentUser) {
       unsubRegs = subscribeRegistrations(
@@ -115,12 +255,15 @@ export default function App() {
       );
       if (currentUser.role === 'admin') {
         unsubUsers = subscribeUsers(setUsers, handlePermissionError);
+        unsubInquiries = subscribeContactInquiries(setContactInquiries);
       } else {
         setUsers([]);
+        setContactInquiries([]);
       }
     } else {
       setRegistrations([]);
       setUsers([]);
+      setContactInquiries([]);
     }
 
     return () => {
@@ -128,6 +271,7 @@ export default function App() {
       unsubFeedbacks();
       unsubRegs?.();
       unsubUsers?.();
+      unsubInquiries?.();
     };
   }, [authReady, currentUser]);
 
@@ -136,7 +280,10 @@ export default function App() {
       await logoutAccount();
       setAuthView(null);
       setPortalView('public');
+      setPublicPage('discover');
+      setSelectedEventId(null);
       setPermissionWarning(null);
+      pushBrowserPath('/');
       showToast('Đã đăng xuất khỏi hệ thống.');
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Lỗi khi đăng xuất.', 'error');
@@ -160,7 +307,7 @@ export default function App() {
             setAuthView(null);
             showToast(msg, 'success');
           }}
-          onBackPublic={() => setAuthView(null)}
+          onBackPublic={() => navigatePublicPage('discover')}
         />
       ) : currentUser?.role === 'admin' && portalView === 'admin' ? (
         <AdminLayout
@@ -168,9 +315,10 @@ export default function App() {
           events={events}
           registrations={registrations}
           users={users}
+          contactInquiries={contactInquiries}
           publicContact={publicContact}
           permissionWarning={permissionWarning}
-          onSwitchToUser={() => setPortalView('public')}
+          onSwitchToUser={() => navigatePublicPage('discover')}
           onLogout={handleLogout}
           onNotify={showToast}
         />
@@ -182,26 +330,32 @@ export default function App() {
           feedbacks={feedbacks}
           publicContact={publicContact}
           permissionWarning={permissionWarning}
-          onViewPublicLanding={() => setPortalView('public')}
+          initialTab={organizerInitialTab}
+          onViewPublicLanding={() => navigatePublicPage('discover')}
+          onNavigatePublicPage={navigatePublicPage}
           onLogout={handleLogout}
           onNotify={showToast}
         />
       ) : (
         <UserLayout
           currentUser={currentUser}
+          activePage={publicPage}
+          selectedEventId={selectedEventId}
           events={events}
           eventsLoading={eventsLoading}
           registrations={registrations}
           feedbacks={feedbacks}
           publicContact={publicContact}
           permissionWarning={permissionWarning}
+          onNavigatePage={navigatePublicPage}
+          onOpenEventDetail={navigateToEventDetail}
           onSwitchToAdmin={
-            currentUser?.role === 'admin' ? () => setPortalView('admin') : undefined
+            currentUser?.role === 'admin' ? switchToAdminPortal : undefined
           }
           onSwitchToOrganizer={
-            currentUser?.role === 'organizer' ? () => setPortalView('organizer') : undefined
+            currentUser?.role === 'organizer' ? switchToOrganizerPortal : undefined
           }
-          onOpenAuth={(mode = 'login', role = 'user') => setAuthView({ mode, role })}
+          onOpenAuth={openAuthScreen}
           onLogout={handleLogout}
           onNotify={showToast}
         />

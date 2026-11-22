@@ -25,6 +25,9 @@ import { buildSeedData } from '../data/seedData';
 import { DEFAULT_PUBLIC_CONTACT, generateTicketCode } from '../utils/formatters';
 import type {
   AppUser,
+  ContactInquiry,
+  ContactInquiryInput,
+  ContactInquiryStatus,
   EventFormInput,
   EventGuest,
   EventItem,
@@ -919,3 +922,62 @@ export async function submitFeedback(params: {
     throw err;
   }
 }
+
+export async function createContactInquiry(
+  input: ContactInquiryInput
+): Promise<ContactInquiry> {
+  const { db: firestore } = requireFirebase();
+  const inquiryId = `inq-${Date.now()}`;
+  const docData: ContactInquiry = {
+    id: inquiryId,
+    fullName: input.fullName.trim(),
+    contactInfo: input.contactInfo.trim(),
+    topic: input.topic.trim() || 'Tư vấn tổ chức sự kiện',
+    message: input.message.trim(),
+    status: 'new',
+    ...(input.userId ? { userId: input.userId } : {}),
+    createdAt: new Date().toISOString(),
+  };
+
+  try {
+    await setDoc(doc(firestore, 'contact_inquiries', inquiryId), docData);
+    return docData;
+  } catch (err) {
+    handleFirestoreError(err, OperationType.CREATE, `contact_inquiries/${inquiryId}`);
+    throw err;
+  }
+}
+
+export function subscribeContactInquiries(
+  callback: (inquiries: ContactInquiry[]) => void,
+  onPermissionError?: (msg: string) => void
+): () => void {
+  const { db: firestore } = requireFirebase();
+  const q = query(collection(firestore, 'contact_inquiries'), orderBy('createdAt', 'desc'));
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const list = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }) as ContactInquiry);
+      callback(list);
+    },
+    (err) => {
+      onPermissionError?.(
+        err instanceof Error ? err.message : 'Không đủ quyền đọc collection contact_inquiries.'
+      );
+      callback([]);
+    }
+  );
+}
+
+export async function updateContactInquiryStatus(
+  id: string,
+  status: ContactInquiryStatus
+): Promise<void> {
+  const { db: firestore } = requireFirebase();
+  try {
+    await updateDoc(doc(firestore, 'contact_inquiries', id), { status });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.UPDATE, `contact_inquiries/${id}`);
+  }
+}
+

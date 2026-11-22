@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import {
   BadgeCheck,
   Building2,
@@ -26,6 +26,7 @@ import { createOrganizerEventRequest } from '../services/dataService';
 import { EventBanner } from './EventBanner';
 import { EventDetailModal } from './EventDetailModal';
 import { AnimatedNumber, RevealBlock } from './MotionPrimitives';
+import { PublicFooter } from './PublicFooter';
 import {
   EVENT_CATEGORIES,
   EVENT_STATUS_META,
@@ -52,7 +53,9 @@ interface OrganizerLayoutProps {
   feedbacks: FeedbackItem[];
   publicContact: PublicContactInfo;
   permissionWarning?: string | null;
+  initialTab?: OrganizerTab;
   onViewPublicLanding: () => void;
+  onNavigatePublicPage?: (page: 'discover' | 'services' | 'contact' | 'tickets') => void;
   onLogout: () => void;
   onNotify: (message: string, type?: 'success' | 'error') => void;
 }
@@ -73,11 +76,17 @@ export function OrganizerLayout({
   feedbacks,
   publicContact,
   permissionWarning,
+  initialTab = 'requests',
   onViewPublicLanding,
+  onNavigatePublicPage,
   onLogout,
   onNotify,
 }: OrganizerLayoutProps) {
-  const [tab, setTab] = useState<OrganizerTab>('requests');
+  const [tab, setTab] = useState<OrganizerTab>(initialTab);
+
+  useEffect(() => {
+    setTab(initialTab);
+  }, [initialTab]);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [previewEvent, setPreviewEvent] = useState<EventItem | null>(null);
 
@@ -230,14 +239,14 @@ export function OrganizerLayout({
             <span>EventFlow Organizer</span>
           </button>
 
-          <nav className="hidden md:flex items-center gap-6 text-[13px] font-medium">
+          <nav className="hidden md:flex items-center gap-1.5 text-[13px] font-medium">
             <button
               type="button"
               onClick={() => setTab('requests')}
-              className={`h-14 inline-flex items-center border-b-2 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg transition-all duration-150 whitespace-nowrap shrink-0 cursor-pointer ${
                 tab === 'requests'
-                  ? 'border-indigo-600 text-slate-900 font-semibold'
-                  : 'border-transparent text-slate-500 hover:text-slate-900'
+                  ? 'bg-indigo-50 text-indigo-700 font-semibold'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
               }`}
             >
               Yêu cầu của tôi ({myRequests.length})
@@ -245,10 +254,10 @@ export function OrganizerLayout({
             <button
               type="button"
               onClick={() => setTab('create')}
-              className={`h-14 inline-flex items-center border-b-2 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg transition-all duration-150 whitespace-nowrap shrink-0 cursor-pointer ${
                 tab === 'create'
-                  ? 'border-indigo-600 text-slate-900 font-semibold'
-                  : 'border-transparent text-slate-500 hover:text-slate-900'
+                  ? 'bg-indigo-50 text-indigo-700 font-semibold'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
               }`}
             >
               Gửi yêu cầu mới
@@ -256,10 +265,10 @@ export function OrganizerLayout({
             <button
               type="button"
               onClick={() => setTab('public_events')}
-              className={`h-14 inline-flex items-center border-b-2 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg transition-all duration-150 whitespace-nowrap shrink-0 cursor-pointer ${
                 tab === 'public_events'
-                  ? 'border-indigo-600 text-slate-900 font-semibold'
-                  : 'border-transparent text-slate-500 hover:text-slate-900'
+                  ? 'bg-indigo-50 text-indigo-700 font-semibold'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
               }`}
             >
               Sự kiện công khai
@@ -267,10 +276,10 @@ export function OrganizerLayout({
             <button
               type="button"
               onClick={onViewPublicLanding}
-              className="h-14 inline-flex items-center gap-1.5 border-b-2 border-transparent text-slate-500 hover:text-indigo-600 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-600 hover:text-indigo-700 hover:bg-slate-100/70 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             >
               <Globe className="w-3.5 h-3.5" />
-              <span>Trang giới thiệu</span>
+              <span>Trang công khai</span>
             </button>
           </nav>
 
@@ -972,6 +981,21 @@ export function OrganizerLayout({
           </div>
         )}
       </main>
+
+      <PublicFooter
+        publicContact={publicContact}
+        onNavigatePage={(page) => {
+          if (onNavigatePublicPage) {
+            onNavigatePublicPage(page);
+          } else {
+            onViewPublicLanding();
+          }
+        }}
+        onBookOrganization={() => {
+          setTab('create');
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }}
+      />
 
       {previewEvent && (
         <EventDetailModal
