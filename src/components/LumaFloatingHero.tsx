@@ -27,13 +27,13 @@ const FLOATING_CARDS: FloatingCardSpec[] = [
     subtitle: 'Thiết kế & Thực hành · T7',
     imageUrl: '/src/assets/images/event_design_workshop_1795132977362.jpg',
     matchCategory: 'Hội thảo / Workshop',
-    positionClass: 'top-4 left-2 xl:left-6',
-    sizeClass: 'w-48 xl:w-52',
+    positionClass: 'top-6 left-6 xl:left-12',
+    sizeClass: 'w-44 xl:w-48',
     floatClass: 'ef-float-a',
-    rotateDeg: '-6deg',
+    rotateDeg: '-3.5deg',
     delayMs: 0,
-    depthFactor: 0.9,
-    zDepthPx: '14px',
+    depthFactor: 0.85,
+    zDepthPx: '12px',
   },
   {
     id: 'picnic',
@@ -41,27 +41,13 @@ const FLOATING_CARDS: FloatingCardSpec[] = [
     subtitle: 'Công viên · Gắn kết đội ngũ',
     imageUrl: '/src/assets/images/outdoor_picnic_gathering_1795317964164.jpg',
     matchCategory: 'Hoạt động ngoại khóa / Teambuilding',
-    positionClass: 'top-[40%] -left-2 xl:left-2',
+    positionClass: 'bottom-6 left-10 xl:left-20',
     sizeClass: 'w-44 xl:w-48',
     floatClass: 'ef-float-b',
-    rotateDeg: '4deg',
+    rotateDeg: '3deg',
     delayMs: 450,
-    depthFactor: 0.45,
-    zDepthPx: '-18px',
-  },
-  {
-    id: 'tech-summit',
-    title: 'Hội thảo Công nghệ',
-    subtitle: 'AI & Cloud · 350+ khách',
-    imageUrl: '/src/assets/images/event_tech_summit_1795132976833.jpg',
-    matchCategory: 'Hội thảo / Workshop',
-    positionClass: 'bottom-4 left-6 xl:left-12',
-    sizeClass: 'w-52 xl:w-56',
-    floatClass: 'ef-float-c',
-    rotateDeg: '-3.5deg',
-    delayMs: 900,
-    depthFactor: 1.35,
-    zDepthPx: '30px',
+    depthFactor: 1,
+    zDepthPx: '20px',
   },
   {
     id: 'music-night',
@@ -69,13 +55,13 @@ const FLOATING_CARDS: FloatingCardSpec[] = [
     subtitle: 'Sân khấu mở · 19:30',
     imageUrl: '/src/assets/images/event_music_festival_1795132976683.jpg',
     matchCategory: 'Sự kiện văn hóa / Nghệ thuật / Ca nhạc',
-    positionClass: 'top-4 right-2 xl:right-6',
-    sizeClass: 'w-48 xl:w-52',
+    positionClass: 'top-6 right-6 xl:right-12',
+    sizeClass: 'w-44 xl:w-48',
     floatClass: 'ef-float-b',
-    rotateDeg: '6deg',
+    rotateDeg: '3.5deg',
     delayMs: 250,
-    depthFactor: 0.95,
-    zDepthPx: '16px',
+    depthFactor: 0.85,
+    zDepthPx: '12px',
   },
   {
     id: 'rooftop-party',
@@ -83,27 +69,13 @@ const FLOATING_CARDS: FloatingCardSpec[] = [
     subtitle: 'Gala & Networking VIP',
     imageUrl: '/src/assets/images/evening_social_party_1795317965105.jpg',
     matchCategory: 'Tiệc Gala / Ra mắt sản phẩm',
-    positionClass: 'top-[41%] -right-2 xl:right-2',
+    positionClass: 'bottom-6 right-10 xl:right-20',
     sizeClass: 'w-44 xl:w-48',
     floatClass: 'ef-float-c',
-    rotateDeg: '-4.5deg',
+    rotateDeg: '-3deg',
     delayMs: 700,
-    depthFactor: 0.5,
-    zDepthPx: '-14px',
-  },
-  {
-    id: 'startup-seminar',
-    title: 'Hoạt động Cộng đồng',
-    subtitle: 'Lan tỏa & Kết nối',
-    imageUrl: '/src/assets/images/event_startup_demo_1795132977076.jpg',
-    matchCategory: 'Hoạt động tình nguyện / Cộng đồng',
-    positionClass: 'bottom-4 right-6 xl:right-12',
-    sizeClass: 'w-52 xl:w-56',
-    floatClass: 'ef-float-a',
-    rotateDeg: '3.5deg',
-    delayMs: 1100,
-    depthFactor: 1.3,
-    zDepthPx: '28px',
+    depthFactor: 1,
+    zDepthPx: '20px',
   },
 ];
 
@@ -143,15 +115,16 @@ export function LumaFloatingHero({
 
     const nx = (e.clientX - rect.left) / rect.width - 0.5;
     const ny = (e.clientY - rect.top) / rect.height - 0.5;
+    const clampedX = Math.max(-12, Math.min(12, nx * 24));
+    const clampedY = Math.max(-12, Math.min(12, ny * 24));
 
     if (parallaxRafRef.current !== null) {
       cancelAnimationFrame(parallaxRafRef.current);
     }
 
     parallaxRafRef.current = requestAnimationFrame(() => {
-      sectionEl.dataset.parallaxActive = 'true';
-      sectionEl.style.setProperty('--ef-px', `${(nx * 24).toFixed(2)}px`);
-      sectionEl.style.setProperty('--ef-py', `${(ny * 18).toFixed(2)}px`);
+      sectionEl.style.setProperty('--ef-px', `${clampedX.toFixed(2)}px`);
+      sectionEl.style.setProperty('--ef-py', `${clampedY.toFixed(2)}px`);
       parallaxRafRef.current = null;
     });
   }
@@ -163,7 +136,6 @@ export function LumaFloatingHero({
     }
     const sectionEl = heroRef.current;
     if (!sectionEl) return;
-    delete sectionEl.dataset.parallaxActive;
     sectionEl.style.setProperty('--ef-px', '0px');
     sectionEl.style.setProperty('--ef-py', '0px');
   }
@@ -173,7 +145,7 @@ export function LumaFloatingHero({
       ref={heroRef}
       onMouseMove={handleHeroMouseMove}
       onMouseLeave={handleHeroMouseLeave}
-      className="relative overflow-hidden rounded-3xl border border-slate-200/80 bg-white px-4 py-9 sm:px-8 sm:py-16 lg:px-10 lg:py-24"
+      className="relative overflow-hidden rounded-3xl border border-slate-200/80 bg-white px-4 py-10 sm:px-8 sm:py-16 lg:flex lg:min-h-[540px] xl:min-h-[560px] lg:flex-col lg:items-center lg:justify-center lg:px-10 lg:py-20"
     >
       {/* Soft Luma-inspired Warm Ambient Radial Glows */}
       <div
@@ -189,8 +161,8 @@ export function LumaFloatingHero({
         className="pointer-events-none absolute -bottom-24 right-12 h-64 w-64 rounded-full bg-rose-100/45 blur-3xl"
       />
 
-      {/* Desktop Multi-Layer 3D Parallax Floating Cards */}
-      <div className="ef-hero-3d-stage hidden lg:block">
+      {/* Desktop 4-Corner Multi-Layer 3D Parallax Floating Cards */}
+      <div className="ef-hero-3d-stage pointer-events-none absolute inset-0 hidden lg:block">
         {FLOATING_CARDS.map((card) => {
           const matchedEvent = card.matchCategory
             ? publicEvents.find((e) => matchesEventCategoryFilter(e.category, card.matchCategory!))
@@ -207,7 +179,7 @@ export function LumaFloatingHero({
                   '--ef-pz': card.zDepthPx,
                 } as CSSProperties
               }
-              className={`ef-hero-parallax-layer ${card.positionClass} absolute z-10`}
+              className={`ef-hero-parallax-layer pointer-events-auto transition-transform duration-300 ease-out ${card.positionClass} absolute z-10`}
             >
               <button
                 type="button"
@@ -218,16 +190,17 @@ export function LumaFloatingHero({
                     animationDelay: `${card.delayMs}ms`,
                   } as CSSProperties
                 }
-                className={`ef-floating-card ${card.floatClass} ${card.sizeClass} rounded-2xl border border-white/90 bg-white/95 p-2 text-left shadow-[0_18px_40px_-14px_rgba(15,23,42,0.16)] ring-1 ring-slate-900/5 backdrop-blur-md cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600`}
+                className={`ef-floating-card ${card.floatClass} ${card.sizeClass} rounded-2xl border border-white/90 bg-white/95 p-2 text-left shadow-[0_18px_38px_-14px_rgba(15,23,42,0.15)] ring-1 ring-slate-900/5 backdrop-blur-md cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600`}
               >
-                <div className="aspect-[4/3] w-full overflow-hidden rounded-xl bg-slate-100">
+                <div className="aspect-[16/10] w-full overflow-hidden rounded-xl bg-slate-100">
                   <EventBanner
                     src={matchedEvent?.bannerUrl || card.imageUrl}
+                    category={matchedEvent?.category || card.matchCategory}
                     alt={displayTitle}
                     className="h-full w-full"
                   />
                 </div>
-                <div className="px-1.5 pb-1 pt-2">
+                <div className="px-1.5 pb-0.5 pt-2">
                   <div className="truncate text-xs font-bold text-slate-900">{displayTitle}</div>
                   <div className="mt-0.5 flex items-center gap-1 truncate text-[11px] text-slate-500">
                     {matchedEvent ? (
@@ -244,8 +217,8 @@ export function LumaFloatingHero({
         })}
       </div>
 
-      {/* Centered Luma Hero Copy & Primary Actions (kept flat & steady for legibility) */}
-      <div className="relative z-20 mx-auto max-w-xl text-center lg:max-w-[33rem] xl:max-w-xl">
+      {/* Centered Luma Hero Copy & Primary Actions (Safe Zone away from corner cards) */}
+      <div className="relative z-20 mx-auto max-w-2xl text-center lg:px-14 xl:px-10">
         <div className="inline-flex items-center gap-1.5 rounded-full border border-orange-200/70 bg-orange-50/80 px-3 py-1 text-[11px] sm:text-xs font-semibold text-orange-700 animate-ef-fade-up">
           <Sparkles className="h-3.5 w-3.5 text-rose-500 shrink-0" />
           <span>EventFlow · Trải nghiệm sự kiện sống động</span>
@@ -309,9 +282,10 @@ export function LumaFloatingHero({
                 idx >= 2 ? 'hidden sm:block' : ''
               }`}
             >
-              <div className="aspect-[4/3] w-full overflow-hidden rounded-xl bg-slate-100">
+              <div className="aspect-[16/10] w-full overflow-hidden rounded-xl bg-slate-100">
                 <EventBanner
                   src={matchedEvent?.bannerUrl || card.imageUrl}
+                  category={matchedEvent?.category || card.matchCategory}
                   alt={displayTitle}
                   className="h-full w-full"
                 />

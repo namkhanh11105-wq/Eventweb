@@ -72,11 +72,18 @@ export interface FaqItem {
   answer: string;
 }
 
+export interface EventGalleryImage {
+  id: string;
+  url: string;
+  caption: string;
+}
+
 export interface EventItem {
   id: string;
   title: string;
   description: string;
   bannerUrl: string;
+  galleryImages?: EventGalleryImage[];
   location: string;
   startTime: string;
   endTime: string;
@@ -153,6 +160,7 @@ export interface EventFormInput {
   title: string;
   description: string;
   bannerUrl: string;
+  galleryImages?: EventGalleryImage[];
   location: string;
   startTime: string;
   endTime: string;
@@ -186,6 +194,7 @@ export interface OrganizerEventRequestInput {
   maxSlots: number;
   description: string;
   bannerUrl: string;
+  galleryImages?: EventGalleryImage[];
   organizerName: string;
   clientUserId: string;
   clientName: string;
@@ -211,6 +220,8 @@ export type ContactInquiryStatus = 'new' | 'reviewed' | 'resolved';
 export interface ContactInquiry {
   id: string;
   fullName: string;
+  email: string;
+  phone: string;
   contactInfo: string;
   topic: string;
   message: string;
@@ -221,7 +232,9 @@ export interface ContactInquiry {
 
 export interface ContactInquiryInput {
   fullName: string;
-  contactInfo: string;
+  email: string;
+  phone: string;
+  contactInfo?: string;
   topic: string;
   message: string;
   userId?: string;

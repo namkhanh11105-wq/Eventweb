@@ -62,6 +62,8 @@ import {
 } from '../services/dataService';
 import { AccountMenuDropdown } from './AccountMenuDropdown';
 import { EventBanner } from './EventBanner';
+import { EventGallerySection } from './EventGalleryLightbox';
+import { EventGalleryPicker } from './EventGalleryPicker';
 import { EventImagePicker } from './EventImagePicker';
 import {
   AnimatedModal,
@@ -150,6 +152,7 @@ function createEmptyForm(): EventFormInput {
     title: '',
     description: '',
     bannerUrl: '',
+    galleryImages: [],
     location: '',
     startTime: '',
     endTime: '',
@@ -475,6 +478,14 @@ export function AdminLayout({
       title: ev.title,
       description: ev.description,
       bannerUrl: ev.bannerUrl || '',
+      galleryImages:
+        ev.galleryImages && ev.galleryImages.length > 0
+          ? ev.galleryImages.map((g, idx) => ({
+              id: g.id || `gal-${idx}`,
+              url: g.url,
+              caption: g.caption || '',
+            }))
+          : [],
       location: ev.location,
       startTime: toDatetimeLocalValue(ev.startTime),
       endTime: toDatetimeLocalValue(ev.endTime),
@@ -520,6 +531,7 @@ export function AdminLayout({
       ...formState,
       category: resolvedCategory,
       bannerUrl: (formState.bannerUrl || '').trim(),
+      galleryImages: formState.galleryImages || [],
     };
 
     setSavingEvent(true);
@@ -2032,6 +2044,15 @@ export function AdminLayout({
                 </div>
               </div>
 
+              {workspaceEvent.galleryImages && workspaceEvent.galleryImages.length > 0 && (
+                <div className="bg-white border border-slate-200 rounded-2xl p-5">
+                  <EventGallerySection
+                    galleryImages={workspaceEvent.galleryImages}
+                    eventTitle={workspaceEvent.title}
+                  />
+                </div>
+              )}
+
               {/* 3 Isolated Event-Scoped Tabs with Sliding Indicator */}
               <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
                 <div className="border-b border-slate-200 px-4 py-2.5 overflow-x-auto bg-slate-50/70">
@@ -3370,58 +3391,113 @@ export function AdminLayout({
                   </p>
                 ) : (
                   <div className="space-y-3">
-                    {contactInquiries.map((inq) => (
-                      <div
-                        key={inq.id}
-                        className="p-4 rounded-xl bg-slate-50/70 border border-slate-200/80 space-y-2"
-                      >
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <div className="text-sm font-bold text-slate-900">
-                            {inq.fullName}{' '}
-                            <span className="font-normal text-xs text-slate-500">
-                              · {inq.contactInfo}
-                            </span>
+                    {contactInquiries.map((inq) => {
+                      const statusMeta =
+                        inq.status === 'resolved'
+                          ? {
+                              label: 'Đã xử lý',
+                              badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+                            }
+                          : inq.status === 'reviewed'
+                          ? {
+                              label: 'Đã liên hệ',
+                              badgeClass: 'bg-sky-50 text-sky-700 border-sky-200',
+                            }
+                          : {
+                              label: 'Chờ xử lý',
+                              badgeClass: 'bg-amber-50 text-amber-800 border-amber-200',
+                            };
+
+                      return (
+                        <div
+                          key={inq.id}
+                          className="p-4 rounded-xl bg-slate-50/70 border border-slate-200/80 space-y-2.5"
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div className="space-y-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="text-sm font-bold text-slate-900">
+                                  {inq.fullName}
+                                </span>
+                                <span
+                                  className={`px-2 py-0.5 text-[11px] font-semibold border rounded-md ${statusMeta.badgeClass}`}
+                                >
+                                  {statusMeta.label}
+                                </span>
+                                <span className="text-[11px] font-mono text-slate-400">
+                                  {inq.id}
+                                </span>
+                              </div>
+
+                              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600">
+                                {inq.phone && (
+                                  <a
+                                    href={`tel:${inq.phone.replace(/\s+/g, '')}`}
+                                    className="inline-flex items-center gap-1 font-medium text-slate-700 hover:text-indigo-700 tabular-nums"
+                                  >
+                                    <Phone className="w-3.5 h-3.5 text-slate-400" />
+                                    <span>{inq.phone}</span>
+                                  </a>
+                                )}
+                                {inq.email && (
+                                  <a
+                                    href={`mailto:${inq.email}`}
+                                    className="inline-flex items-center gap-1 font-medium text-indigo-700 hover:text-indigo-800 break-all"
+                                  >
+                                    <Mail className="w-3.5 h-3.5 text-indigo-500" />
+                                    <span>{inq.email}</span>
+                                  </a>
+                                )}
+                                {!inq.phone && !inq.email && inq.contactInfo && (
+                                  <span>{inq.contactInfo}</span>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="inline-flex items-center gap-1.5">
+                              {updatingInquiryId === inq.id && (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-600" />
+                              )}
+                              <select
+                                aria-label={`Trạng thái yêu cầu ${inq.fullName}`}
+                                disabled={updatingInquiryId === inq.id}
+                                value={inq.status}
+                                onChange={async (e) => {
+                                  const next = e.target.value as ContactInquiryStatus;
+                                  setUpdatingInquiryId(inq.id);
+                                  try {
+                                    await updateContactInquiryStatus(inq.id, next);
+                                    onNotify('Đã cập nhật trạng thái yêu cầu tư vấn.');
+                                  } catch (err) {
+                                    onNotify(
+                                      err instanceof Error ? err.message : 'Lỗi cập nhật.',
+                                      'error'
+                                    );
+                                  } finally {
+                                    setUpdatingInquiryId(null);
+                                  }
+                                }}
+                                className="h-8 px-2.5 text-xs font-semibold bg-white border border-slate-200 rounded-lg cursor-pointer disabled:opacity-60"
+                              >
+                                <option value="new">Chờ xử lý (Mới tiếp nhận)</option>
+                                <option value="reviewed">Đã liên hệ</option>
+                                <option value="resolved">Đã xử lý</option>
+                              </select>
+                            </div>
                           </div>
-                          <div className="inline-flex items-center gap-1.5">
-                            {updatingInquiryId === inq.id && (
-                              <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-600" />
-                            )}
-                            <select
-                              aria-label={`Trạng thái yêu cầu ${inq.fullName}`}
-                              disabled={updatingInquiryId === inq.id}
-                              value={inq.status}
-                              onChange={async (e) => {
-                                const next = e.target.value as ContactInquiryStatus;
-                                setUpdatingInquiryId(inq.id);
-                                try {
-                                  await updateContactInquiryStatus(inq.id, next);
-                                  onNotify('Đã cập nhật trạng thái yêu cầu tư vấn.');
-                                } catch (err) {
-                                  onNotify(
-                                    err instanceof Error ? err.message : 'Lỗi cập nhật.',
-                                    'error'
-                                  );
-                                } finally {
-                                  setUpdatingInquiryId(null);
-                                }
-                              }}
-                              className="h-8 px-2.5 text-xs font-semibold bg-white border border-slate-200 rounded-lg cursor-pointer disabled:opacity-60"
-                            >
-                              <option value="new">Mới tiếp nhận</option>
-                              <option value="reviewed">Đã liên hệ</option>
-                              <option value="resolved">Đã xử lý</option>
-                            </select>
+
+                          <div className="text-xs font-semibold text-indigo-700">
+                            Chủ đề: {inq.topic}
+                          </div>
+                          <p className="text-xs sm:text-sm text-slate-700 leading-relaxed whitespace-pre-line bg-white/80 border border-slate-200/70 rounded-lg p-3">
+                            {inq.message}
+                          </p>
+                          <div className="text-[11px] text-slate-400 tabular-nums">
+                            Gửi lúc: {formatDateTimeVN(inq.createdAt)}
                           </div>
                         </div>
-                        <div className="text-xs font-semibold text-indigo-600">{inq.topic}</div>
-                        <p className="text-xs sm:text-sm text-slate-700 leading-relaxed">
-                          {inq.message}
-                        </p>
-                        <div className="text-[11px] text-slate-400 tabular-nums">
-                          Gửi lúc: {formatDateTimeVN(inq.createdAt)}
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -3526,6 +3602,20 @@ export function AdminLayout({
                 eventCategory={
                   formState.category === 'Khác' ? customCategory : formState.category
                 }
+                accentColor="indigo"
+              />
+
+              <EventGalleryPicker
+                images={formState.galleryImages || []}
+                onChange={(nextImages) =>
+                  setFormState((s) => ({ ...s, galleryImages: nextImages }))
+                }
+                currentBannerUrl={formState.bannerUrl}
+                onSetAsBanner={(url) => {
+                  setFormState((s) => ({ ...s, bannerUrl: url }));
+                  onNotify('Đã chọn ảnh này làm ảnh bìa chính.');
+                }}
+                maxImages={8}
                 accentColor="indigo"
               />
 

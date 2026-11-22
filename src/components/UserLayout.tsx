@@ -38,6 +38,8 @@ import { AccountMenuDropdown } from './AccountMenuDropdown';
 import { ContactPage } from './ContactPage';
 import { EventBanner } from './EventBanner';
 import { EventDetailPage } from './EventDetailPage';
+import { EventGallerySection } from './EventGalleryLightbox';
+import { EventGalleryPicker } from './EventGalleryPicker';
 import { EventImagePicker } from './EventImagePicker';
 import {
   EventServiceSelector,
@@ -72,6 +74,7 @@ import {
 } from '../utils/formatters';
 import type {
   AppUser,
+  EventGalleryImage,
   EventItem,
   EventServiceRequest,
   EventStatus,
@@ -184,6 +187,7 @@ export function UserLayout({
   const [reqMaxSlots, setReqMaxSlots] = useState(100);
   const [reqDescription, setReqDescription] = useState('');
   const [reqBannerUrl, setReqBannerUrl] = useState('');
+  const [reqGalleryImages, setReqGalleryImages] = useState<EventGalleryImage[]>([]);
   const [reqSelectedServices, setReqSelectedServices] = useState<
     Record<string, ServiceSelectionItem>
   >(() => {
@@ -629,6 +633,7 @@ export function UserLayout({
         maxSlots: Math.round(safeMaxSlots),
         description: reqDescription.trim(),
         bannerUrl: reqBannerUrl.trim(),
+        galleryImages: reqGalleryImages,
         organizerName:
           reqOrganizerName.trim() || reqClientName.trim() || currentUser.fullName || 'Thành viên EventFlow',
         clientUserId: currentUser.uid || '',
@@ -644,6 +649,7 @@ export function UserLayout({
       setReqLocation('');
       setReqDescription('');
       setReqBannerUrl('');
+      setReqGalleryImages([]);
       setReqCustomServiceName('');
       setBookingPackageLabel(null);
       setReqSelectedServices(createDefaultSelectedServices());
@@ -1116,6 +1122,8 @@ export function UserLayout({
               <ContactPage
                 currentUser={currentUser}
                 publicContact={publicContact}
+                onGoServices={() => smoothNavigatePage('services')}
+                onBookOrganization={() => handleBookOrganization()}
                 onNotify={onNotify}
               />
             )}
@@ -2290,6 +2298,19 @@ export function UserLayout({
                                 accentColor="slate"
                               />
 
+                              {/* Gallery Images (up to 8 photos with captions & set-as-banner) */}
+                              <EventGalleryPicker
+                                images={reqGalleryImages}
+                                onChange={setReqGalleryImages}
+                                currentBannerUrl={reqBannerUrl}
+                                onSetAsBanner={(url) => {
+                                  setReqBannerUrl(url);
+                                  onNotify('Đã chọn ảnh này làm ảnh bìa chính của sự kiện.');
+                                }}
+                                maxImages={8}
+                                accentColor="slate"
+                              />
+
                               {/* Enhanced Services Selector with Combo Presets & Quick Chips */}
                               <EventServiceSelector
                                 selectedServices={reqSelectedServices}
@@ -2565,6 +2586,15 @@ export function UserLayout({
                                           <p className="text-sm text-slate-600 leading-relaxed line-clamp-2">
                                             {ev.description}
                                           </p>
+
+                                          {ev.galleryImages && ev.galleryImages.length > 0 && (
+                                            <div className="pt-1">
+                                              <EventGallerySection
+                                                galleryImages={ev.galleryImages}
+                                                eventTitle={ev.title}
+                                              />
+                                            </div>
+                                          )}
 
                                           {/* Requested Services Progress */}
                                           <div className="pt-4 border-t border-slate-100 space-y-2.5">

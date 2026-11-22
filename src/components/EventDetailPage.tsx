@@ -28,6 +28,7 @@ import {
   updateRegistrationStatus,
 } from '../services/dataService';
 import { EventBanner } from './EventBanner';
+import { EventGallerySection } from './EventGalleryLightbox';
 import { AnimatedProgressBar } from './MotionPrimitives';
 import {
   EVENT_STATUS_META,
@@ -417,6 +418,11 @@ export function EventDetailPage({
                 {event.description}
               </p>
             </section>
+
+            <EventGallerySection
+              galleryImages={event.galleryImages}
+              eventTitle={event.title}
+            />
 
             {/* Speakers & Invited Guests */}
             {event.speakers && event.speakers.length > 0 && (

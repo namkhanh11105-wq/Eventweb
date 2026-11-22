@@ -30,6 +30,7 @@ import type {
   ContactInquiryInput,
   ContactInquiryStatus,
   EventFormInput,
+  EventGalleryImage,
   EventGuest,
   EventItem,
   EventServiceRequest,
@@ -148,12 +149,38 @@ function normalizeInvitedGuests(guests?: EventGuest[]): EventGuest[] {
     }));
 }
 
+function normalizeGalleryImages(images?: EventGalleryImage[]): EventGalleryImage[] {
+  if (!Array.isArray(images)) return [];
+  return images
+    .filter((img) => Boolean(img && typeof img.url === 'string' && img.url.trim()))
+    .slice(0, 8)
+    .map((img, idx) => ({
+      id: String(img.id || `gal-${Date.now()}-${idx}`),
+      url: String(img.url ?? '').trim(),
+      caption: String(img.caption ?? '').trim(),
+    }));
+}
+
+function assertEventMediaSizeSafe(bannerUrl: string, galleryImages: EventGalleryImage[]) {
+  const totalStringChars =
+    (bannerUrl || '').length +
+    galleryImages.reduce((acc, g) => acc + (g.url || '').length + (g.caption || '').length, 0);
+  if (totalStringChars > 960 * 1024) {
+    throw new Error(
+      'Tổng dung lượng ảnh đính kèm vượt quá giới hạn an toàn của Firestore (1MB). Vui lòng giảm bớt số ảnh tải từ máy hoặc dùng link URL.'
+    );
+  }
+}
+
 function normalizeEventDoc(id: string, raw: Record<string, unknown>): EventItem {
   return {
     id,
     title: String(raw.title ?? ''),
     description: String(raw.description ?? ''),
     bannerUrl: String(raw.bannerUrl ?? ''),
+    galleryImages: Array.isArray(raw.galleryImages)
+      ? normalizeGalleryImages(raw.galleryImages as EventGalleryImage[])
+      : [],
     location: String(raw.location ?? ''),
     startTime: String(raw.startTime ?? new Date().toISOString()),
     endTime: String(raw.endTime ?? new Date().toISOString()),
@@ -673,11 +700,16 @@ export async function createEvent(input: EventFormInput): Promise<EventItem> {
   const newId = `evt-${Date.now()}`;
   const nowIso = new Date().toISOString();
   const parsedMaxSlots = Number(input.maxSlots);
+  const safeBannerUrl = String(input.bannerUrl ?? '').trim();
+  const safeGalleryImages = normalizeGalleryImages(input.galleryImages);
+  assertEventMediaSizeSafe(safeBannerUrl, safeGalleryImages);
+
   const eventDoc: EventItem = sanitizeForFirestore({
     id: newId,
     title: String(input.title ?? '').trim(),
     description: String(input.description ?? '').trim(),
-    bannerUrl: String(input.bannerUrl ?? '').trim(),
+    bannerUrl: safeBannerUrl,
+    galleryImages: safeGalleryImages,
     location: String(input.location ?? '').trim(),
     startTime: toSafeIsoDate(input.startTime, nowIso),
     endTime: toSafeIsoDate(input.endTime, nowIso),
@@ -740,11 +772,16 @@ export async function createOrganizerEventRequest(
   const parsedMaxSlots = Number(input.maxSlots);
   const safeClientName = String(input.clientName ?? '').trim() || 'Thành viên EventFlow';
 
+  const safeBannerUrl = String(input.bannerUrl ?? '').trim();
+  const safeGalleryImages = normalizeGalleryImages(input.galleryImages);
+  assertEventMediaSizeSafe(safeBannerUrl, safeGalleryImages);
+
   const eventDoc: EventItem = sanitizeForFirestore({
     id: newId,
     title: String(input.title ?? '').trim(),
     description: String(input.description ?? '').trim(),
-    bannerUrl: String(input.bannerUrl ?? '').trim(),
+    bannerUrl: safeBannerUrl,
+    galleryImages: safeGalleryImages,
     location: String(input.location ?? '').trim(),
     startTime: toSafeIsoDate(input.startTime, nowIso),
     endTime: toSafeIsoDate(input.endTime, nowIso),
@@ -789,6 +826,7 @@ export async function duplicateEvent(source: EventItem): Promise<EventItem> {
     title: `${source.title} (Bản sao)`,
     description: source.description,
     bannerUrl: source.bannerUrl,
+    galleryImages: source.galleryImages || [],
     location: source.location,
     startTime: source.startTime,
     endTime: source.endTime,
@@ -815,10 +853,22 @@ export async function duplicateEvent(source: EventItem): Promise<EventItem> {
 
 export async function updateEvent(id: string, input: Partial<EventFormInput>): Promise<void> {
   const { db: firestore } = requireFirebase();
+  const safeGallery =
+    input.galleryImages !== undefined
+      ? normalizeGalleryImages(input.galleryImages)
+      : undefined;
+  if (input.bannerUrl !== undefined || safeGallery !== undefined) {
+    assertEventMediaSizeSafe(
+      String(input.bannerUrl ?? ''),
+      safeGallery ?? []
+    );
+  }
+
   const updates = sanitizeForFirestore<Record<string, unknown>>({
     ...(input.title !== undefined ? { title: input.title.trim() } : {}),
     ...(input.description !== undefined ? { description: input.description.trim() } : {}),
     ...(input.bannerUrl !== undefined ? { bannerUrl: input.bannerUrl.trim() } : {}),
+    ...(safeGallery !== undefined ? { galleryImages: safeGallery } : {}),
     ...(input.location !== undefined ? { location: input.location.trim() } : {}),
     ...(input.startTime !== undefined ? { startTime: toSafeIsoDate(input.startTime) } : {}),
     ...(input.endTime !== undefined ? { endTime: toSafeIsoDate(input.endTime) } : {}),
@@ -1106,19 +1156,58 @@ export async function submitFeedback(params: {
   }
 }
 
+function normalizeContactInquiryDoc(
+  id: string,
+  raw: Record<string, unknown>
+): ContactInquiry {
+  const rawContact = String(raw.contactInfo ?? '').trim();
+  const rawEmail = String(raw.email ?? '').trim();
+  const rawPhone = String(raw.phone ?? '').trim();
+
+  const inferredEmail =
+    rawEmail || (rawContact.includes('@') ? rawContact : '');
+  const inferredPhone =
+    rawPhone || (!rawContact.includes('@') ? rawContact : '');
+  const combinedContact =
+    rawContact || [inferredPhone, inferredEmail].filter(Boolean).join(' · ');
+
+  return {
+    id,
+    fullName: String(raw.fullName ?? '').trim(),
+    email: inferredEmail,
+    phone: inferredPhone,
+    contactInfo: combinedContact,
+    topic: String(raw.topic ?? '').trim() || 'Tư vấn tổ chức sự kiện / Dã ngoại',
+    message: String(raw.message ?? '').trim(),
+    status: (raw.status as ContactInquiryStatus) || 'new',
+    userId: String(raw.userId ?? '').trim(),
+    createdAt: String(raw.createdAt ?? new Date().toISOString()),
+  };
+}
+
 export async function createContactInquiry(
   input: ContactInquiryInput
 ): Promise<ContactInquiry> {
   const { db: firestore } = requireFirebase();
   const inquiryId = `inq-${Date.now()}`;
+  const cleanEmail = String(input.email ?? '').trim();
+  const cleanPhone = String(input.phone ?? '').trim();
+  const combinedContact =
+    String(input.contactInfo ?? '').trim() ||
+    [cleanPhone, cleanEmail].filter(Boolean).join(' · ');
+
   const docData: ContactInquiry = sanitizeForFirestore({
     id: inquiryId,
     fullName: String(input.fullName ?? '').trim(),
-    contactInfo: String(input.contactInfo ?? '').trim(),
-    topic: String(input.topic ?? '').trim() || 'Tư vấn tổ chức sự kiện',
+    email: cleanEmail,
+    phone: cleanPhone,
+    contactInfo: combinedContact,
+    topic:
+      String(input.topic ?? '').trim() ||
+      'Tư vấn tổ chức sự kiện / Dã ngoại',
     message: String(input.message ?? '').trim(),
     status: 'new',
-    ...(input.userId ? { userId: input.userId } : {}),
+    userId: String(input.userId ?? '').trim(),
     createdAt: new Date().toISOString(),
   });
 
@@ -1140,7 +1229,9 @@ export function subscribeContactInquiries(
   return onSnapshot(
     q,
     (snapshot) => {
-      const list = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }) as ContactInquiry);
+      const list = snapshot.docs.map((d) =>
+        normalizeContactInquiryDoc(d.id, d.data() as Record<string, unknown>)
+      );
       callback(list);
     },
     (err) => {

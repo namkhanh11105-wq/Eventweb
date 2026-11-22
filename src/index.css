@@ -103,7 +103,7 @@
     transform: translate3d(0, 0px, 0) rotate(var(--ef-rot, 0deg));
   }
   50% {
-    transform: translate3d(0, -10px, 0) rotate(calc(var(--ef-rot, 0deg) + 1.4deg));
+    transform: translate3d(0, -5px, 0) rotate(calc(var(--ef-rot, 0deg) + 1deg));
   }
 }
 
@@ -112,7 +112,7 @@
     transform: translate3d(0, 0px, 0) rotate(var(--ef-rot, 0deg));
   }
   50% {
-    transform: translate3d(0, 9px, 0) rotate(calc(var(--ef-rot, 0deg) - 1.4deg));
+    transform: translate3d(0, 5px, 0) rotate(calc(var(--ef-rot, 0deg) - 1deg));
   }
 }
 
@@ -121,7 +121,7 @@
     transform: translate3d(0, 0px, 0) rotate(var(--ef-rot, 0deg));
   }
   50% {
-    transform: translate3d(3px, -8px, 0) rotate(calc(var(--ef-rot, 0deg) + 1deg));
+    transform: translate3d(2px, -4px, 0) rotate(calc(var(--ef-rot, 0deg) + 0.8deg));
   }
 }
 
@@ -213,9 +213,9 @@
 
 .ef-floating-card:hover {
   animation-play-state: paused;
-  transform: translate3d(0, -8px, 0) rotate(0deg) scale(1.06) !important;
+  transform: translate3d(0, -4px, 0) rotate(0deg) scale(1.03) !important;
   z-index: 30;
-  box-shadow: 0 24px 48px -12px rgba(15, 23, 42, 0.22);
+  box-shadow: 0 22px 44px -12px rgba(15, 23, 42, 0.2);
 }
 
 .ef-floating-card:hover::after {
@@ -349,12 +349,8 @@
     calc(var(--ef-py, 0px) * var(--ef-depth, 1)),
     var(--ef-pz, 0px)
   );
-  transition: transform 540ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: transform 300ms ease-out;
   will-change: transform;
-}
-
-[data-parallax-active="true"] .ef-hero-parallax-layer {
-  transition: transform 115ms ease-out;
 }
 
 .ef-ticket-3d {

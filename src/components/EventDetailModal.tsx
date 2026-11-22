@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { createRegistration, submitFeedback } from '../services/dataService';
 import { EventBanner } from './EventBanner';
+import { EventGallerySection } from './EventGalleryLightbox';
 import { AnimatedModal, AnimatedProgressBar } from './MotionPrimitives';
 import {
   EVENT_STATUS_META,
@@ -345,6 +346,11 @@ export function EventDetailModal({
                 {activeEvent.description}
               </p>
             </section>
+
+            <EventGallerySection
+              galleryImages={activeEvent.galleryImages}
+              eventTitle={activeEvent.title}
+            />
 
             {activeEvent.speakers && activeEvent.speakers.length > 0 && (
               <section>
