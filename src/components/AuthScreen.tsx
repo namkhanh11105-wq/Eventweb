@@ -1,36 +1,39 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react';
 import {
-  ArrowLeft,
   ArrowRight,
   Building2,
   CalendarDays,
   Lock,
   Mail,
   Phone,
+  QrCode,
   ShieldCheck,
+  Sparkles,
+  Ticket,
   User,
   Users,
 } from 'lucide-react';
 import { loginAccount, loginAsDemo, registerAccount } from '../services/dataService';
-import { isFirebaseConfigured } from '../firebase';
+import { triggerPageProgress } from './MotionPrimitives';
 import type { PublicContactInfo, UserRole } from '../types';
 
 interface AuthScreenProps {
-  initialMode?: 'login' | 'register';
+  mode: 'login' | 'register';
   initialRegisterRole?: 'user' | 'organizer';
   publicContact: PublicContactInfo;
+  onSwitchMode: (nextMode: 'login' | 'register') => void;
   onSuccess: (message: string) => void;
   onBackPublic: () => void;
 }
 
 export function AuthScreen({
-  initialMode = 'login',
+  mode,
   initialRegisterRole = 'user',
   publicContact,
+  onSwitchMode,
   onSuccess,
   onBackPublic,
 }: AuthScreenProps) {
-  const [mode, setMode] = useState<'login' | 'register'>(initialMode);
   const [registerRole, setRegisterRole] = useState<'user' | 'organizer'>(initialRegisterRole);
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
@@ -40,6 +43,51 @@ export function AuthScreen({
   const [submitting, setSubmitting] = useState(false);
   const [demoLoading, setDemoLoading] = useState<UserRole | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isSwitching, setIsSwitching] = useState(false);
+  const switchTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    setRegisterRole(initialRegisterRole);
+  }, [initialRegisterRole]);
+
+  useEffect(() => {
+    setError(null);
+  }, [mode]);
+
+  useEffect(() => {
+    return () => {
+      if (switchTimerRef.current !== null) {
+        window.clearTimeout(switchTimerRef.current);
+      }
+    };
+  }, []);
+
+  function handleSmoothSwitchMode(nextMode: 'login' | 'register') {
+    if (nextMode === mode) return;
+    triggerPageProgress();
+
+    const reduced =
+      typeof window !== 'undefined' &&
+      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+    if (reduced) {
+      setError(null);
+      onSwitchMode(nextMode);
+      return;
+    }
+
+    if (switchTimerRef.current !== null) {
+      window.clearTimeout(switchTimerRef.current);
+    }
+
+    setIsSwitching(true);
+    switchTimerRef.current = window.setTimeout(() => {
+      setError(null);
+      onSwitchMode(nextMode);
+      setIsSwitching(false);
+      switchTimerRef.current = null;
+    }, 140);
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -62,7 +110,7 @@ export function AuthScreen({
           user.role === 'admin'
             ? 'Quản trị viên'
             : user.role === 'organizer'
-            ? 'Người đăng ký tổ chức sự kiện'
+            ? 'Khách hàng đặt tổ chức sự kiện'
             : 'Người tham gia sự kiện';
         onSuccess(`Đăng ký thành công với vai trò ${roleText}.`);
       }
@@ -92,349 +140,388 @@ export function AuthScreen({
     }
   }
 
+  const inputClass =
+    'w-full h-11 pl-10 pr-3.5 text-sm bg-white border border-slate-200/90 rounded-xl text-slate-900 placeholder:text-slate-400 transition-all duration-150 focus:outline-none focus:border-slate-900 focus:ring-4 focus:ring-slate-900/5';
+
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col justify-center py-8 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-5xl w-full mx-auto space-y-4">
-        <button
-          type="button"
-          onClick={onBackPublic}
-          className="inline-flex items-center gap-2 text-xs font-semibold text-slate-600 hover:text-indigo-600 transition-colors cursor-pointer"
+    <div className="relative min-h-screen overflow-hidden bg-[#FAFAFC] flex flex-col justify-between px-4 py-8 sm:px-6">
+      {/* Ambient Drifting Mesh Gradient Blobs */}
+      <div
+        aria-hidden="true"
+        className="ef-blob-drift-a pointer-events-none absolute -top-32 -left-24 h-[28rem] w-[28rem] rounded-full bg-gradient-to-br from-rose-200/55 via-orange-100/55 to-amber-100/40 blur-3xl"
+      />
+      <div
+        aria-hidden="true"
+        className="ef-blob-drift-b pointer-events-none absolute -bottom-36 -right-24 h-[30rem] w-[30rem] rounded-full bg-gradient-to-tr from-indigo-200/50 via-sky-100/50 to-rose-100/35 blur-3xl"
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute top-1/2 left-1/2 h-80 w-80 -translate-x-1/2 -translate-y-1/2 rounded-full bg-orange-100/35 blur-3xl"
+      />
+
+      {/* Subtle Floating Background Event Cards & Icons */}
+      <div aria-hidden="true" className="hidden md:block pointer-events-none select-none">
+        <div
+          style={{ '--ef-rot': '-7deg', animationDelay: '0ms' } as CSSProperties}
+          className="ef-float-a absolute top-24 left-[6%] lg:left-[10%] w-44 rounded-2xl border border-white/90 bg-white/75 p-2 shadow-[0_14px_34px_-12px_rgba(15,23,42,0.12)] backdrop-blur-md opacity-80"
         >
-          <ArrowLeft className="w-4 h-4" />
-          <span>Quay lại trang giới thiệu &amp; liên hệ công khai</span>
-        </button>
-
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
-          {/* Left editorial intro */}
-          <div className="lg:col-span-5 bg-indigo-950 text-white rounded-2xl p-8 sm:p-10 flex flex-col justify-between animate-ef-fade-up">
-            <div>
-              <div className="flex items-center gap-2.5 text-indigo-200 text-sm font-semibold">
-                <CalendarDays className="w-5 h-5" />
-                <span>EventFlow Platform</span>
-              </div>
-
-              <h1 className="mt-6 text-3xl sm:text-4xl font-bold tracking-tight text-balance leading-tight">
-                Vận hành 3 luồng nghiệp vụ sự kiện đồng bộ.
-              </h1>
-
-              <p className="mt-4 text-sm text-indigo-200/90 leading-relaxed">
-                Một nền tảng thống nhất cho Người tham gia đăng ký sự kiện, Khách hàng gửi yêu cầu
-                tổ chức cùng dịch vụ đi kèm, và Quản trị viên điều phối chi tiết từng sự kiện.
-              </p>
-
-              <div className="mt-6 space-y-2.5 text-xs text-indigo-100/90">
-                <div className="p-3 rounded-xl bg-white/10 border border-white/10">
-                  <div className="font-semibold text-white">1. Người tham gia sự kiện</div>
-                  <div className="mt-0.5 text-indigo-200">
-                    Xem sự kiện đang mở, giữ chỗ và theo dõi trạng thái tham gia.
-                  </div>
-                </div>
-                <div className="p-3 rounded-xl bg-white/10 border border-white/10">
-                  <div className="font-semibold text-white">2. Khách hàng đặt tổ chức</div>
-                  <div className="mt-0.5 text-indigo-200">
-                    Gửi yêu cầu tổ chức, chọn dịch vụ hệ thống và theo dõi tiến độ duyệt.
-                  </div>
-                </div>
-                <div className="p-3 rounded-xl bg-white/10 border border-white/10">
-                  <div className="font-semibold text-white">3. Quản trị viên (Admin)</div>
-                  <div className="mt-0.5 text-indigo-200">
-                    Duyệt dịch vụ, quản lý khách mời VIP và người tham gia theo từng sự kiện.
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-8 pt-5 border-t border-indigo-800/70 space-y-2 text-xs text-indigo-200">
-              <div className="font-semibold text-white">
-                Cần tư vấn nhanh trước khi tạo tài khoản?
-              </div>
-              <div className="tabular-nums">
-                SĐT: <strong className="text-white">{publicContact.phone}</strong> · Email:{' '}
-                <strong className="text-white">{publicContact.email}</strong>
-              </div>
-              <div className="text-indigo-300/80">
-                {isFirebaseConfigured
-                  ? 'Kết nối trực tiếp Cloud Firestore (quan-ly-su-kien-86a89).'
-                  : 'Chưa cấu hình Firebase.'}
-              </div>
-            </div>
+          <div className="aspect-[16/10] w-full overflow-hidden rounded-xl bg-slate-100">
+            <img
+              src="/src/assets/images/event_design_workshop_1795132977362.jpg"
+              alt=""
+              className="h-full w-full object-cover"
+            />
           </div>
+          <div className="px-1 pt-2 pb-0.5">
+            <div className="text-[11px] font-bold text-slate-800 truncate">Design Workshop</div>
+            <div className="text-[10px] text-slate-500">Thứ Bảy · 14:00</div>
+          </div>
+        </div>
 
-          {/* Right auth card */}
-          <div
-            style={{ animationDelay: '70ms' }}
-            className="lg:col-span-7 bg-white border border-slate-200 rounded-2xl p-6 sm:p-10 flex flex-col justify-between animate-ef-fade-up"
-          >
-            <div>
-              <div className="flex items-center justify-between gap-4 border-b border-slate-200 pb-5">
-                <div>
-                  <h2 className="text-xl font-bold text-slate-900">
-                    {mode === 'login' ? 'Đăng nhập hệ thống' : 'Đăng ký tài khoản'}
-                  </h2>
-                  <p className="mt-1 text-sm text-slate-500">
-                    {mode === 'login'
-                      ? 'Đăng nhập bằng tài khoản của bạn hoặc chọn nhanh 1 trong 3 luồng demo.'
-                      : 'Chọn mục đích sử dụng phù hợp để mở đúng không gian làm việc.'}
-                  </p>
-                </div>
+        <div
+          style={{ '--ef-rot': '6deg', animationDelay: '400ms' } as CSSProperties}
+          className="ef-float-b absolute top-28 right-[6%] lg:right-[10%] w-44 rounded-2xl border border-white/90 bg-white/75 p-2 shadow-[0_14px_34px_-12px_rgba(15,23,42,0.12)] backdrop-blur-md opacity-80"
+        >
+          <div className="aspect-[16/10] w-full overflow-hidden rounded-xl bg-slate-100">
+            <img
+              src="/src/assets/images/event_music_festival_1795132976683.jpg"
+              alt=""
+              className="h-full w-full object-cover"
+            />
+          </div>
+          <div className="px-1 pt-2 pb-0.5">
+            <div className="text-[11px] font-bold text-slate-800 truncate">Live Acoustic Night</div>
+            <div className="text-[10px] text-slate-500">Sân khấu mở · 19:30</div>
+          </div>
+        </div>
 
-                <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-lg shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMode('login');
-                      setError(null);
-                    }}
-                    className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors whitespace-nowrap cursor-pointer ${
-                      mode === 'login'
-                        ? 'bg-white text-slate-900 shadow-xs'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    Đăng nhập
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMode('register');
-                      setError(null);
-                    }}
-                    className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors whitespace-nowrap cursor-pointer ${
-                      mode === 'register'
-                        ? 'bg-white text-slate-900 shadow-xs'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    Đăng ký
-                  </button>
-                </div>
-              </div>
+        <div
+          style={{ '--ef-rot': '5deg', animationDelay: '700ms' } as CSSProperties}
+          className="ef-float-c absolute bottom-24 left-[8%] lg:left-[13%] flex items-center gap-2.5 rounded-2xl border border-white/90 bg-white/80 px-3.5 py-2.5 shadow-[0_14px_30px_-12px_rgba(15,23,42,0.1)] backdrop-blur-md opacity-75"
+        >
+          <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-rose-50 text-rose-500">
+            <QrCode className="h-4 w-4" />
+          </span>
+          <div>
+            <div className="text-[11px] font-bold text-slate-800">Check-in QR</div>
+            <div className="text-[10px] text-slate-500">Tức thì &lt; 2 giây</div>
+          </div>
+        </div>
 
-              {error && (
-                <div
-                  role="alert"
-                  className="mt-5 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800"
-                >
-                  {error}
-                </div>
-              )}
-
-              <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-                {mode === 'register' && (
-                  <>
-                    <div>
-                      <span className="block text-xs font-semibold text-slate-700 mb-2">
-                        Bạn muốn sử dụng EventFlow với vai trò nào?
-                      </span>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <button
-                          type="button"
-                          onClick={() => setRegisterRole('user')}
-                          className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                            registerRole === 'user'
-                              ? 'border-indigo-600 bg-indigo-50/70'
-                              : 'border-slate-200 hover:border-slate-300'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
-                            <Users className="w-4 h-4 text-indigo-600" />
-                            <span>Người tham gia sự kiện</span>
-                          </div>
-                          <p className="mt-1 text-[11px] text-slate-500">
-                            Đăng ký tham dự và quản lý sự kiện đã đăng ký.
-                          </p>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => setRegisterRole('organizer')}
-                          className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                            registerRole === 'organizer'
-                              ? 'border-indigo-600 bg-indigo-50/70'
-                              : 'border-slate-200 hover:border-slate-300'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
-                            <Building2 className="w-4 h-4 text-indigo-600" />
-                            <span>Khách hàng đặt tổ chức</span>
-                          </div>
-                          <p className="mt-1 text-[11px] text-slate-500">
-                            Gửi yêu cầu tổ chức sự kiện &amp; chọn dịch vụ đi kèm.
-                          </p>
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label
-                          htmlFor="auth-fullname"
-                          className="block text-sm font-medium text-slate-700 mb-1.5"
-                        >
-                          Họ và tên
-                        </label>
-                        <div className="relative">
-                          <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                          <input
-                            id="auth-fullname"
-                            type="text"
-                            required
-                            value={fullName}
-                            onChange={(e) => setFullName(e.target.value)}
-                            placeholder="Nguyễn Văn An"
-                            className="w-full pl-10 pr-3.5 py-2.5 text-sm bg-white border border-slate-200 rounded-lg text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-600"
-                          />
-                        </div>
-                      </div>
-
-                      <div>
-                        <label
-                          htmlFor="auth-phone"
-                          className="block text-sm font-medium text-slate-700 mb-1.5"
-                        >
-                          Số điện thoại
-                        </label>
-                        <div className="relative">
-                          <Phone className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                          <input
-                            id="auth-phone"
-                            type="tel"
-                            required
-                            value={phone}
-                            onChange={(e) => setPhone(e.target.value)}
-                            placeholder="0901 234 567"
-                            className="w-full pl-10 pr-3.5 py-2.5 text-sm bg-white border border-slate-200 rounded-lg text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-600"
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    {registerRole === 'organizer' && (
-                      <div>
-                        <label
-                          htmlFor="auth-org"
-                          className="block text-sm font-medium text-slate-700 mb-1.5"
-                        >
-                          Tên doanh nghiệp / Đơn vị tổ chức
-                        </label>
-                        <div className="relative">
-                          <Building2 className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                          <input
-                            id="auth-org"
-                            type="text"
-                            value={organization}
-                            onChange={(e) => setOrganization(e.target.value)}
-                            placeholder="Công ty Cổ phần TechNova..."
-                            className="w-full pl-10 pr-3.5 py-2.5 text-sm bg-white border border-slate-200 rounded-lg text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-600"
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </>
-                )}
-
-                <div>
-                  <label
-                    htmlFor="auth-email"
-                    className="block text-sm font-medium text-slate-700 mb-1.5"
-                  >
-                    Email
-                  </label>
-                  <div className="relative">
-                    <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                    <input
-                      id="auth-email"
-                      type="email"
-                      required
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="name@company.vn (chứa 'admin' để vào quyền Admin)"
-                      className="w-full pl-10 pr-3.5 py-2.5 text-sm bg-white border border-slate-200 rounded-lg text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-600"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label
-                    htmlFor="auth-password"
-                    className="block text-sm font-medium text-slate-700 mb-1.5"
-                  >
-                    Mật khẩu
-                  </label>
-                  <div className="relative">
-                    <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                    <input
-                      id="auth-password"
-                      type="password"
-                      required
-                      minLength={6}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Tối thiểu 6 ký tự"
-                      className="w-full pl-10 pr-3.5 py-2.5 text-sm bg-white border border-slate-200 rounded-lg text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-600"
-                    />
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={submitting || demoLoading !== null}
-                  className="w-full inline-flex items-center justify-center gap-2 py-2.5 px-5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 rounded-lg transition-colors cursor-pointer"
-                >
-                  <span>
-                    {submitting
-                      ? 'Đang xử lý...'
-                      : mode === 'login'
-                      ? 'Đăng nhập'
-                      : 'Hoàn tất đăng ký'}
-                  </span>
-                  <ArrowRight className="w-4 h-4" />
-                </button>
-              </form>
-            </div>
-
-            <div className="mt-8 pt-6 border-t border-slate-200">
-              <div className="text-xs font-semibold text-slate-500 mb-3">
-                Đăng nhập nhanh 3 luồng kiểm thử trên Cloud Firestore
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                <button
-                  type="button"
-                  disabled={submitting || demoLoading !== null}
-                  onClick={() => handleDemoLogin('user')}
-                  className="flex items-center justify-center gap-1.5 py-2.5 px-3 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-lg transition-colors cursor-pointer disabled:opacity-60 whitespace-nowrap"
-                >
-                  <Users className="w-3.5 h-3.5 shrink-0" />
-                  <span>{demoLoading === 'user' ? 'Đang vào...' : 'Demo Người tham gia'}</span>
-                </button>
-
-                <button
-                  type="button"
-                  disabled={submitting || demoLoading !== null}
-                  onClick={() => handleDemoLogin('organizer')}
-                  className="flex items-center justify-center gap-1.5 py-2.5 px-3 text-xs font-semibold text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200 rounded-lg transition-colors cursor-pointer disabled:opacity-60 whitespace-nowrap"
-                >
-                  <Building2 className="w-3.5 h-3.5 shrink-0" />
-                  <span>
-                    {demoLoading === 'organizer' ? 'Đang vào...' : 'Demo Khách tổ chức'}
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  disabled={submitting || demoLoading !== null}
-                  onClick={() => handleDemoLogin('admin')}
-                  className="flex items-center justify-center gap-1.5 py-2.5 px-3 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg transition-colors cursor-pointer disabled:opacity-60 whitespace-nowrap"
-                >
-                  <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
-                  <span>{demoLoading === 'admin' ? 'Đang vào...' : 'Demo Admin'}</span>
-                </button>
-              </div>
-            </div>
+        <div
+          style={{ '--ef-rot': '-5deg', animationDelay: '950ms' } as CSSProperties}
+          className="ef-float-a absolute bottom-24 right-[8%] lg:right-[13%] flex items-center gap-2.5 rounded-2xl border border-white/90 bg-white/80 px-3.5 py-2.5 shadow-[0_14px_30px_-12px_rgba(15,23,42,0.1)] backdrop-blur-md opacity-75"
+        >
+          <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-orange-50 text-orange-500">
+            <Ticket className="h-4 w-4" />
+          </span>
+          <div>
+            <div className="text-[11px] font-bold text-slate-800">E-Ticket trực tuyến</div>
+            <div className="text-[10px] text-slate-500">Đồng bộ Firestore</div>
           </div>
         </div>
       </div>
+
+      {/* Top Minimal Brand Header -> Click to return Home */}
+      <header className="relative z-10 flex items-center justify-center">
+        <button
+          type="button"
+          onClick={onBackPublic}
+          className="inline-flex items-center gap-2.5 rounded-full border border-slate-200/80 bg-white/85 px-4 py-2 text-sm font-bold tracking-tight text-slate-900 shadow-xs backdrop-blur-md transition-all duration-150 hover:-translate-y-0.5 hover:border-slate-300 hover:bg-white cursor-pointer"
+        >
+          <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-gradient-to-br from-rose-500 to-orange-500 text-white">
+            <CalendarDays className="h-3.5 w-3.5" />
+          </span>
+          <span>EventFlow</span>
+        </button>
+      </header>
+
+      {/* Centered Single Auth Card */}
+      <main className="relative z-10 my-8 flex items-center justify-center">
+        <div
+          className={`w-full transition-[opacity,transform] duration-150 ease-out motion-reduce:transition-none motion-reduce:transform-none ${
+            mode === 'register' ? 'max-w-[30rem]' : 'max-w-[26rem]'
+          } ${
+            isSwitching
+              ? 'opacity-0 scale-[0.982] pointer-events-none'
+              : 'opacity-100'
+          }`}
+        >
+          <div
+            key={mode}
+            className="animate-ef-page-enter rounded-3xl border border-slate-200/85 bg-white/95 p-6 sm:p-8 shadow-[0_24px_60px_-18px_rgba(15,23,42,0.12)] backdrop-blur-md"
+          >
+            {/* Card Header */}
+            <div className="text-center">
+              <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+                {mode === 'login' ? 'Đăng nhập EventFlow' : 'Tạo tài khoản mới'}
+              </h1>
+              <p className="mt-1.5 text-sm text-slate-500">
+                {mode === 'login'
+                  ? 'Truy cập không gian sự kiện, vé QR hoặc cổng điều phối của bạn.'
+                  : 'Chọn vai trò phù hợp để bắt đầu tham gia hoặc tổ chức sự kiện.'}
+              </p>
+            </div>
+
+            {error && (
+              <div
+                role="alert"
+                className="mt-5 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs sm:text-sm text-rose-800 animate-ef-fade-in"
+              >
+                {error}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+              {mode === 'register' && (
+                <>
+                  {/* Role Selector */}
+                  <div>
+                    <span className="block text-xs font-semibold text-slate-700 mb-2">
+                      Vai trò sử dụng
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() => setRegisterRole('user')}
+                        className={`p-3 rounded-2xl border text-left transition-all duration-150 cursor-pointer ${
+                          registerRole === 'user'
+                            ? 'border-slate-900 bg-slate-900/5 ring-2 ring-slate-900/10'
+                            : 'border-slate-200/90 bg-white hover:border-slate-300'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
+                          <Users className="w-4 h-4 text-rose-500 shrink-0" />
+                          <span>Người tham gia</span>
+                        </div>
+                        <p className="mt-1 text-[11px] text-slate-500 leading-snug">
+                          Đăng ký sự kiện &amp; lưu mã QR.
+                        </p>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setRegisterRole('organizer')}
+                        className={`p-3 rounded-2xl border text-left transition-all duration-150 cursor-pointer ${
+                          registerRole === 'organizer'
+                            ? 'border-slate-900 bg-slate-900/5 ring-2 ring-slate-900/10'
+                            : 'border-slate-200/90 bg-white hover:border-slate-300'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
+                          <Building2 className="w-4 h-4 text-orange-500 shrink-0" />
+                          <span>Khách hàng tổ chức</span>
+                        </div>
+                        <p className="mt-1 text-[11px] text-slate-500 leading-snug">
+                          Đặt tổ chức sự kiện &amp; dịch vụ.
+                        </p>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Full Name & Phone */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    <div>
+                      <label
+                        htmlFor="auth-fullname"
+                        className="block text-xs font-semibold text-slate-700 mb-1.5"
+                      >
+                        Họ và tên
+                      </label>
+                      <div className="relative">
+                        <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                        <input
+                          id="auth-fullname"
+                          type="text"
+                          required
+                          value={fullName}
+                          onChange={(e) => setFullName(e.target.value)}
+                          placeholder="Nguyễn Văn An"
+                          className={inputClass}
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label
+                        htmlFor="auth-phone"
+                        className="block text-xs font-semibold text-slate-700 mb-1.5"
+                      >
+                        Số điện thoại
+                      </label>
+                      <div className="relative">
+                        <Phone className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                        <input
+                          id="auth-phone"
+                          type="tel"
+                          required
+                          value={phone}
+                          onChange={(e) => setPhone(e.target.value)}
+                          placeholder="0901 234 567"
+                          className={inputClass}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {registerRole === 'organizer' && (
+                    <div className="animate-ef-fade-in">
+                      <label
+                        htmlFor="auth-org"
+                        className="block text-xs font-semibold text-slate-700 mb-1.5"
+                      >
+                        Tên doanh nghiệp / Đơn vị (tùy chọn)
+                      </label>
+                      <div className="relative">
+                        <Building2 className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                        <input
+                          id="auth-org"
+                          type="text"
+                          value={organization}
+                          onChange={(e) => setOrganization(e.target.value)}
+                          placeholder="Công ty Cổ phần TechNova..."
+                          className={inputClass}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Email */}
+              <div>
+                <label
+                  htmlFor="auth-email"
+                  className="block text-xs font-semibold text-slate-700 mb-1.5"
+                >
+                  Email
+                </label>
+                <div className="relative">
+                  <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    id="auth-email"
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="name@company.vn"
+                    className={inputClass}
+                  />
+                </div>
+              </div>
+
+              {/* Password */}
+              <div>
+                <label
+                  htmlFor="auth-password"
+                  className="block text-xs font-semibold text-slate-700 mb-1.5"
+                >
+                  Mật khẩu
+                </label>
+                <div className="relative">
+                  <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    id="auth-password"
+                    type="password"
+                    required
+                    minLength={6}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Tối thiểu 6 ký tự"
+                    className={inputClass}
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={submitting || demoLoading !== null}
+                className="w-full h-11 inline-flex items-center justify-center gap-2 px-5 text-sm font-semibold text-white bg-slate-950 hover:bg-slate-800 disabled:opacity-60 rounded-full shadow-sm transition-all duration-200 ease-[cubic-bezier(0.34,1.32,0.64,1)] hover:-translate-y-0.5 active:scale-[0.98] cursor-pointer"
+              >
+                <span>
+                  {submitting
+                    ? 'Đang xác thực...'
+                    : mode === 'login'
+                    ? 'Đăng nhập'
+                    : 'Hoàn tất đăng ký'}
+                </span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </form>
+
+            {/* Quick Demo Login Strip on Login Page */}
+            {mode === 'login' && (
+              <div className="mt-6 pt-5 border-t border-slate-100">
+                <div className="flex items-center justify-center gap-1.5 text-[11px] font-medium text-slate-400 mb-2.5">
+                  <Sparkles className="w-3 h-3 text-orange-400" />
+                  <span>Hoặc trải nghiệm nhanh 3 vai trò Demo</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    disabled={submitting || demoLoading !== null}
+                    onClick={() => handleDemoLogin('user')}
+                    className="inline-flex items-center justify-center gap-1 py-2 px-2 text-[11px] font-semibold text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200/80 rounded-xl transition-colors cursor-pointer disabled:opacity-60 whitespace-nowrap"
+                  >
+                    <Users className="w-3 h-3 shrink-0" />
+                    <span>{demoLoading === 'user' ? '...' : 'Tham gia'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={submitting || demoLoading !== null}
+                    onClick={() => handleDemoLogin('organizer')}
+                    className="inline-flex items-center justify-center gap-1 py-2 px-2 text-[11px] font-semibold text-sky-700 bg-sky-50/70 hover:bg-sky-100/80 border border-sky-200/70 rounded-xl transition-colors cursor-pointer disabled:opacity-60 whitespace-nowrap"
+                  >
+                    <Building2 className="w-3 h-3 shrink-0" />
+                    <span>{demoLoading === 'organizer' ? '...' : 'Tổ chức'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={submitting || demoLoading !== null}
+                    onClick={() => handleDemoLogin('admin')}
+                    className="inline-flex items-center justify-center gap-1 py-2 px-2 text-[11px] font-semibold text-indigo-700 bg-indigo-50/70 hover:bg-indigo-100/80 border border-indigo-200/70 rounded-xl transition-colors cursor-pointer disabled:opacity-60 whitespace-nowrap"
+                  >
+                    <ShieldCheck className="w-3 h-3 shrink-0" />
+                    <span>{demoLoading === 'admin' ? '...' : 'Admin'}</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Footer Page Switch Link */}
+            <div className="mt-6 pt-5 border-t border-slate-100 text-center text-xs sm:text-sm text-slate-500">
+              {mode === 'login' ? (
+                <>
+                  <span>Chưa có tài khoản? </span>
+                  <button
+                    type="button"
+                    onClick={() => handleSmoothSwitchMode('register')}
+                    className="font-semibold text-slate-900 hover:text-rose-600 underline underline-offset-4 transition-colors cursor-pointer"
+                  >
+                    Đăng ký ngay
+                  </button>
+                </>
+              ) : (
+                <>
+                  <span>Đã có tài khoản? </span>
+                  <button
+                    type="button"
+                    onClick={() => handleSmoothSwitchMode('login')}
+                    className="font-semibold text-slate-900 hover:text-rose-600 underline underline-offset-4 transition-colors cursor-pointer"
+                  >
+                    Đăng nhập
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      </main>
+
+      {/* Quiet Support Line */}
+      <footer className="relative z-10 text-center text-[11px] text-slate-400">
+        <span>Hỗ trợ nhanh: {publicContact.phone} · {publicContact.email}</span>
+      </footer>
     </div>
   );
 }

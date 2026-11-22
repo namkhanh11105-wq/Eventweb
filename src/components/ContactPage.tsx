@@ -85,7 +85,7 @@ export function ContactPage({
   }
 
   return (
-    <div className="space-y-8 animate-ef-fade-up">
+    <div className="space-y-8">
       {/* Page Header */}
       <section className="bg-white border border-slate-200/80 rounded-2xl p-6 sm:p-8">
         <div className="max-w-2xl space-y-2.5">

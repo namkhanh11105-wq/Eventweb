@@ -179,7 +179,7 @@ export function EventDetailPage({
   }
 
   return (
-    <div className="space-y-6 animate-ef-fade-up">
+    <div className="space-y-6 animate-ef-detail-enter">
       {/* Top Breadcrumb & Actions */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <button

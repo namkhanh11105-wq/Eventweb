@@ -12,7 +12,7 @@
   }
   to {
     opacity: 1;
-    transform: translate3d(0, 0, 0);
+    transform: none;
   }
 }
 
@@ -23,7 +23,18 @@
   }
   to {
     opacity: 1;
-    transform: translate3d(0, 0, 0) scale(1);
+    transform: none;
+  }
+}
+
+@keyframes ef-detail-enter {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
   }
 }
 
@@ -39,11 +50,20 @@
 @keyframes ef-modal-in {
   from {
     opacity: 0;
-    transform: translate3d(0, 16px, 0) scale(0.96);
+    transform: translate3d(0, 10px, 0) scale(0.96);
   }
   to {
     opacity: 1;
-    transform: translate3d(0, 0, 0) scale(1);
+    transform: none;
+  }
+}
+
+@keyframes ef-top-progress-shimmer {
+  0% {
+    transform: translate3d(-100%, 0, 0);
+  }
+  100% {
+    transform: translate3d(200%, 0, 0);
   }
 }
 
@@ -110,7 +130,11 @@
 }
 
 .animate-ef-page-enter {
-  animation: ef-page-enter 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: ef-page-enter 350ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.animate-ef-detail-enter {
+  animation: ef-detail-enter 350ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .animate-ef-fade-in {
@@ -118,11 +142,15 @@
 }
 
 .animate-ef-modal-in {
-  animation: ef-modal-in 320ms cubic-bezier(0.34, 1.32, 0.64, 1) both;
+  animation: ef-modal-in 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .animate-ef-toast-in {
   animation: ef-toast-in 300ms cubic-bezier(0.34, 1.38, 0.64, 1) both;
+}
+
+.ef-top-progress-sheen {
+  animation: ef-top-progress-shimmer 900ms cubic-bezier(0.22, 1, 0.36, 1) infinite;
 }
 
 .ef-float-a {
@@ -210,6 +238,32 @@
   animation: ef-shimmer 1.5s linear infinite;
 }
 
+@keyframes ef-blob-drift-a {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(36px, -24px, 0) scale(1.06);
+  }
+}
+
+@keyframes ef-blob-drift-b {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(-32px, 26px, 0) scale(1.05);
+  }
+}
+
+.ef-blob-drift-a {
+  animation: ef-blob-drift-a 16s ease-in-out infinite;
+}
+
+.ef-blob-drift-b {
+  animation: ef-blob-drift-b 19s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
@@ -217,19 +271,24 @@
 
   .animate-ef-fade-up,
   .animate-ef-page-enter,
+  .animate-ef-detail-enter,
   .animate-ef-fade-in,
   .animate-ef-modal-in,
   .animate-ef-toast-in,
+  .ef-top-progress-sheen,
   .ef-float-a,
   .ef-float-b,
   .ef-float-c,
+  .ef-blob-drift-a,
+  .ef-blob-drift-b,
   .ef-skeleton-shimmer {
     animation: none !important;
   }
 
   .ef-floating-card,
   .ef-floating-card::after,
-  .ef-card-sheen::after {
+  .ef-card-sheen::after,
+  .ef-sliding-pill {
     transition: none !important;
   }
 }

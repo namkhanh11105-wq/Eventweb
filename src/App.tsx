@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CheckCircle2, AlertCircle, X } from 'lucide-react';
 import { AuthScreen } from './components/AuthScreen';
+import { TopProgressBar, prefersReducedMotion, triggerPageProgress } from './components/MotionPrimitives';
 import { UserLayout } from './components/UserLayout';
 import { OrganizerLayout } from './components/OrganizerLayout';
 import { AdminLayout } from './components/AdminLayout';
@@ -82,6 +83,33 @@ export default function App() {
   const [publicContact, setPublicContact] = useState<PublicContactInfo>(DEFAULT_PUBLIC_CONTACT);
   const [permissionWarning, setPermissionWarning] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
+  const [isRootTransitioningOut, setIsRootTransitioningOut] = useState(false);
+  const rootTransitionTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (rootTransitionTimerRef.current !== null) {
+        window.clearTimeout(rootTransitionTimerRef.current);
+      }
+    };
+  }, []);
+
+  function runRootTransition(action: () => void) {
+    triggerPageProgress();
+    if (prefersReducedMotion()) {
+      action();
+      return;
+    }
+    if (rootTransitionTimerRef.current !== null) {
+      window.clearTimeout(rootTransitionTimerRef.current);
+    }
+    setIsRootTransitioningOut(true);
+    rootTransitionTimerRef.current = window.setTimeout(() => {
+      action();
+      setIsRootTransitioningOut(false);
+      rootTransitionTimerRef.current = null;
+    }, 140);
+  }
 
   function showToast(message: string, type: 'success' | 'error' = 'success') {
     const id = Date.now();
@@ -92,52 +120,81 @@ export default function App() {
   }
 
   function navigatePublicPage(page: 'discover' | 'services' | 'contact' | 'tickets') {
-    setAuthView(null);
-    setPortalView('public');
-    setPublicPage(page);
-    setSelectedEventId(null);
-    pushBrowserPath(getPathForPublicPage(page));
-    window.scrollTo({ top: 0, behavior: 'auto' });
+    const apply = () => {
+      setAuthView(null);
+      setPortalView('public');
+      setPublicPage(page);
+      setSelectedEventId(null);
+      pushBrowserPath(getPathForPublicPage(page));
+      window.scrollTo({ top: 0, behavior: 'auto' });
+    };
+
+    if (authView !== null || portalView !== 'public') {
+      runRootTransition(apply);
+    } else {
+      apply();
+    }
   }
 
   function navigateToEventDetail(eventId: string) {
-    setAuthView(null);
-    setPortalView('public');
-    setPublicPage('event_detail');
-    setSelectedEventId(eventId);
-    pushBrowserPath(getPathForPublicPage('event_detail', eventId));
-    window.scrollTo({ top: 0, behavior: 'auto' });
+    const apply = () => {
+      setAuthView(null);
+      setPortalView('public');
+      setPublicPage('event_detail');
+      setSelectedEventId(eventId);
+      pushBrowserPath(getPathForPublicPage('event_detail', eventId));
+      window.scrollTo({ top: 0, behavior: 'auto' });
+    };
+
+    if (authView !== null || portalView !== 'public') {
+      runRootTransition(apply);
+    } else {
+      apply();
+    }
   }
 
   function openAuthScreen(mode: 'login' | 'register' = 'login', role: 'user' | 'organizer' = 'user') {
-    setAuthView({ mode, role });
-    const path =
-      mode === 'register'
-        ? role === 'organizer'
-          ? '/dang-ky?role=organizer'
-          : '/dang-ky'
-        : '/dang-nhap';
-    pushBrowserPath(path);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    const apply = () => {
+      setAuthView({ mode, role });
+      const path =
+        mode === 'register'
+          ? role === 'organizer'
+            ? '/dang-ky?role=organizer'
+            : '/dang-ky'
+          : '/dang-nhap';
+      pushBrowserPath(path);
+      window.scrollTo({ top: 0, behavior: 'auto' });
+    };
+
+    if (authView === null) {
+      runRootTransition(apply);
+    } else {
+      apply();
+    }
   }
 
   function switchToOrganizerPortal(tab: 'requests' | 'create' | 'public_events' = 'requests') {
-    setAuthView(null);
-    setOrganizerInitialTab(tab);
-    setPortalView('organizer');
-    pushBrowserPath('/to-chuc');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    runRootTransition(() => {
+      setAuthView(null);
+      setOrganizerInitialTab(tab);
+      setPortalView('organizer');
+      pushBrowserPath('/to-chuc');
+      window.scrollTo({ top: 0, behavior: 'auto' });
+    });
   }
 
   function switchToAdminPortal() {
-    setAuthView(null);
-    setPortalView('admin');
-    pushBrowserPath('/quan-tri');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    runRootTransition(() => {
+      setAuthView(null);
+      setPortalView('admin');
+      pushBrowserPath('/quan-tri');
+      window.scrollTo({ top: 0, behavior: 'auto' });
+    });
   }
 
   useEffect(() => {
     function handlePopState() {
+      triggerPageProgress();
       const next = parseRouteFromLocation(window.location.pathname, window.location.search);
       if (next.view === 'auth') {
         setAuthView({ mode: next.mode, role: next.role });
@@ -278,20 +335,39 @@ export default function App() {
   async function handleLogout() {
     try {
       await logoutAccount();
-      setAuthView(null);
-      setPortalView('public');
-      setPublicPage('discover');
-      setSelectedEventId(null);
-      setPermissionWarning(null);
-      pushBrowserPath('/');
+      runRootTransition(() => {
+        setAuthView(null);
+        setPortalView('public');
+        setPublicPage('discover');
+        setSelectedEventId(null);
+        setPermissionWarning(null);
+        pushBrowserPath('/');
+      });
       showToast('Đã đăng xuất khỏi hệ thống.');
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Lỗi khi đăng xuất.', 'error');
     }
   }
 
+  const rootViewKey = !authReady
+    ? 'loading'
+    : authView !== null && !currentUser
+    ? 'auth'
+    : currentUser?.role === 'admin' && portalView === 'admin'
+    ? 'admin'
+    : currentUser?.role === 'organizer' && portalView === 'organizer'
+    ? 'organizer'
+    : 'public';
+
   return (
     <>
+      <TopProgressBar />
+      <div
+        className={`min-h-screen transition-[opacity,transform] duration-150 ease-out motion-reduce:transition-none motion-reduce:transform-none ${
+          isRootTransitioningOut ? 'opacity-0 scale-[0.985] pointer-events-none' : 'opacity-100'
+        }`}
+      >
+        <div key={rootViewKey} className={rootViewKey === 'loading' ? '' : 'animate-ef-page-enter'}>
       {!authReady ? (
         <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
           <div className="bg-white border border-slate-200 rounded-xl px-6 py-5 text-sm font-medium text-slate-600">
@@ -300,10 +376,12 @@ export default function App() {
         </div>
       ) : authView !== null && !currentUser ? (
         <AuthScreen
-          initialMode={authView.mode}
+          mode={authView.mode}
           initialRegisterRole={authView.role}
           publicContact={publicContact}
+          onSwitchMode={(nextMode) => openAuthScreen(nextMode, authView.role)}
           onSuccess={(msg) => {
+            triggerPageProgress();
             setAuthView(null);
             showToast(msg, 'success');
           }}
@@ -360,6 +438,8 @@ export default function App() {
           onNotify={showToast}
         />
       )}
+        </div>
+      </div>
 
       {/* Toast notification */}
       {toast && (

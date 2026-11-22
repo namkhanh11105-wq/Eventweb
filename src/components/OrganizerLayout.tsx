@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import {
   BadgeCheck,
   Building2,
@@ -25,7 +25,13 @@ import { DEFAULT_EVENT_BANNERS } from '../data/seedData';
 import { createOrganizerEventRequest } from '../services/dataService';
 import { EventBanner } from './EventBanner';
 import { EventDetailModal } from './EventDetailModal';
-import { AnimatedNumber, RevealBlock } from './MotionPrimitives';
+import {
+  AnimatedNumber,
+  prefersReducedMotion,
+  RevealBlock,
+  triggerPageProgress,
+  useSlidingIndicator,
+} from './MotionPrimitives';
 import { PublicFooter } from './PublicFooter';
 import {
   EVENT_CATEGORIES,
@@ -83,10 +89,45 @@ export function OrganizerLayout({
   onNotify,
 }: OrganizerLayoutProps) {
   const [tab, setTab] = useState<OrganizerTab>(initialTab);
+  const [isTabTransitioningOut, setIsTabTransitioningOut] = useState(false);
+  const tabTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     setTab(initialTab);
   }, [initialTab]);
+
+  useEffect(() => {
+    return () => {
+      if (tabTimerRef.current !== null) {
+        window.clearTimeout(tabTimerRef.current);
+      }
+    };
+  }, []);
+
+  function smoothSwitchTab(nextTab: OrganizerTab) {
+    setMobileMenuOpen(false);
+    if (tab === nextTab) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    triggerPageProgress();
+    if (prefersReducedMotion()) {
+      setTab(nextTab);
+      window.scrollTo({ top: 0, behavior: 'auto' });
+      return;
+    }
+    if (tabTimerRef.current !== null) {
+      window.clearTimeout(tabTimerRef.current);
+    }
+    setIsTabTransitioningOut(true);
+    tabTimerRef.current = window.setTimeout(() => {
+      setTab(nextTab);
+      window.scrollTo({ top: 0, behavior: 'auto' });
+      setIsTabTransitioningOut(false);
+      tabTimerRef.current = null;
+    }, 140);
+  }
+
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [previewEvent, setPreviewEvent] = useState<EventItem | null>(null);
 
@@ -223,6 +264,12 @@ export function OrganizerLayout({
     }
   }
 
+  const {
+    containerRef: orgNavRef,
+    setItemRef: setOrgNavRef,
+    rect: orgNavPill,
+  } = useSlidingIndicator(tab, myRequests.length);
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
       {/* Sleek Frosted Top Navbar */}
@@ -230,7 +277,7 @@ export function OrganizerLayout({
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between gap-6">
           <button
             type="button"
-            onClick={() => setTab('requests')}
+            onClick={() => smoothSwitchTab('requests')}
             className="inline-flex items-center gap-2.5 text-[15px] font-bold tracking-tight text-slate-900 whitespace-nowrap shrink-0 cursor-pointer"
           >
             <span className="w-7 h-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center">
@@ -240,43 +287,58 @@ export function OrganizerLayout({
           </button>
 
           <nav className="hidden md:flex items-center gap-1.5 text-[13px] font-medium">
-            <button
-              type="button"
-              onClick={() => setTab('requests')}
-              className={`px-3 py-1.5 rounded-lg transition-all duration-150 whitespace-nowrap shrink-0 cursor-pointer ${
-                tab === 'requests'
-                  ? 'bg-indigo-50 text-indigo-700 font-semibold'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
-              }`}
-            >
-              Yêu cầu của tôi ({myRequests.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setTab('create')}
-              className={`px-3 py-1.5 rounded-lg transition-all duration-150 whitespace-nowrap shrink-0 cursor-pointer ${
-                tab === 'create'
-                  ? 'bg-indigo-50 text-indigo-700 font-semibold'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
-              }`}
-            >
-              Gửi yêu cầu mới
-            </button>
-            <button
-              type="button"
-              onClick={() => setTab('public_events')}
-              className={`px-3 py-1.5 rounded-lg transition-all duration-150 whitespace-nowrap shrink-0 cursor-pointer ${
-                tab === 'public_events'
-                  ? 'bg-indigo-50 text-indigo-700 font-semibold'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
-              }`}
-            >
-              Sự kiện công khai
-            </button>
+            <div ref={orgNavRef} className="relative flex items-center gap-1">
+              <span
+                aria-hidden="true"
+                className="ef-sliding-pill pointer-events-none absolute top-0 left-0 rounded-full bg-indigo-600 shadow-xs transition-[transform,width,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+                style={{
+                  width: `${orgNavPill.width}px`,
+                  height: `${orgNavPill.height}px`,
+                  transform: `translate3d(${orgNavPill.x}px, ${orgNavPill.y}px, 0)`,
+                  opacity: orgNavPill.ready ? 1 : 0,
+                }}
+              />
+              <button
+                ref={setOrgNavRef('requests')}
+                type="button"
+                onClick={() => smoothSwitchTab('requests')}
+                className={`relative z-10 px-3.5 py-1.5 rounded-full transition-colors duration-200 whitespace-nowrap shrink-0 cursor-pointer ${
+                  tab === 'requests'
+                    ? 'text-white font-semibold'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Yêu cầu của tôi ({myRequests.length})
+              </button>
+              <button
+                ref={setOrgNavRef('create')}
+                type="button"
+                onClick={() => smoothSwitchTab('create')}
+                className={`relative z-10 px-3.5 py-1.5 rounded-full transition-colors duration-200 whitespace-nowrap shrink-0 cursor-pointer ${
+                  tab === 'create'
+                    ? 'text-white font-semibold'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Gửi yêu cầu mới
+              </button>
+              <button
+                ref={setOrgNavRef('public_events')}
+                type="button"
+                onClick={() => smoothSwitchTab('public_events')}
+                className={`relative z-10 px-3.5 py-1.5 rounded-full transition-colors duration-200 whitespace-nowrap shrink-0 cursor-pointer ${
+                  tab === 'public_events'
+                    ? 'text-white font-semibold'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Sự kiện công khai
+              </button>
+            </div>
             <button
               type="button"
               onClick={onViewPublicLanding}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-600 hover:text-indigo-700 hover:bg-slate-100/70 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-slate-600 hover:text-indigo-700 hover:bg-slate-100/70 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             >
               <Globe className="w-3.5 h-3.5" />
               <span>Trang công khai</span>
@@ -316,33 +378,24 @@ export function OrganizerLayout({
         </div>
 
         {mobileMenuOpen && (
-          <div className="md:hidden border-t border-slate-200 bg-white px-4 py-3 space-y-2">
+          <div className="md:hidden border-t border-slate-200 bg-white px-4 py-3 space-y-2 animate-ef-fade-in">
             <button
               type="button"
-              onClick={() => {
-                setTab('requests');
-                setMobileMenuOpen(false);
-              }}
+              onClick={() => smoothSwitchTab('requests')}
               className="w-full text-left px-3 py-2 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-100"
             >
               Yêu cầu của tôi ({myRequests.length})
             </button>
             <button
               type="button"
-              onClick={() => {
-                setTab('create');
-                setMobileMenuOpen(false);
-              }}
+              onClick={() => smoothSwitchTab('create')}
               className="w-full text-left px-3 py-2 rounded-lg text-sm font-medium text-indigo-700 bg-indigo-50"
             >
               + Gửi yêu cầu tổ chức mới
             </button>
             <button
               type="button"
-              onClick={() => {
-                setTab('public_events');
-                setMobileMenuOpen(false);
-              }}
+              onClick={() => smoothSwitchTab('public_events')}
               className="w-full text-left px-3 py-2 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-100"
             >
               Sự kiện công khai
@@ -379,8 +432,16 @@ export function OrganizerLayout({
           </div>
         )}
 
+        <div
+          className={`transition-[opacity,transform] duration-150 ease-out motion-reduce:transition-none motion-reduce:transform-none ${
+            isTabTransitioningOut
+              ? 'opacity-0 scale-[0.982] pointer-events-none'
+              : 'opacity-100'
+          }`}
+        >
+          <div key={tab} className="animate-ef-page-enter">
         {tab === 'requests' && (
-          <div className="space-y-6 animate-ef-fade-up">
+          <div className="space-y-6">
             {/* Header & Primary Action */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
@@ -394,7 +455,7 @@ export function OrganizerLayout({
               </div>
               <button
                 type="button"
-                onClick={() => setTab('create')}
+                onClick={() => smoothSwitchTab('create')}
                 className="inline-flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors cursor-pointer whitespace-nowrap shrink-0"
               >
                 <Plus className="w-4 h-4" />
@@ -626,7 +687,7 @@ export function OrganizerLayout({
         )}
 
         {tab === 'create' && (
-          <div className="max-w-4xl mx-auto bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 space-y-6 animate-ef-fade-up">
+          <div className="max-w-4xl mx-auto bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 space-y-6">
             <div className="border-b border-slate-200 pb-4">
               <h1 className="text-xl sm:text-2xl font-bold text-slate-900">
                 Gửi yêu cầu tổ chức sự kiện mới
@@ -916,7 +977,7 @@ export function OrganizerLayout({
         )}
 
         {tab === 'public_events' && (
-          <div className="space-y-6 animate-ef-fade-up">
+          <div className="space-y-6">
             <div>
               <h1 className="text-2xl font-bold text-slate-900">
                 Các sự kiện công khai trên EventFlow
@@ -933,7 +994,7 @@ export function OrganizerLayout({
                   <RevealBlock key={ev.id} delayMs={Math.min(idx, 5) * 45}>
                     <article
                       onClick={() => setPreviewEvent(ev)}
-                      className="group ef-card-shine bg-white border border-slate-200 rounded-2xl overflow-hidden hover:-translate-y-1 hover:border-indigo-300 hover:shadow-md transition-all duration-300 cursor-pointer h-full flex flex-col justify-between"
+                      className="group ef-card-sheen bg-white border border-slate-200 rounded-2xl overflow-hidden hover:-translate-y-1 hover:border-indigo-300 hover:shadow-md transition-all duration-300 cursor-pointer h-full flex flex-col justify-between"
                     >
                       <div>
                         <div className="aspect-video overflow-hidden bg-slate-100">
@@ -980,6 +1041,8 @@ export function OrganizerLayout({
             </div>
           </div>
         )}
+          </div>
+        </div>
       </main>
 
       <PublicFooter
@@ -991,32 +1054,31 @@ export function OrganizerLayout({
             onViewPublicLanding();
           }
         }}
-        onBookOrganization={() => {
-          setTab('create');
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-        }}
+        onBookOrganization={() => smoothSwitchTab('create')}
       />
 
-      {previewEvent && (
-        <EventDetailModal
-          event={previewEvent}
-          currentUser={currentUser}
-          existingRegistration={registrations.find(
-            (r) =>
-              r.eventId === previewEvent.id &&
-              r.status !== 'cancelled' &&
-              (r.userId === currentUser.uid ||
-                r.guestEmail.toLowerCase() === currentUser.email.toLowerCase())
-          )}
-          feedbacks={feedbacks}
-          isSaved={false}
-          onToggleSave={() => {}}
-          onClose={() => setPreviewEvent(null)}
-          onRequireAuth={() => setPreviewEvent(null)}
-          onViewMyTickets={() => setPreviewEvent(null)}
-          onNotify={onNotify}
-        />
-      )}
+      <EventDetailModal
+        event={previewEvent}
+        currentUser={currentUser}
+        existingRegistration={
+          previewEvent
+            ? registrations.find(
+                (r) =>
+                  r.eventId === previewEvent.id &&
+                  r.status !== 'cancelled' &&
+                  (r.userId === currentUser.uid ||
+                    r.guestEmail.toLowerCase() === currentUser.email.toLowerCase())
+              )
+            : undefined
+        }
+        feedbacks={feedbacks}
+        isSaved={false}
+        onToggleSave={() => {}}
+        onClose={() => setPreviewEvent(null)}
+        onRequireAuth={() => setPreviewEvent(null)}
+        onViewMyTickets={() => setPreviewEvent(null)}
+        onNotify={onNotify}
+      />
     </div>
   );
 }

@@ -23,7 +23,14 @@ import { ContactPage } from './ContactPage';
 import { EventBanner } from './EventBanner';
 import { EventDetailPage } from './EventDetailPage';
 import { LumaFloatingHero } from './LumaFloatingHero';
-import { AnimatedNumber, AnimatedProgressBar, RevealBlock } from './MotionPrimitives';
+import {
+  AnimatedModal,
+  AnimatedNumber,
+  AnimatedProgressBar,
+  RevealBlock,
+  triggerPageProgress,
+  useSlidingIndicator,
+} from './MotionPrimitives';
 import { PublicFooter } from './PublicFooter';
 import { ServicesPage } from './ServicesPage';
 import {
@@ -91,6 +98,12 @@ export function UserLayout({
 
   const [savedEventIds, setSavedEventIds] = useState<string[]>([]);
   const [feedbackReg, setFeedbackReg] = useState<RegistrationItem | null>(null);
+  const lastFeedbackRegRef = useRef<RegistrationItem | null>(null);
+  if (feedbackReg) {
+    lastFeedbackRegRef.current = feedbackReg;
+  }
+  const activeFeedbackReg = feedbackReg || lastFeedbackRegRef.current;
+
   const [ratingValue, setRatingValue] = useState(5);
   const [ratingComment, setRatingComment] = useState('');
   const [sendingFeedback, setSendingFeedback] = useState(false);
@@ -104,6 +117,8 @@ export function UserLayout({
   }, []);
 
   function runSmoothViewTransition(action: () => void) {
+    triggerPageProgress();
+
     const reduced =
       typeof window !== 'undefined' &&
       window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
@@ -312,11 +327,16 @@ export function UserLayout({
     }
   }
 
+  const activeNavKey = activePage === 'event_detail' ? 'discover' : activePage;
+  const {
+    containerRef: navContainerRef,
+    setItemRef: setNavItemRef,
+    rect: navPillRect,
+  } = useSlidingIndicator(activeNavKey, `${Boolean(currentUser)}-${myRegistrations.length}`);
+
   const navButtonClass = (isActive: boolean) =>
-    `px-3.5 py-1.5 rounded-full transition-all duration-200 whitespace-nowrap shrink-0 cursor-pointer ${
-      isActive
-        ? 'bg-slate-900 text-white font-semibold shadow-xs'
-        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
+    `relative z-10 px-3.5 py-1.5 rounded-full transition-colors duration-200 whitespace-nowrap shrink-0 cursor-pointer ${
+      isActive ? 'text-white font-semibold' : 'text-slate-600 hover:text-slate-900'
     }`;
 
   const pageTransitionKey =
@@ -339,40 +359,54 @@ export function UserLayout({
             <span>EventFlow</span>
           </button>
 
-          {/* Zone 2: Multi-page Navigation Links */}
+          {/* Zone 2: Multi-page Navigation Links with Sliding Active Indicator Pill */}
           <nav className="hidden md:flex items-center gap-1.5 text-[13px] font-medium">
-            <button
-              type="button"
-              onClick={() => smoothNavigatePage('discover')}
-              className={navButtonClass(
-                activePage === 'discover' || activePage === 'event_detail'
-              )}
-            >
-              Khám phá
-            </button>
-            <button
-              type="button"
-              onClick={() => smoothNavigatePage('services')}
-              className={navButtonClass(activePage === 'services')}
-            >
-              Dịch vụ
-            </button>
-            <button
-              type="button"
-              onClick={() => smoothNavigatePage('contact')}
-              className={navButtonClass(activePage === 'contact')}
-            >
-              Liên hệ
-            </button>
-            {currentUser && (
+            <div ref={navContainerRef} className="relative flex items-center gap-1">
+              <span
+                aria-hidden="true"
+                className="ef-sliding-pill pointer-events-none absolute top-0 left-0 rounded-full bg-slate-900 shadow-xs transition-[transform,width,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+                style={{
+                  width: `${navPillRect.width}px`,
+                  height: `${navPillRect.height}px`,
+                  transform: `translate3d(${navPillRect.x}px, ${navPillRect.y}px, 0)`,
+                  opacity: navPillRect.ready ? 1 : 0,
+                }}
+              />
               <button
+                ref={setNavItemRef('discover')}
                 type="button"
-                onClick={() => smoothNavigatePage('tickets')}
-                className={navButtonClass(activePage === 'tickets')}
+                onClick={() => smoothNavigatePage('discover')}
+                className={navButtonClass(activeNavKey === 'discover')}
               >
-                Đã đăng ký ({myRegistrations.length})
+                Khám phá
               </button>
-            )}
+              <button
+                ref={setNavItemRef('services')}
+                type="button"
+                onClick={() => smoothNavigatePage('services')}
+                className={navButtonClass(activeNavKey === 'services')}
+              >
+                Dịch vụ
+              </button>
+              <button
+                ref={setNavItemRef('contact')}
+                type="button"
+                onClick={() => smoothNavigatePage('contact')}
+                className={navButtonClass(activeNavKey === 'contact')}
+              >
+                Liên hệ
+              </button>
+              {currentUser && (
+                <button
+                  ref={setNavItemRef('tickets')}
+                  type="button"
+                  onClick={() => smoothNavigatePage('tickets')}
+                  className={navButtonClass(activeNavKey === 'tickets')}
+                >
+                  Đã đăng ký ({myRegistrations.length})
+                </button>
+              )}
+            </div>
             {onSwitchToOrganizer && (
               <button
                 type="button"
@@ -566,10 +600,10 @@ export function UserLayout({
 
         {/* Smooth Two-Phase Fade-Out -> Fade-In Multi-View Transition Wrapper */}
         <div
-          className={`transition-all duration-150 ease-out ${
+          className={`transition-[opacity,transform] duration-150 ease-out motion-reduce:transition-none motion-reduce:transform-none ${
             isTransitioningOut
-              ? 'opacity-0 translate-y-2 scale-[0.994] pointer-events-none'
-              : 'opacity-100 translate-y-0 scale-100'
+              ? 'opacity-0 scale-[0.982] pointer-events-none'
+              : 'opacity-100'
           }`}
         >
           <div key={pageTransitionKey} className="animate-ef-page-enter">
@@ -1248,14 +1282,16 @@ export function UserLayout({
         onBookOrganization={handleBookOrganization}
       />
 
-      {/* Feedback Modal with elastic entrance */}
-      {feedbackReg && (
-        <div
-          className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 animate-ef-fade-in"
-          role="dialog"
-          aria-modal="true"
-        >
-          <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 space-y-4 animate-ef-modal-in shadow-xl">
+      {/* Feedback Modal with smooth scale + backdrop-blur enter/exit */}
+      <AnimatedModal
+        isOpen={Boolean(feedbackReg)}
+        onClose={() => setFeedbackReg(null)}
+        maxWidthClassName="max-w-md"
+        backdropClassName="bg-slate-900/50 backdrop-blur-xs p-4"
+        panelClassName="bg-white border border-slate-200 rounded-2xl w-full p-6 space-y-4 shadow-xl"
+      >
+        {activeFeedbackReg && (
+          <>
             <div className="flex items-center justify-between">
               <h2 className="text-base font-bold text-slate-900">Đánh giá sự kiện</h2>
               <button
@@ -1266,7 +1302,7 @@ export function UserLayout({
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <p className="text-xs text-slate-500">{feedbackReg.eventTitle}</p>
+            <p className="text-xs text-slate-500">{activeFeedbackReg.eventTitle}</p>
 
             <form onSubmit={handleSubmitTicketFeedback} className="space-y-4">
               <div>
@@ -1324,9 +1360,9 @@ export function UserLayout({
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+          </>
+        )}
+      </AnimatedModal>
     </div>
   );
 }

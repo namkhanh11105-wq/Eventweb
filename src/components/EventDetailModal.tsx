@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import {
   BadgeCheck,
   Bookmark,
@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import { createRegistration, submitFeedback } from '../services/dataService';
 import { EventBanner } from './EventBanner';
-import { AnimatedProgressBar } from './MotionPrimitives';
+import { AnimatedModal, AnimatedProgressBar } from './MotionPrimitives';
 import {
   EVENT_STATUS_META,
   formatDateTimeVN,
@@ -35,7 +35,7 @@ import type {
 } from '../types';
 
 interface EventDetailModalProps {
-  event: EventItem;
+  event: EventItem | null;
   currentUser: AppUser | null;
   existingRegistration?: RegistrationItem;
   feedbacks: FeedbackItem[];
@@ -59,9 +59,23 @@ export function EventDetailModal({
   onViewMyTickets,
   onNotify,
 }: EventDetailModalProps) {
+  const lastEventRef = useRef<EventItem | null>(event);
+  if (event) {
+    lastEventRef.current = event;
+  }
+  const activeEvent = event || lastEventRef.current;
+
   const [guestName, setGuestName] = useState(currentUser?.fullName || '');
   const [guestEmail, setGuestEmail] = useState(currentUser?.email || '');
   const [guestPhone, setGuestPhone] = useState(currentUser?.phone || '');
+
+  useEffect(() => {
+    if (event) {
+      setGuestName(currentUser?.fullName || '');
+      setGuestEmail(currentUser?.email || '');
+      setGuestPhone(currentUser?.phone || '');
+    }
+  }, [event, currentUser]);
   const [note, setNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -71,8 +85,8 @@ export function EventDetailModal({
   const [submittingFeedback, setSubmittingFeedback] = useState(false);
 
   const eventFeedbacks = useMemo(
-    () => feedbacks.filter((f) => f.eventId === event.id),
-    [feedbacks, event.id]
+    () => (activeEvent ? feedbacks.filter((f) => f.eventId === activeEvent.id) : []),
+    [feedbacks, activeEvent]
   );
 
   const avgRating = useMemo(() => {
@@ -81,32 +95,35 @@ export function EventDetailModal({
     return (sum / eventFeedbacks.length).toFixed(1);
   }, [eventFeedbacks]);
 
-  const statusMeta = EVENT_STATUS_META[event.status] || EVENT_STATUS_META.upcoming;
-  const remaining = Math.max(0, event.maxSlots - event.registeredCount);
+  if (!activeEvent) return null;
+
+  const statusMeta = EVENT_STATUS_META[activeEvent.status] || EVENT_STATUS_META.upcoming;
+  const remaining = Math.max(0, activeEvent.maxSlots - activeEvent.registeredCount);
   const fillPercent = Math.min(
     100,
-    Math.round((event.registeredCount / Math.max(1, event.maxSlots)) * 100)
+    Math.round((activeEvent.registeredCount / Math.max(1, activeEvent.maxSlots)) * 100)
   );
   const canBook =
-    event.status !== 'cancelled' &&
-    event.status !== 'completed' &&
-    event.status !== 'paused' &&
+    activeEvent.status !== 'cancelled' &&
+    activeEvent.status !== 'completed' &&
+    activeEvent.status !== 'paused' &&
     remaining > 0;
 
   const canLeaveFeedback =
     Boolean(currentUser) &&
     (existingRegistration?.status === 'attended' ||
-      (event.status === 'completed' &&
+      (activeEvent.status === 'completed' &&
         existingRegistration &&
         existingRegistration.status !== 'cancelled'));
 
   const mapsSearchUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-    event.location
+    activeEvent.location
   )}`;
 
   async function handleShare() {
-    const shareText = `${event.title} — ${formatDateTimeVN(event.startTime)} tại ${
-      event.location
+    if (!activeEvent) return;
+    const shareText = `${activeEvent.title} — ${formatDateTimeVN(activeEvent.startTime)} tại ${
+      activeEvent.location
     }`;
     try {
       if (navigator.clipboard?.writeText) {
@@ -120,6 +137,7 @@ export function EventDetailModal({
 
   async function handleRegister(e: FormEvent) {
     e.preventDefault();
+    if (!activeEvent) return;
     if (!currentUser) {
       onNotify('Vui lòng đăng nhập tài khoản để đăng ký tham gia sự kiện.', 'error');
       onRequireAuth();
@@ -133,8 +151,8 @@ export function EventDetailModal({
     setSubmitting(true);
     try {
       const reg = await createRegistration({
-        eventId: event.id,
-        eventTitle: event.title,
+        eventId: activeEvent.id,
+        eventTitle: activeEvent.title,
         userId: currentUser.uid,
         guestName,
         guestEmail,
@@ -156,12 +174,12 @@ export function EventDetailModal({
 
   async function handleSendFeedback(e: FormEvent) {
     e.preventDefault();
-    if (!currentUser || !comment.trim()) return;
+    if (!activeEvent || !currentUser || !comment.trim()) return;
     setSubmittingFeedback(true);
     try {
       await submitFeedback({
-        eventId: event.id,
-        eventTitle: event.title,
+        eventId: activeEvent.id,
+        eventTitle: activeEvent.title,
         userId: currentUser.uid,
         userName: currentUser.fullName,
         rating,
@@ -180,18 +198,17 @@ export function EventDetailModal({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-ef-fade-in"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="event-detail-title"
+    <AnimatedModal
+      isOpen={Boolean(event)}
+      onClose={onClose}
+      maxWidthClassName="max-w-5xl"
+      labelledBy="event-detail-title"
     >
-      <div className="bg-white border border-slate-200 rounded-2xl max-w-5xl w-full max-h-[92vh] overflow-y-auto shadow-2xl animate-ef-modal-in">
         {/* Hero Cover Banner */}
         <div className="relative aspect-[16/7] w-full bg-slate-100 overflow-hidden">
           <EventBanner
-            src={event.bannerUrl}
-            alt={event.title}
+            src={activeEvent.bannerUrl}
+            alt={activeEvent.title}
             className="w-full h-full"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/25 to-transparent" />
@@ -208,7 +225,7 @@ export function EventDetailModal({
             </button>
             <button
               type="button"
-              onClick={() => onToggleSave(event.id)}
+              onClick={() => onToggleSave(activeEvent.id)}
               className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl shadow-sm cursor-pointer transition-colors ${
                 isSaved
                   ? 'bg-indigo-600 text-white hover:bg-indigo-700'
@@ -231,7 +248,7 @@ export function EventDetailModal({
           <div className="absolute bottom-0 inset-x-0 p-6 sm:p-8 text-white">
             <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
               <span className="px-2.5 py-1 rounded-md bg-white/20 backdrop-blur-sm">
-                {event.category}
+                {activeEvent.category}
               </span>
               <span className="px-2.5 py-1 rounded-md bg-indigo-600/95">
                 {statusMeta.label}
@@ -247,12 +264,12 @@ export function EventDetailModal({
               id="event-detail-title"
               className="mt-3 text-xl sm:text-3xl font-bold tracking-tight text-balance leading-tight"
             >
-              {event.title}
+              {activeEvent.title}
             </h2>
             <div className="mt-2 inline-flex items-center gap-1.5 text-xs sm:text-sm text-slate-200">
               <span>Đơn vị tổ chức:</span>
-              <strong className="text-white">{event.organizer}</strong>
-              {event.organizerVerified !== false && (
+              <strong className="text-white">{activeEvent.organizer}</strong>
+              {activeEvent.organizerVerified !== false && (
                 <BadgeCheck
                   className="w-4 h-4 text-emerald-400 shrink-0"
                   aria-label="Đơn vị đã xác thực"
@@ -272,10 +289,10 @@ export function EventDetailModal({
                 <div>
                   <div className="text-xs font-medium text-slate-500">Thời gian tổ chức</div>
                   <div className="mt-0.5 text-sm font-semibold text-slate-900 tabular-nums">
-                    {formatDateTimeVN(event.startTime)}
+                    {formatDateTimeVN(activeEvent.startTime)}
                   </div>
                   <div className="text-xs text-slate-500 tabular-nums">
-                    Kết thúc: {formatDateTimeVN(event.endTime)}
+                    Kết thúc: {formatDateTimeVN(activeEvent.endTime)}
                   </div>
                 </div>
               </div>
@@ -285,7 +302,7 @@ export function EventDetailModal({
                 <div>
                   <div className="text-xs font-medium text-slate-500">Địa điểm</div>
                   <div className="mt-0.5 text-sm font-semibold text-slate-900">
-                    {event.location}
+                    {activeEvent.location}
                   </div>
                   <a
                     href={mapsSearchUrl}
@@ -308,9 +325,9 @@ export function EventDetailModal({
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5">
                     <span className="text-sm font-bold text-slate-900 truncate">
-                      {event.organizer}
+                      {activeEvent.organizer}
                     </span>
-                    {event.organizerVerified !== false && (
+                    {activeEvent.organizerVerified !== false && (
                       <BadgeCheck className="w-4 h-4 text-indigo-600 shrink-0" />
                     )}
                   </div>
@@ -324,17 +341,17 @@ export function EventDetailModal({
             <section>
               <h3 className="text-base font-bold text-slate-900">Giới thiệu sự kiện</h3>
               <p className="mt-2.5 text-sm text-slate-600 leading-relaxed whitespace-pre-line">
-                {event.description}
+                {activeEvent.description}
               </p>
             </section>
 
-            {event.speakers && event.speakers.length > 0 && (
+            {activeEvent.speakers && activeEvent.speakers.length > 0 && (
               <section>
                 <h3 className="text-base font-bold text-slate-900">
                   Diễn giả &amp; Khách mời chuyên môn
                 </h3>
                 <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {event.speakers.map((sp, idx) => (
+                  {activeEvent.speakers.map((sp, idx) => (
                     <div
                       key={`${sp.name}-${idx}`}
                       className="flex items-center gap-3 p-3.5 rounded-xl border border-slate-200 bg-white"
@@ -357,13 +374,13 @@ export function EventDetailModal({
               </section>
             )}
 
-            {event.agenda && event.agenda.length > 0 && (
+            {activeEvent.agenda && activeEvent.agenda.length > 0 && (
               <section>
                 <h3 className="text-base font-bold text-slate-900">
                   Lịch trình chi tiết (Agenda)
                 </h3>
                 <div className="mt-4 relative pl-5 border-l border-slate-200 space-y-5">
-                  {event.agenda.map((item, idx) => (
+                  {activeEvent.agenda.map((item, idx) => (
                     <div key={`${item.time}-${idx}`} className="relative">
                       <span className="absolute -left-[25px] top-1.5 w-2.5 h-2.5 rounded-full bg-indigo-600 ring-4 ring-white" />
                       <div className="flex items-center gap-2 text-xs font-mono font-semibold text-indigo-600 tabular-nums">
@@ -385,14 +402,14 @@ export function EventDetailModal({
               </section>
             )}
 
-            {event.faqs && event.faqs.length > 0 && (
+            {activeEvent.faqs && activeEvent.faqs.length > 0 && (
               <section>
                 <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
                   <HelpCircle className="w-4 h-4 text-indigo-600" />
                   <span>Câu hỏi thường gặp (FAQ)</span>
                 </h3>
                 <div className="mt-3 divide-y divide-slate-200 border border-slate-200 rounded-xl overflow-hidden bg-white">
-                  {event.faqs.map((faq, idx) => {
+                  {activeEvent.faqs.map((faq, idx) => {
                     const isOpen = openFaqIndex === idx;
                     return (
                       <div key={idx}>
@@ -422,14 +439,14 @@ export function EventDetailModal({
               </section>
             )}
 
-            {event.rules && (
+            {activeEvent.rules && (
               <section className="p-4 rounded-xl bg-slate-50 border border-slate-200">
                 <div className="flex items-center gap-2 text-sm font-bold text-slate-900">
                   <ShieldAlert className="w-4 h-4 text-indigo-600" />
                   <span>Quy định tham gia</span>
                 </div>
                 <p className="mt-2 text-xs sm:text-sm text-slate-600 leading-relaxed">
-                  {event.rules}
+                  {activeEvent.rules}
                 </p>
               </section>
             )}
@@ -546,10 +563,10 @@ export function EventDetailModal({
               </div>
               <div className="text-right">
                 <div className="text-xs font-semibold text-indigo-700 tabular-nums">
-                  Còn {remaining}/{event.maxSlots} chỗ
+                  Còn {remaining}/{activeEvent.maxSlots} chỗ
                 </div>
                 <div className="text-[11px] text-slate-500 tabular-nums">
-                  {event.registeredCount} người đã đăng ký
+                  {activeEvent.registeredCount} người đã đăng ký
                 </div>
               </div>
             </div>
@@ -584,11 +601,11 @@ export function EventDetailModal({
               </div>
             ) : !canBook ? (
               <div className="p-4 rounded-xl bg-slate-100 border border-slate-200 text-sm text-slate-600">
-                {event.status === 'cancelled'
+                {activeEvent.status === 'cancelled'
                   ? 'Sự kiện này đã bị hủy.'
-                  : event.status === 'completed'
+                  : activeEvent.status === 'completed'
                   ? 'Sự kiện này đã kết thúc.'
-                  : event.status === 'paused'
+                  : activeEvent.status === 'paused'
                   ? 'Cổng đăng ký hiện đang tạm đóng để rà soát danh sách.'
                   : 'Sự kiện đã hết chỗ trống.'}
               </div>
@@ -682,7 +699,6 @@ export function EventDetailModal({
             )}
           </aside>
         </div>
-      </div>
-    </div>
+    </AnimatedModal>
   );
 }

@@ -1,9 +1,273 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
+import { createPortal } from 'react-dom';
 
-function prefersReducedMotion(): boolean {
+export function prefersReducedMotion(): boolean {
   if (typeof window === 'undefined' || !window.matchMedia) return false;
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Global Top Progress Bar Emitter + Component (Linear / GitHub / YouTube)    */
+/* -------------------------------------------------------------------------- */
+
+const progressListeners = new Set<() => void>();
+
+export function triggerPageProgress(): void {
+  progressListeners.forEach((listener) => listener());
+}
+
+export function TopProgressBar() {
+  const [phase, setPhase] = useState<'idle' | 'sweeping' | 'finishing'>('idle');
+  const [scale, setScale] = useState(0);
+  const timersRef = useRef<number[]>([]);
+  const lastTriggerRef = useRef(0);
+
+  const clearAllTimers = useCallback(() => {
+    timersRef.current.forEach((id) => window.clearTimeout(id));
+    timersRef.current = [];
+  }, []);
+
+  const startSweep = useCallback(() => {
+    if (prefersReducedMotion()) return;
+    const now = performance.now();
+    if (now - lastTriggerRef.current < 120) return;
+    lastTriggerRef.current = now;
+
+    clearAllTimers();
+    setPhase('sweeping');
+    setScale(0.08);
+
+    const t1 = window.setTimeout(() => {
+      setScale(0.76);
+    }, 16);
+
+    const t2 = window.setTimeout(() => {
+      setPhase('finishing');
+      setScale(1);
+    }, 240);
+
+    const t3 = window.setTimeout(() => {
+      setPhase('idle');
+      setScale(0);
+    }, 520);
+
+    timersRef.current.push(t1, t2, t3);
+  }, [clearAllTimers]);
+
+  useEffect(() => {
+    progressListeners.add(startSweep);
+    return () => {
+      progressListeners.delete(startSweep);
+      clearAllTimers();
+    };
+  }, [startSweep, clearAllTimers]);
+
+  if (phase === 'idle') return null;
+
+  return (
+    <div
+      aria-hidden="true"
+      className="pointer-events-none fixed top-0 left-0 right-0 z-[100] h-[2px] overflow-hidden bg-transparent"
+    >
+      <div
+        className={`relative h-full w-full origin-left bg-gradient-to-r from-rose-500 via-orange-500 to-indigo-500 shadow-[0_0_10px_rgba(244,63,94,0.55)] transition-[transform,opacity] ${
+          phase === 'sweeping'
+            ? 'duration-240 ease-[cubic-bezier(0.22,1,0.36,1)] opacity-100'
+            : 'duration-260 ease-out opacity-0'
+        }`}
+        style={{ transform: `scaleX(${scale})` }}
+      >
+        <span className="ef-top-progress-sheen absolute inset-y-0 w-24 bg-gradient-to-r from-transparent via-white/75 to-transparent" />
+      </div>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Sliding Active Indicator Hook for Horizontal & Vertical Navbars            */
+/* -------------------------------------------------------------------------- */
+
+interface IndicatorRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  ready: boolean;
+}
+
+export function useSlidingIndicator(activeKey: string, dependencySignal?: unknown) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const itemRefs = useRef<Map<string, HTMLElement>>(new Map());
+  const [rect, setRect] = useState<IndicatorRect>({
+    x: 0,
+    y: 0,
+    width: 0,
+    height: 0,
+    ready: false,
+  });
+
+  const setItemRef = useCallback(
+    (key: string) => (el: HTMLElement | null) => {
+      if (el) {
+        itemRefs.current.set(key, el);
+      } else {
+        itemRefs.current.delete(key);
+      }
+    },
+    []
+  );
+
+  const measure = useCallback(() => {
+    const container = containerRef.current;
+    const activeEl = itemRefs.current.get(activeKey);
+    if (!container || !activeEl) {
+      setRect((prev) => (prev.ready ? { ...prev, ready: false } : prev));
+      return;
+    }
+
+    const nextX = activeEl.offsetLeft;
+    const nextY = activeEl.offsetTop;
+    const nextW = activeEl.offsetWidth;
+    const nextH = activeEl.offsetHeight;
+
+    setRect((prev) => {
+      if (
+        prev.ready &&
+        prev.x === nextX &&
+        prev.y === nextY &&
+        prev.width === nextW &&
+        prev.height === nextH
+      ) {
+        return prev;
+      }
+      return { x: nextX, y: nextY, width: nextW, height: nextH, ready: true };
+    });
+  }, [activeKey]);
+
+  useLayoutEffect(() => {
+    measure();
+  }, [measure, dependencySignal]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => measure());
+    ro.observe(container);
+    const activeEl = itemRefs.current.get(activeKey);
+    if (activeEl) ro.observe(activeEl);
+    return () => ro.disconnect();
+  }, [activeKey, measure, dependencySignal]);
+
+  return { containerRef, setItemRef, rect };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Animated Modal with Smooth Scale-from-Center & Backdrop Blur Enter/Exit    */
+/* -------------------------------------------------------------------------- */
+
+interface AnimatedModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  children: ReactNode;
+  maxWidthClassName?: string;
+  labelledBy?: string;
+  backdropClassName?: string;
+  panelClassName?: string;
+  closeOnBackdropClick?: boolean;
+}
+
+export function AnimatedModal({
+  isOpen,
+  onClose,
+  children,
+  maxWidthClassName = 'max-w-3xl',
+  labelledBy,
+  backdropClassName = 'bg-slate-900/60 backdrop-blur-xs p-3 sm:p-6',
+  panelClassName = 'bg-white border border-slate-200 rounded-2xl w-full max-h-[92vh] overflow-y-auto shadow-2xl',
+  closeOnBackdropClick = true,
+}: AnimatedModalProps) {
+  const [rendered, setRendered] = useState(isOpen);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setRendered(true);
+      if (prefersReducedMotion()) {
+        setVisible(true);
+        return;
+      }
+      let raf2 = 0;
+      const raf1 = requestAnimationFrame(() => {
+        raf2 = requestAnimationFrame(() => {
+          setVisible(true);
+        });
+      });
+      return () => {
+        cancelAnimationFrame(raf1);
+        cancelAnimationFrame(raf2);
+      };
+    }
+
+    setVisible(false);
+    if (!rendered) return;
+    const delay = prefersReducedMotion() ? 0 : 220;
+    const timer = window.setTimeout(() => {
+      setRendered(false);
+    }, delay);
+    return () => window.clearTimeout(timer);
+  }, [isOpen, rendered]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
+  if (!rendered || typeof document === 'undefined') return null;
+
+  return createPortal(
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={labelledBy}
+      onClick={(e) => {
+        if (closeOnBackdropClick && e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
+      className={`fixed inset-0 z-50 flex items-center justify-center transition-[opacity,backdrop-filter] duration-240 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${backdropClassName} ${
+        visible ? 'opacity-100' : 'opacity-0 pointer-events-none'
+      }`}
+    >
+      <div
+        className={`${maxWidthClassName} ${panelClassName} transition-[opacity,transform] duration-260 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none motion-reduce:transform-none ${
+          visible
+            ? 'opacity-100 scale-100 translate-y-0'
+            : 'opacity-0 scale-[0.96] translate-y-2'
+        }`}
+      >
+        {children}
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Animated KPI Numbers, Progress Bars & Scroll Reveals                       */
+/* -------------------------------------------------------------------------- */
 
 interface AnimatedNumberProps {
   value: number;

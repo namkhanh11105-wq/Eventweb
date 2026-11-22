@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import {
   ArrowLeft,
   BadgeCheck,
@@ -60,7 +60,13 @@ import {
   updateRegistrationStatus,
 } from '../services/dataService';
 import { EventBanner } from './EventBanner';
-import { AnimatedNumber } from './MotionPrimitives';
+import {
+  AnimatedModal,
+  AnimatedNumber,
+  prefersReducedMotion,
+  triggerPageProgress,
+  useSlidingIndicator,
+} from './MotionPrimitives';
 import {
   EVENT_CATEGORIES,
   EVENT_STATUS_META,
@@ -174,6 +180,35 @@ export function AdminLayout({
   const [section, setSection] = useState<AdminSection>('overview');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [seeding, setSeeding] = useState(false);
+  const [isAdminTransitioningOut, setIsAdminTransitioningOut] = useState(false);
+  const adminTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (adminTimerRef.current !== null) {
+        window.clearTimeout(adminTimerRef.current);
+      }
+    };
+  }, []);
+
+  function runAdminTransition(action: () => void) {
+    triggerPageProgress();
+    if (prefersReducedMotion()) {
+      action();
+      window.scrollTo({ top: 0, behavior: 'auto' });
+      return;
+    }
+    if (adminTimerRef.current !== null) {
+      window.clearTimeout(adminTimerRef.current);
+    }
+    setIsAdminTransitioningOut(true);
+    adminTimerRef.current = window.setTimeout(() => {
+      action();
+      window.scrollTo({ top: 0, behavior: 'auto' });
+      setIsAdminTransitioningOut(false);
+      adminTimerRef.current = null;
+    }, 140);
+  }
 
   // Events list filters
   const [eventSearch, setEventSearch] = useState('');
@@ -802,18 +837,33 @@ export function AdminLayout({
       ? `Không gian sự kiện: ${workspaceEvent.title}`
       : SECTION_TITLES[section];
 
+  const {
+    containerRef: sidebarNavRef,
+    setItemRef: setSidebarNavRef,
+    rect: sidebarNavPill,
+  } = useSlidingIndicator(section, stats.pendingReviewCount);
+
+  const {
+    containerRef: wsTabNavRef,
+    setItemRef: setWsTabNavRef,
+    rect: wsTabPill,
+  } = useSlidingIndicator(workspaceTab, workspaceEvent?.id || '');
+
+  const adminViewKey = `${section}-${workspaceEvent ? workspaceEvent.id : 'list'}`;
+
   return (
     <div className="min-h-screen bg-slate-50 flex">
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 z-40 bg-slate-900/40 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
+      <div
+        aria-hidden="true"
+        className={`fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-[2px] lg:hidden transition-opacity duration-240 ${
+          sidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+        }`}
+        onClick={() => setSidebarOpen(false)}
+      />
 
       {/* Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-slate-200 flex flex-col justify-between transition-transform duration-200 lg:static lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-slate-200 flex flex-col justify-between transition-transform duration-260 ease-[cubic-bezier(0.22,1,0.36,1)] lg:static lg:translate-x-0 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -832,39 +882,59 @@ export function AdminLayout({
             </button>
           </div>
 
-          <nav className="p-4 space-y-1">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              const active = section === item.key;
-              return (
-                <button
-                  key={item.key}
-                  type="button"
-                  onClick={() => {
-                    setSection(item.key);
-                    if (item.key !== 'events') {
-                      setWorkspaceEventId(null);
-                    }
-                    setSidebarOpen(false);
-                  }}
-                  className={`w-full flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer whitespace-nowrap ${
-                    active
-                      ? 'bg-indigo-50 text-indigo-700 font-semibold'
-                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                  }`}
-                >
-                  <span className="flex items-center gap-3">
-                    <Icon className="w-4 h-4 shrink-0" />
-                    <span>{item.label}</span>
-                  </span>
-                  {item.badge !== undefined && (
-                    <span className="px-2 py-0.5 text-[11px] font-bold rounded-full bg-amber-100 text-amber-800">
-                      {item.badge}
+          <nav className="p-4">
+            <div ref={sidebarNavRef} className="relative space-y-1">
+              <span
+                aria-hidden="true"
+                className="ef-sliding-pill pointer-events-none absolute top-0 left-0 rounded-lg bg-indigo-50 border border-indigo-200/70 transition-[transform,width,height,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+                style={{
+                  width: `${sidebarNavPill.width}px`,
+                  height: `${sidebarNavPill.height}px`,
+                  transform: `translate3d(${sidebarNavPill.x}px, ${sidebarNavPill.y}px, 0)`,
+                  opacity: sidebarNavPill.ready ? 1 : 0,
+                }}
+              />
+              {navItems.map((item) => {
+                const Icon = item.icon;
+                const active = section === item.key;
+                return (
+                  <button
+                    key={item.key}
+                    ref={setSidebarNavRef(item.key)}
+                    type="button"
+                    onClick={() => {
+                      setSidebarOpen(false);
+                      if (section === item.key && !(item.key === 'events' && workspaceEventId)) {
+                        return;
+                      }
+                      runAdminTransition(() => {
+                        setSection(item.key);
+                        if (item.key !== 'events') {
+                          setWorkspaceEventId(null);
+                        } else if (section === 'events') {
+                          setWorkspaceEventId(null);
+                        }
+                      });
+                    }}
+                    className={`relative z-10 w-full flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer whitespace-nowrap ${
+                      active
+                        ? 'text-indigo-700 font-semibold'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    <span className="flex items-center gap-3">
+                      <Icon className="w-4 h-4 shrink-0" />
+                      <span>{item.label}</span>
                     </span>
-                  )}
-                </button>
-              );
-            })}
+                    {item.badge !== undefined && (
+                      <span className="px-2 py-0.5 text-[11px] font-bold rounded-full bg-amber-100 text-amber-800">
+                        {item.badge}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           </nav>
         </div>
 
@@ -958,9 +1028,17 @@ export function AdminLayout({
             </div>
           )}
 
+          <div
+            className={`transition-[opacity,transform] duration-150 ease-out motion-reduce:transition-none motion-reduce:transform-none ${
+              isAdminTransitioningOut
+                ? 'opacity-0 scale-[0.985] pointer-events-none'
+                : 'opacity-100'
+            }`}
+          >
+            <div key={adminViewKey} className="animate-ef-page-enter">
           {/* SECTION 1: OVERVIEW */}
           {section === 'overview' && (
-            <div className="space-y-6 animate-ef-fade-up">
+            <div className="space-y-6">
               {/* Alert banner if pending organizer requests exist */}
               {stats.pendingReviewCount > 0 && (
                 <div className="rounded-xl border border-indigo-200 bg-indigo-50/70 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -978,11 +1056,13 @@ export function AdminLayout({
                   </div>
                   <button
                     type="button"
-                    onClick={() => {
-                      setSection('events');
-                      setEventPlanningFilter('pending_review');
-                      setWorkspaceEventId(null);
-                    }}
+                    onClick={() =>
+                      runAdminTransition(() => {
+                        setSection('events');
+                        setEventPlanningFilter('pending_review');
+                        setWorkspaceEventId(null);
+                      })
+                    }
                     className="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg cursor-pointer whitespace-nowrap shrink-0"
                   >
                     Xem yêu cầu chờ duyệt
@@ -1178,7 +1258,7 @@ export function AdminLayout({
 
           {/* SECTION 2: EVENTS LIST OR PER-EVENT 3-TAB WORKSPACE */}
           {section === 'events' && !workspaceEvent && (
-            <div className="bg-white border border-slate-200 rounded-xl overflow-hidden animate-ef-fade-up">
+            <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
               <div className="p-4 border-b border-slate-200 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
                 <div className="flex flex-col sm:flex-row flex-wrap gap-2.5 flex-1">
                   <div className="relative w-full sm:w-64">
@@ -1262,10 +1342,12 @@ export function AdminLayout({
                                 <div className="min-w-0">
                                   <button
                                     type="button"
-                                    onClick={() => {
-                                      setWorkspaceEventId(ev.id);
-                                      setWorkspaceTab('services');
-                                    }}
+                                    onClick={() =>
+                                      runAdminTransition(() => {
+                                        setWorkspaceEventId(ev.id);
+                                        setWorkspaceTab('services');
+                                      })
+                                    }
                                     className="font-semibold text-slate-900 hover:text-indigo-600 text-left line-clamp-1 flex items-center gap-1.5 cursor-pointer"
                                   >
                                     <span className="truncate">{ev.title}</span>
@@ -1338,10 +1420,12 @@ export function AdminLayout({
                               <div className="inline-flex items-center gap-1.5">
                                 <button
                                   type="button"
-                                  onClick={() => {
-                                    setWorkspaceEventId(ev.id);
-                                    setWorkspaceTab('services');
-                                  }}
+                                  onClick={() =>
+                                    runAdminTransition(() => {
+                                      setWorkspaceEventId(ev.id);
+                                      setWorkspaceTab('services');
+                                    })
+                                  }
                                   className="px-2.5 py-1.5 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-md cursor-pointer"
                                 >
                                   Quản lý chi tiết
@@ -1403,11 +1487,11 @@ export function AdminLayout({
 
           {/* PER-EVENT WORKSPACE (STRICTLY 3 ISOLATED TABS FOR THIS SPECIFIC EVENT) */}
           {section === 'events' && workspaceEvent && (
-            <div className="space-y-5 animate-ef-fade-up">
+            <div className="space-y-5">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <button
                   type="button"
-                  onClick={() => setWorkspaceEventId(null)}
+                  onClick={() => runAdminTransition(() => setWorkspaceEventId(null))}
                   className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:border-indigo-300 hover:text-indigo-700 rounded-lg cursor-pointer"
                 >
                   <ArrowLeft className="w-4 h-4" />
@@ -1527,59 +1611,83 @@ export function AdminLayout({
                 </div>
               </div>
 
-              {/* 3 Isolated Event-Scoped Tabs */}
+              {/* 3 Isolated Event-Scoped Tabs with Sliding Indicator */}
               <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
-                <div className="border-b border-slate-200 px-4 pt-3 flex items-center gap-2 overflow-x-auto bg-slate-50/70">
-                  <button
-                    type="button"
-                    onClick={() => setWorkspaceTab('services')}
-                    className={`inline-flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-colors whitespace-nowrap cursor-pointer ${
-                      workspaceTab === 'services'
-                        ? 'border-indigo-600 text-indigo-700 bg-white rounded-t-lg'
-                        : 'border-transparent text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    <Wrench className="w-4 h-4" />
-                    <span>
-                      1. Dịch vụ khách hàng yêu cầu ({workspaceEvent.requestedServices.length})
-                    </span>
-                  </button>
+                <div className="border-b border-slate-200 px-4 py-2.5 overflow-x-auto bg-slate-50/70">
+                  <div ref={wsTabNavRef} className="relative inline-flex items-center gap-1.5">
+                    <span
+                      aria-hidden="true"
+                      className="ef-sliding-pill pointer-events-none absolute top-0 left-0 rounded-lg bg-white border border-slate-200/80 shadow-xs transition-[transform,width,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+                      style={{
+                        width: `${wsTabPill.width}px`,
+                        height: `${wsTabPill.height}px`,
+                        transform: `translate3d(${wsTabPill.x}px, ${wsTabPill.y}px, 0)`,
+                        opacity: wsTabPill.ready ? 1 : 0,
+                      }}
+                    />
+                    <button
+                      ref={setWsTabNavRef('services')}
+                      type="button"
+                      onClick={() => {
+                        triggerPageProgress();
+                        setWorkspaceTab('services');
+                      }}
+                      className={`relative z-10 inline-flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-lg transition-colors whitespace-nowrap cursor-pointer ${
+                        workspaceTab === 'services'
+                          ? 'text-indigo-700'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      <Wrench className="w-4 h-4" />
+                      <span>
+                        1. Dịch vụ khách hàng yêu cầu ({workspaceEvent.requestedServices.length})
+                      </span>
+                    </button>
 
-                  <button
-                    type="button"
-                    onClick={() => setWorkspaceTab('guests')}
-                    className={`inline-flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-colors whitespace-nowrap cursor-pointer ${
-                      workspaceTab === 'guests'
-                        ? 'border-indigo-600 text-indigo-700 bg-white rounded-t-lg'
-                        : 'border-transparent text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    <BadgeCheck className="w-4 h-4" />
-                    <span>
-                      2. Danh sách khách mời của sự kiện ({workspaceEvent.invitedGuests.length})
-                    </span>
-                  </button>
+                    <button
+                      ref={setWsTabNavRef('guests')}
+                      type="button"
+                      onClick={() => {
+                        triggerPageProgress();
+                        setWorkspaceTab('guests');
+                      }}
+                      className={`relative z-10 inline-flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-lg transition-colors whitespace-nowrap cursor-pointer ${
+                        workspaceTab === 'guests'
+                          ? 'text-indigo-700'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      <BadgeCheck className="w-4 h-4" />
+                      <span>
+                        2. Danh sách khách mời của sự kiện ({workspaceEvent.invitedGuests.length})
+                      </span>
+                    </button>
 
-                  <button
-                    type="button"
-                    onClick={() => setWorkspaceTab('participants')}
-                    className={`inline-flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-colors whitespace-nowrap cursor-pointer ${
-                      workspaceTab === 'participants'
-                        ? 'border-indigo-600 text-indigo-700 bg-white rounded-t-lg'
-                        : 'border-transparent text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    <UserCheck className="w-4 h-4" />
-                    <span>
-                      3. Danh sách người tham gia ({workspaceEventRegs.length}/
-                      {workspaceEvent.maxSlots})
-                    </span>
-                  </button>
+                    <button
+                      ref={setWsTabNavRef('participants')}
+                      type="button"
+                      onClick={() => {
+                        triggerPageProgress();
+                        setWorkspaceTab('participants');
+                      }}
+                      className={`relative z-10 inline-flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-lg transition-colors whitespace-nowrap cursor-pointer ${
+                        workspaceTab === 'participants'
+                          ? 'text-indigo-700'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      <UserCheck className="w-4 h-4" />
+                      <span>
+                        3. Danh sách người tham gia ({workspaceEventRegs.length}/
+                        {workspaceEvent.maxSlots})
+                      </span>
+                    </button>
+                  </div>
                 </div>
 
                 {/* TAB 1: REQUESTED SERVICES FOR THIS EVENT */}
                 {workspaceTab === 'services' && (
-                  <div className="p-5 sm:p-6 space-y-6">
+                  <div key="ws-services" className="p-5 sm:p-6 space-y-6 animate-ef-page-enter">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                       <div>
                         <h3 className="text-sm font-bold text-slate-900">
@@ -1754,7 +1862,7 @@ export function AdminLayout({
 
                 {/* TAB 2: INVITED GUESTS FOR THIS EVENT */}
                 {workspaceTab === 'guests' && (
-                  <div className="p-5 sm:p-6 space-y-6">
+                  <div key="ws-guests" className="p-5 sm:p-6 space-y-6 animate-ef-page-enter">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div>
                         <h3 className="text-sm font-bold text-slate-900">
@@ -1938,7 +2046,7 @@ export function AdminLayout({
 
                 {/* TAB 3: PARTICIPANTS REGISTERED FOR THIS SPECIFIC EVENT */}
                 {workspaceTab === 'participants' && (
-                  <div className="p-5 sm:p-6 space-y-5">
+                  <div key="ws-participants" className="p-5 sm:p-6 space-y-5 animate-ef-page-enter">
                     <div className="p-4 rounded-xl bg-indigo-50/70 border border-indigo-200 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
                       <div className="flex items-start gap-3">
                         <QrCode className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" />
@@ -2098,7 +2206,7 @@ export function AdminLayout({
 
           {/* SECTION 3: GLOBAL PARTICIPANTS & QR CHECK-IN */}
           {section === 'registrations' && (
-            <div className="space-y-5 animate-ef-fade-up">
+            <div className="space-y-5">
               <div className="bg-white border border-indigo-200 rounded-xl p-5 space-y-4">
                 <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                   <div className="flex items-start gap-3">
@@ -2314,7 +2422,7 @@ export function AdminLayout({
 
           {/* SECTION 4: USERS */}
           {section === 'users' && (
-            <div className="bg-white border border-slate-200 rounded-xl overflow-hidden animate-ef-fade-up">
+            <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
               <div className="p-4 border-b border-slate-200 flex items-center justify-between">
                 <h2 className="text-sm font-bold text-slate-900">
                   Danh sách tài khoản theo 3 luồng người dùng
@@ -2380,7 +2488,7 @@ export function AdminLayout({
 
           {/* SECTION 5: PUBLIC CONTACT SETTINGS & INQUIRIES */}
           {section === 'contact' && (
-            <div className="space-y-6 animate-ef-fade-up">
+            <div className="space-y-6">
               <div className="max-w-3xl bg-white border border-slate-200 rounded-2xl p-6 sm:p-8">
                 <div className="mb-6">
                   <h2 className="text-lg font-bold text-slate-900">
@@ -2587,18 +2695,20 @@ export function AdminLayout({
               </div>
             </div>
           )}
+            </div>
+          </div>
         </main>
       </div>
 
-      {/* Create / Edit Event Modal */}
-      {eventModalOpen && (
-        <div
-          className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 animate-ef-fade-in"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="admin-event-modal-title"
-        >
-          <div className="bg-white border border-slate-200 rounded-2xl max-w-3xl w-full max-h-[92vh] overflow-y-auto animate-ef-modal-in shadow-2xl">
+      {/* Create / Edit Event Modal with smooth scale + backdrop-blur enter/exit */}
+      <AnimatedModal
+        isOpen={eventModalOpen}
+        onClose={() => setEventModalOpen(false)}
+        maxWidthClassName="max-w-3xl"
+        labelledBy="admin-event-modal-title"
+        backdropClassName="bg-slate-900/50 backdrop-blur-xs p-4"
+        panelClassName="bg-white border border-slate-200 rounded-2xl w-full max-h-[92vh] overflow-y-auto shadow-2xl"
+      >
             <div className="sticky top-0 z-10 bg-white px-6 py-4 border-b border-slate-200 flex items-center justify-between">
               <h2 id="admin-event-modal-title" className="text-lg font-bold text-slate-900">
                 {editingEventId ? 'Chỉnh sửa thông tin sự kiện' : 'Tạo sự kiện mới'}
@@ -3090,9 +3200,7 @@ export function AdminLayout({
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+      </AnimatedModal>
     </div>
   );
 }
