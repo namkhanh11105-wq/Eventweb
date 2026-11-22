@@ -115,6 +115,12 @@
 }
 
 @layer base {
+  html,
+  body {
+    overflow-x: clip;
+    max-width: 100%;
+  }
+
   html {
     font-family: var(--font-sans);
     scroll-behavior: smooth;

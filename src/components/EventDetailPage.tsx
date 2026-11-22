@@ -218,11 +218,11 @@ export function EventDetailPage({
       {/* Main Detail Shell */}
       <article className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden">
         {/* Hero Cover Banner */}
-        <div className="relative aspect-[16/6] min-h-[240px] w-full bg-slate-100 overflow-hidden">
+        <div className="relative aspect-[16/10] sm:aspect-[16/6] min-h-[240px] w-full bg-slate-100 overflow-hidden">
           <EventBanner src={event.bannerUrl} alt={event.title} className="w-full h-full" />
-          <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/30 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/35 to-transparent" />
 
-          <div className="absolute bottom-0 inset-x-0 p-6 sm:p-8 text-white">
+          <div className="absolute bottom-0 inset-x-0 p-4 sm:p-8 text-white">
             <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-200">
               <span className="font-semibold text-white">{event.category}</span>
               <span aria-hidden="true">·</span>
@@ -237,10 +237,10 @@ export function EventDetailPage({
                 </>
               )}
             </div>
-            <h1 className="mt-2.5 text-2xl sm:text-3xl font-bold tracking-tight text-balance leading-tight max-w-3xl">
+            <h1 className="mt-2 text-xl sm:text-3xl font-bold tracking-tight text-balance leading-tight max-w-3xl">
               {event.title}
             </h1>
-            <div className="mt-2 inline-flex items-center gap-1.5 text-xs sm:text-sm text-slate-200">
+            <div className="mt-1.5 inline-flex flex-wrap items-center gap-1.5 text-xs sm:text-sm text-slate-200">
               <span>Đơn vị tổ chức:</span>
               <strong className="text-white">{event.organizer}</strong>
               {event.organizerVerified !== false && (
@@ -251,7 +251,7 @@ export function EventDetailPage({
         </div>
 
         {/* Two-column body with Sticky Registration Card */}
-        <div className="p-6 sm:p-8 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        <div className="p-4 sm:p-8 grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8 items-start">
           {/* Left Content Column */}
           <div className="lg:col-span-7 space-y-8">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-xl bg-slate-50/80 border border-slate-200/80">
@@ -498,19 +498,19 @@ export function EventDetailPage({
                       ))}
                     </div>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-col sm:flex-row gap-2">
                     <input
                       type="text"
                       required
                       value={comment}
                       onChange={(e) => setComment(e.target.value)}
                       placeholder="Chia sẻ trải nghiệm của bạn về sự kiện..."
-                      className="flex-1 px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-600"
+                      className="flex-1 min-h-[42px] px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-600"
                     />
                     <button
                       type="submit"
                       disabled={submittingFeedback}
-                      className="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg cursor-pointer shrink-0 disabled:opacity-60"
+                      className="min-h-[42px] px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg cursor-pointer shrink-0 disabled:opacity-60"
                     >
                       {submittingFeedback ? 'Đang gửi...' : 'Gửi'}
                     </button>
@@ -556,7 +556,7 @@ export function EventDetailPage({
           </div>
 
           {/* Right Sticky Registration Card */}
-          <aside className="lg:col-span-5 lg:sticky lg:top-20 bg-slate-50/60 border border-slate-200/80 rounded-2xl p-6 space-y-5">
+          <aside className="lg:col-span-5 lg:sticky lg:top-20 bg-slate-50/60 border border-slate-200/80 rounded-2xl p-4 sm:p-6 space-y-5">
             <div className="flex items-baseline justify-between gap-3">
               <div>
                 <div className="text-xs font-medium text-slate-500">Hình thức tham gia</div>

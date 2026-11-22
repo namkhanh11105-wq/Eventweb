@@ -60,11 +60,11 @@ export function ServicesPage({
               chức.
             </p>
 
-            <div className="pt-2 flex flex-wrap items-center gap-3">
+            <div className="pt-2 flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3">
               <button
                 type="button"
                 onClick={onBookOrganization}
-                className="inline-flex items-center gap-2 h-11 px-6 text-sm font-semibold text-white bg-slate-950 hover:bg-slate-800 rounded-full shadow-sm transition-all duration-200 ease-[cubic-bezier(0.34,1.32,0.64,1)] hover:-translate-y-0.5 active:scale-[0.98] cursor-pointer whitespace-nowrap"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 h-11 px-6 text-sm font-semibold text-white bg-slate-950 hover:bg-slate-800 rounded-full shadow-sm transition-all duration-200 ease-[cubic-bezier(0.34,1.32,0.64,1)] hover:-translate-y-0.5 active:scale-[0.98] cursor-pointer whitespace-nowrap"
               >
                 <span>Đặt dịch vụ / Đăng ký tổ chức</span>
                 <ArrowRight className="w-4 h-4" />
@@ -72,7 +72,7 @@ export function ServicesPage({
               <button
                 type="button"
                 onClick={onGoContact}
-                className="inline-flex items-center gap-2 h-11 px-5 text-sm font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200/90 rounded-full transition-colors cursor-pointer whitespace-nowrap"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 h-11 px-5 text-sm font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200/90 rounded-full transition-colors cursor-pointer whitespace-nowrap"
               >
                 <Phone className="w-4 h-4 text-rose-500" />
                 <span>Nhận tư vấn trực tiếp</span>
@@ -153,12 +153,12 @@ export function ServicesPage({
                 </ul>
               </div>
 
-              <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between gap-3">
+              <div className="mt-6 pt-4 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <span className="text-xs text-slate-500">Hỗ trợ đồng bộ đại biểu &amp; diễn giả</span>
                 <button
                   type="button"
                   onClick={onBookOrganization}
-                  className="inline-flex items-center gap-1.5 h-10 px-4 text-xs font-semibold text-white bg-slate-950 hover:bg-slate-800 rounded-full transition-colors cursor-pointer whitespace-nowrap"
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 h-10 px-4 text-xs font-semibold text-white bg-slate-950 hover:bg-slate-800 rounded-full transition-colors cursor-pointer whitespace-nowrap"
                 >
                   <span>Đặt gói dịch vụ này</span>
                   <ArrowRight className="w-3.5 h-3.5" />
@@ -274,14 +274,14 @@ export function ServicesPage({
                 </p>
               </div>
 
-              <div className="relative mt-6 pt-5 border-t border-white/10 flex flex-wrap items-center justify-between gap-4">
+              <div className="relative mt-6 pt-5 border-t border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="text-xs text-slate-300">
                   Phản hồi kế hoạch trực tiếp qua cổng Tổ chức
                 </div>
                 <button
                   type="button"
                   onClick={onBookOrganization}
-                  className="inline-flex items-center gap-2 h-11 px-6 text-xs sm:text-sm font-semibold text-slate-950 bg-white hover:bg-slate-100 rounded-full transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] cursor-pointer whitespace-nowrap"
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 h-11 px-6 text-xs sm:text-sm font-semibold text-slate-950 bg-white hover:bg-slate-100 rounded-full transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] cursor-pointer whitespace-nowrap"
                 >
                   <span>Đặt dịch vụ / Đăng ký tổ chức</span>
                   <ArrowRight className="w-4 h-4" />
@@ -382,11 +382,11 @@ export function ServicesPage({
                 hệ trực tiếp qua số {publicContact.phone} để được tư vấn nhanh.
               </p>
             </div>
-            <div className="flex flex-wrap items-center gap-3 shrink-0">
+            <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3 shrink-0">
               <button
                 type="button"
                 onClick={onBookOrganization}
-                className="inline-flex items-center gap-2 h-11 px-6 text-sm font-semibold text-white bg-slate-950 hover:bg-slate-800 rounded-full transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98] cursor-pointer whitespace-nowrap"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 h-11 px-6 text-sm font-semibold text-white bg-slate-950 hover:bg-slate-800 rounded-full transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98] cursor-pointer whitespace-nowrap"
               >
                 <span>Đặt dịch vụ / Đăng ký tổ chức</span>
                 <ArrowRight className="w-4 h-4" />
@@ -394,7 +394,7 @@ export function ServicesPage({
               <button
                 type="button"
                 onClick={onGoContact}
-                className="inline-flex items-center gap-2 h-11 px-5 text-sm font-semibold text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200/80 rounded-full transition-colors cursor-pointer whitespace-nowrap"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 h-11 px-5 text-sm font-semibold text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200/80 rounded-full transition-colors cursor-pointer whitespace-nowrap"
               >
                 <span>Trang Liên hệ</span>
               </button>

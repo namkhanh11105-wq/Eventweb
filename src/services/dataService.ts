@@ -17,10 +17,8 @@ import {
   setDoc,
   updateDoc,
   where,
-  writeBatch,
 } from 'firebase/firestore';
 import { auth, db, handleFirestoreError, isFirebaseConfigured, OperationType } from '../firebase';
-import { buildSeedData } from '../data/seedData';
 import { DEFAULT_PUBLIC_CONTACT, generateTicketCode } from '../utils/formatters';
 import type {
   AppUser,
@@ -364,71 +362,6 @@ export async function loginAccount(emailInput: string, password: string): Promis
   }
 }
 
-export async function loginAsDemo(role: UserRole): Promise<AppUser> {
-  const { auth: firebaseAuth, db: firestore } = requireFirebase();
-  const demoConfig: Record<
-    UserRole,
-    { email: string; password: string; fullName: string; phone: string; organization: string }
-  > = {
-    admin: {
-      email: 'admin@eventflow.vn',
-      password: 'DemoAdmin@2026',
-      fullName: 'Nguyễn Minh Quản Trị',
-      phone: '0900000001',
-      organization: 'EventFlow Enterprise',
-    },
-    user: {
-      email: 'user@eventflow.vn',
-      password: 'DemoUser@2026',
-      fullName: 'Trần Thu Hà',
-      phone: '0901234567',
-      organization: 'Product Studio',
-    },
-  };
-
-  const cfg = demoConfig[role];
-
-  try {
-    const cred = await signInWithEmailAndPassword(firebaseAuth, cfg.email, cfg.password);
-    const profile: AppUser = {
-      uid: cred.user.uid,
-      fullName: cfg.fullName,
-      email: cfg.email,
-      phone: cfg.phone,
-      role,
-      organization: cfg.organization,
-      createdAt: new Date().toISOString(),
-    };
-    try {
-      await setDoc(doc(firestore, 'users', cred.user.uid), profile, { merge: true });
-    } catch {
-      // Ignore if rules block profile write
-    }
-    return profile;
-  } catch {
-    try {
-      const cred = await createUserWithEmailAndPassword(firebaseAuth, cfg.email, cfg.password);
-      const profile: AppUser = {
-        uid: cred.user.uid,
-        fullName: cfg.fullName,
-        email: cfg.email,
-        phone: cfg.phone,
-        role,
-        organization: cfg.organization,
-        createdAt: new Date().toISOString(),
-      };
-      try {
-        await setDoc(doc(firestore, 'users', cred.user.uid), profile);
-      } catch {
-        // Ignore
-      }
-      return profile;
-    } catch (createErr) {
-      throw new Error(mapFirebaseAuthError(createErr));
-    }
-  }
-}
-
 export async function logoutAccount(): Promise<void> {
   const { auth: firebaseAuth } = requireFirebase();
   await signOut(firebaseAuth);
@@ -578,53 +511,6 @@ export function subscribeFeedbacks(
       callback([]);
     }
   );
-}
-
-export async function seedSampleData(): Promise<{
-  usersCount: number;
-  eventsCount: number;
-  registrationsCount: number;
-  feedbacksCount: number;
-}> {
-  const { db: firestore } = requireFirebase();
-  const { users, events, registrations, feedbacks, publicContact } = buildSeedData();
-
-  try {
-    const batch = writeBatch(firestore);
-    for (const u of users) {
-      batch.set(doc(firestore, 'users', u.uid), sanitizeForFirestore(u), { merge: true });
-    }
-    for (const ev of events) {
-      batch.set(doc(firestore, 'events', ev.id), sanitizeForFirestore(ev));
-    }
-    for (const reg of registrations) {
-      batch.set(doc(firestore, 'registrations', reg.id), sanitizeForFirestore(reg));
-    }
-    for (const fb of feedbacks) {
-      batch.set(doc(firestore, 'feedbacks', fb.id), sanitizeForFirestore(fb));
-    }
-    await batch.commit();
-
-    try {
-      await setDoc(
-        doc(firestore, 'site_settings', 'public_contact'),
-        sanitizeForFirestore(publicContact),
-        { merge: true }
-      );
-    } catch {
-      // Ignore if Firestore rules restrict site_settings separately
-    }
-
-    return {
-      usersCount: users.length,
-      eventsCount: events.length,
-      registrationsCount: registrations.length,
-      feedbacksCount: feedbacks.length,
-    };
-  } catch (err) {
-    handleFirestoreError(err, OperationType.WRITE, 'users+events+registrations+feedbacks');
-    throw err;
-  }
 }
 
 export async function createEvent(input: EventFormInput): Promise<EventItem> {

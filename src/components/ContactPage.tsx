@@ -115,8 +115,8 @@ export function ContactPage({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         {/* Left Column: Direct Admin Contact + Smooth Accordion FAQ */}
         <div className="lg:col-span-6 space-y-6">
-          <section className="bg-white border border-slate-200/80 rounded-2xl p-6 space-y-5">
-            <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-4">
+          <section className="bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-6 space-y-5">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-4">
               <div>
                 <div className="text-xs font-medium text-slate-500">
                   Thông tin Ban quản trị (Đồng bộ Firestore)
@@ -134,7 +134,7 @@ export function ContactPage({
             <div className="space-y-2.5 text-sm">
               <a
                 href={`tel:${publicContact.phone.replace(/\s+/g, '')}`}
-                className="flex items-center justify-between gap-3 p-3.5 rounded-xl bg-slate-50/80 border border-slate-200/80 hover:border-indigo-300 hover:bg-white transition-colors"
+                className="flex flex-wrap items-center justify-between gap-2 p-3.5 rounded-xl bg-slate-50/80 border border-slate-200/80 hover:border-indigo-300 hover:bg-white transition-colors"
               >
                 <span className="inline-flex items-center gap-2.5 text-slate-600 font-medium">
                   <Phone className="w-4 h-4 text-indigo-600 shrink-0" />
@@ -145,7 +145,7 @@ export function ContactPage({
                 </strong>
               </a>
 
-              <div className="flex items-center justify-between gap-3 p-3.5 rounded-xl bg-slate-50/80 border border-slate-200/80">
+              <div className="flex flex-wrap items-center justify-between gap-2 p-3.5 rounded-xl bg-slate-50/80 border border-slate-200/80">
                 <span className="inline-flex items-center gap-2.5 text-slate-600 font-medium">
                   <Phone className="w-4 h-4 text-slate-400 shrink-0" />
                   <span>Tổng đài tư vấn</span>
@@ -157,13 +157,13 @@ export function ContactPage({
 
               <a
                 href={`mailto:${publicContact.email}`}
-                className="flex items-center justify-between gap-3 p-3.5 rounded-xl bg-slate-50/80 border border-slate-200/80 hover:border-indigo-300 hover:bg-white transition-colors"
+                className="flex flex-wrap items-center justify-between gap-2 p-3.5 rounded-xl bg-slate-50/80 border border-slate-200/80 hover:border-indigo-300 hover:bg-white transition-colors"
               >
-                <span className="inline-flex items-center gap-2.5 text-slate-600 font-medium">
+                <span className="inline-flex items-center gap-2.5 text-slate-600 font-medium shrink-0">
                   <Mail className="w-4 h-4 text-indigo-600 shrink-0" />
                   <span>Email Ban quản trị</span>
                 </span>
-                <strong className="font-semibold text-indigo-700 truncate">
+                <strong className="font-semibold text-indigo-700 break-all sm:truncate">
                   {publicContact.email}
                 </strong>
               </a>
@@ -221,7 +221,7 @@ export function ContactPage({
 
         {/* Right Column: Quick Consultation Request Form -> Firestore */}
         <div className="lg:col-span-6">
-          <section className="bg-white border border-slate-200/80 rounded-2xl p-6 sm:p-8 space-y-5">
+          <section className="bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-8 space-y-5">
             <div>
               <h2 className="text-lg font-bold text-slate-900">Gửi yêu cầu tư vấn nhanh</h2>
               <p className="mt-1 text-xs sm:text-sm text-slate-500">
@@ -277,7 +277,7 @@ export function ContactPage({
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
                     placeholder="Nguyễn Minh Anh"
-                    className="w-full h-10 px-3.5 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-600 transition-colors"
+                    className="w-full h-11 px-3.5 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-600 transition-colors"
                   />
                 </div>
 
@@ -291,7 +291,7 @@ export function ContactPage({
                     value={contactInfo}
                     onChange={(e) => setContactInfo(e.target.value)}
                     placeholder="0901 234 567 hoặc email@congty.vn"
-                    className="w-full h-10 px-3.5 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-600 transition-colors"
+                    className="w-full h-11 px-3.5 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-600 transition-colors"
                   />
                 </div>
 
@@ -302,7 +302,7 @@ export function ContactPage({
                   <select
                     value={topic}
                     onChange={(e) => setTopic(e.target.value)}
-                    className="w-full h-10 px-3.5 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-600 cursor-pointer transition-colors"
+                    className="w-full h-11 px-3.5 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-600 cursor-pointer transition-colors"
                   >
                     {INQUIRY_TOPICS.map((t) => (
                       <option key={t} value={t}>

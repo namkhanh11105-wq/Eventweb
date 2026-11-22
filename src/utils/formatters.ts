@@ -10,6 +10,45 @@ import type {
   ServiceRequestStatus,
 } from '../types';
 
+export interface BannerPreset {
+  id: string;
+  label: string;
+  url: string;
+}
+
+export const DEFAULT_EVENT_BANNERS: BannerPreset[] = [
+  {
+    id: 'tech-summit',
+    label: 'Hội nghị Công nghệ',
+    url: '/src/assets/images/event_tech_summit_1795132976833.jpg',
+  },
+  {
+    id: 'design-workshop',
+    label: 'Workshop Chuyên đề',
+    url: '/src/assets/images/event_design_workshop_1795132977362.jpg',
+  },
+  {
+    id: 'startup-seminar',
+    label: 'Seminar & Hội thảo',
+    url: '/src/assets/images/event_startup_demo_1795132977076.jpg',
+  },
+  {
+    id: 'music-festival',
+    label: 'Gala Doanh nghiệp',
+    url: '/src/assets/images/event_music_festival_1795132976683.jpg',
+  },
+  {
+    id: 'ai-hackathon',
+    label: 'Đào tạo Nội bộ',
+    url: '/src/assets/images/event_ai_hackathon_1795132976875.jpg',
+  },
+  {
+    id: 'sports-marathon',
+    label: 'Hoạt động Gắn kết',
+    url: '/src/assets/images/event_sports_marathon_1795139559931.jpg',
+  },
+];
+
 export const EVENT_CATEGORIES: EventCategory[] = [
   'Hội nghị công nghệ',
   'Workshop chuyên đề',

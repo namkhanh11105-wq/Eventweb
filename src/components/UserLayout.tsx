@@ -26,7 +26,6 @@ import {
   Users,
   X,
 } from 'lucide-react';
-import { DEFAULT_EVENT_BANNERS } from '../data/seedData';
 import {
   createOrganizerEventRequest,
   submitFeedback,
@@ -51,6 +50,7 @@ import {
 import { PublicFooter } from './PublicFooter';
 import { ServicesPage } from './ServicesPage';
 import {
+  DEFAULT_EVENT_BANNERS,
   ENTERPRISE_PARTNERS,
   EVENT_CATEGORIES,
   EVENT_STATUS_META,
@@ -727,101 +727,213 @@ export function UserLayout({
 
           <button
             type="button"
-            aria-label="Mở menu điều hướng"
+            aria-label={mobileMenuOpen ? 'Đóng menu điều hướng' : 'Mở menu điều hướng'}
+            aria-expanded={mobileMenuOpen}
             onClick={() => setMobileMenuOpen((prev) => !prev)}
-            className="md:hidden p-2 rounded-lg text-slate-600 hover:bg-slate-100 cursor-pointer"
+            className="md:hidden min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-xl text-slate-700 hover:bg-slate-100 active:scale-[0.97] transition-all cursor-pointer"
           >
             {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
         </div>
+      </header>
 
-        {mobileMenuOpen && (
-          <div className="md:hidden border-t border-slate-200 bg-white px-4 py-4 space-y-1.5 animate-ef-fade-in">
-            <button
-              type="button"
-              onClick={() => smoothNavigatePage('discover')}
-              className={`w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium ${
-                activePage === 'discover' || activePage === 'event_detail'
-                  ? 'bg-slate-900 text-white font-semibold'
-                  : 'text-slate-700 hover:bg-slate-100'
-              }`}
-            >
-              Khám phá sự kiện
-            </button>
-            <button
-              type="button"
-              onClick={() => smoothNavigatePage('services')}
-              className={`w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium ${
-                activePage === 'services'
-                  ? 'bg-slate-900 text-white font-semibold'
-                  : 'text-slate-700 hover:bg-slate-100'
-              }`}
-            >
-              Dịch vụ tổ chức sự kiện
-            </button>
-            <button
-              type="button"
-              onClick={() => smoothNavigatePage('contact')}
-              className={`w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium ${
-                activePage === 'contact'
-                  ? 'bg-slate-900 text-white font-semibold'
-                  : 'text-slate-700 hover:bg-slate-100'
-              }`}
-            >
-              Liên hệ Ban quản trị
-            </button>
-            {currentUser && (
+      {/* Slide-out Mobile Navigation Drawer */}
+      <div
+        className={`fixed inset-0 z-50 md:hidden transition-opacity duration-250 ${
+          mobileMenuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+        }`}
+        aria-hidden={!mobileMenuOpen}
+      >
+        <div
+          className="absolute inset-0 bg-slate-900/45 backdrop-blur-[2px]"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+        <aside
+          role="dialog"
+          aria-modal="true"
+          aria-label="Menu điều hướng di động"
+          className={`absolute inset-y-0 right-0 w-[84vw] max-w-xs bg-white border-l border-slate-200 shadow-2xl flex flex-col justify-between transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+            mobileMenuOpen ? 'translate-x-0' : 'translate-x-full'
+          }`}
+        >
+          <div className="flex flex-col flex-1 min-h-0 overflow-y-auto">
+            <div className="h-14 px-4 border-b border-slate-200/80 flex items-center justify-between shrink-0">
               <button
                 type="button"
-                onClick={() => smoothNavigatePage('tickets')}
-                className={`w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium ${
-                  activePage === 'tickets'
+                onClick={() => smoothNavigatePage('discover')}
+                className="inline-flex items-center gap-2 text-[15px] font-bold tracking-tight text-slate-900 cursor-pointer"
+              >
+                <span className="w-7 h-7 rounded-lg bg-gradient-to-br from-rose-500 to-orange-500 text-white flex items-center justify-center shadow-xs">
+                  <CalendarDays className="w-4 h-4" />
+                </span>
+                <span>EventFlow</span>
+              </button>
+              <button
+                type="button"
+                aria-label="Đóng menu điều hướng"
+                onClick={() => setMobileMenuOpen(false)}
+                className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-xl text-slate-500 hover:text-slate-900 hover:bg-slate-100 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {currentUser && (
+              <div className="mx-4 mt-4 p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-center gap-3">
+                <div
+                  className={`w-10 h-10 rounded-xl border text-sm font-bold flex items-center justify-center shrink-0 ${
+                    currentUser.role === 'admin'
+                      ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
+                      : 'bg-white border-slate-200 text-slate-800'
+                  }`}
+                >
+                  {currentUser.fullName.trim().charAt(0).toUpperCase() || 'U'}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-bold text-slate-900 truncate">
+                    {currentUser.fullName}
+                  </div>
+                  <div className="text-xs text-slate-500 truncate">{currentUser.email}</div>
+                  <span
+                    className={`mt-1 inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold rounded-full ${
+                      currentUser.role === 'admin'
+                        ? 'bg-indigo-600 text-white'
+                        : 'bg-slate-200/80 text-slate-700'
+                    }`}
+                  >
+                    {currentUser.role === 'admin' && <ShieldCheck className="w-3 h-3" />}
+                    <span>
+                      {currentUser.role === 'admin' ? 'Quản trị viên' : 'Tài khoản thành viên'}
+                    </span>
+                  </span>
+                </div>
+              </div>
+            )}
+
+            <nav className="p-4 space-y-1.5">
+              <div className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                Điều hướng
+              </div>
+              <button
+                type="button"
+                onClick={() => smoothNavigatePage('discover')}
+                className={`w-full min-h-[44px] flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm transition-colors cursor-pointer ${
+                  activePage === 'discover' || activePage === 'event_detail'
                     ? 'bg-slate-900 text-white font-semibold'
-                    : 'text-slate-700 hover:bg-slate-100'
+                    : 'text-slate-700 hover:bg-slate-100 font-medium'
                 }`}
               >
-                Sự kiện của tôi
+                <span>Khám phá sự kiện</span>
+                <ArrowRight className="w-4 h-4 opacity-60" />
               </button>
-            )}
-            {onSwitchToAdmin && (
+              <button
+                type="button"
+                onClick={() => smoothNavigatePage('services')}
+                className={`w-full min-h-[44px] flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm transition-colors cursor-pointer ${
+                  activePage === 'services'
+                    ? 'bg-slate-900 text-white font-semibold'
+                    : 'text-slate-700 hover:bg-slate-100 font-medium'
+                }`}
+              >
+                <span>Dịch vụ tổ chức sự kiện</span>
+                <ArrowRight className="w-4 h-4 opacity-60" />
+              </button>
+              <button
+                type="button"
+                onClick={() => smoothNavigatePage('contact')}
+                className={`w-full min-h-[44px] flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm transition-colors cursor-pointer ${
+                  activePage === 'contact'
+                    ? 'bg-slate-900 text-white font-semibold'
+                    : 'text-slate-700 hover:bg-slate-100 font-medium'
+                }`}
+              >
+                <span>Liên hệ Ban quản trị</span>
+                <ArrowRight className="w-4 h-4 opacity-60" />
+              </button>
+              {currentUser && (
+                <button
+                  type="button"
+                  onClick={() => smoothNavigatePage('tickets')}
+                  className={`w-full min-h-[44px] flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm transition-colors cursor-pointer ${
+                    activePage === 'tickets'
+                      ? 'bg-slate-900 text-white font-semibold'
+                      : 'text-slate-700 hover:bg-slate-100 font-medium'
+                  }`}
+                >
+                  <span>Sự kiện của tôi</span>
+                  <span
+                    className={`text-xs font-bold px-2 py-0.5 rounded-full tabular-nums ${
+                      activePage === 'tickets'
+                        ? 'bg-white/20 text-white'
+                        : 'bg-slate-100 text-slate-700'
+                    }`}
+                  >
+                    {myRegistrations.length + myRequests.length}
+                  </span>
+                </button>
+              )}
+
+              {onSwitchToAdmin && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    onSwitchToAdmin();
+                  }}
+                  className="w-full min-h-[44px] mt-2 flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200/80 hover:bg-indigo-100 transition-colors cursor-pointer"
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4" />
+                    <span>Không gian Quản trị viên</span>
+                  </span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              )}
+            </nav>
+          </div>
+
+          <div className="p-4 border-t border-slate-200/80 bg-slate-50/70 space-y-2.5 shrink-0">
+            {currentUser ? (
               <button
                 type="button"
                 onClick={() => {
                   setMobileMenuOpen(false);
-                  onSwitchToAdmin();
+                  onLogout();
                 }}
-                className="w-full text-left px-3 py-2.5 rounded-xl text-sm font-semibold text-indigo-700 bg-indigo-50"
+                className="w-full min-h-[44px] inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-rose-700 bg-white hover:bg-rose-50 border border-rose-200/80 transition-colors cursor-pointer"
               >
-                Không gian Quản trị viên
+                <LogOut className="w-4 h-4" />
+                <span>Đăng xuất tài khoản</span>
               </button>
-            )}
-            <div className="pt-2 border-t border-slate-100">
-              {currentUser ? (
-                <button
-                  type="button"
-                  onClick={onLogout}
-                  className="w-full text-left px-3 py-2 rounded-xl text-sm font-medium text-rose-700 hover:bg-rose-50"
-                >
-                  Đăng xuất ({currentUser.fullName})
-                </button>
-              ) : (
+            ) : (
+              <div className="grid grid-cols-2 gap-2.5">
                 <button
                   type="button"
                   onClick={() => {
                     setMobileMenuOpen(false);
                     onOpenAuth('login');
                   }}
-                  className="w-full text-center px-4 py-2.5 rounded-full text-sm font-semibold text-white bg-slate-950"
+                  className="min-h-[44px] px-3 py-2.5 rounded-xl text-sm font-semibold text-slate-800 bg-white border border-slate-200 hover:bg-slate-100 transition-colors cursor-pointer"
                 >
-                  Đăng nhập / Đăng ký
+                  Đăng nhập
                 </button>
-              )}
-            </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    onOpenAuth('register');
+                  }}
+                  className="min-h-[44px] px-3 py-2.5 rounded-xl text-sm font-semibold text-white bg-slate-950 hover:bg-slate-800 transition-colors cursor-pointer"
+                >
+                  Đăng ký
+                </button>
+              </div>
+            )}
           </div>
-        )}
-      </header>
+        </aside>
+      </div>
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-8">
         {permissionWarning && currentUser && (
           <div
             role="alert"
@@ -1065,7 +1177,7 @@ export function UserLayout({
                             </div>
                           </div>
 
-                          <div className="pt-4 border-t border-slate-100 flex items-center justify-between gap-4">
+                          <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
                             <div className="text-xs text-slate-500 tabular-nums">
                               Đã giữ chỗ:{' '}
                               <strong className="text-slate-900">
@@ -1078,7 +1190,7 @@ export function UserLayout({
                                 e.stopPropagation();
                                 smoothOpenEventDetail(featuredEvent.id);
                               }}
-                              className="h-10 px-5 text-sm font-semibold text-white bg-slate-950 hover:bg-slate-800 rounded-full transition-all duration-150 active:scale-[0.98] cursor-pointer whitespace-nowrap"
+                              className="w-full sm:w-auto h-11 sm:h-10 px-5 text-sm font-semibold text-white bg-slate-950 hover:bg-slate-800 rounded-full transition-all duration-150 active:scale-[0.98] cursor-pointer whitespace-nowrap"
                             >
                               Xem chi tiết &amp; Đăng ký
                             </button>
@@ -1149,24 +1261,24 @@ export function UserLayout({
                       ))}
                     </div>
                   ) : filteredEvents.length === 0 ? (
-                    <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center">
+                    <div className="bg-white border border-slate-200 rounded-2xl p-8 sm:p-12 text-center">
                       <Calendar className="w-10 h-10 text-slate-300 mx-auto" />
                       <h2 className="mt-4 text-base font-bold text-slate-900">
                         {publicEvents.length === 0
-                          ? 'Chưa có sự kiện công khai nào được hiển thị'
+                          ? 'Hiện chưa có sự kiện công khai nào đang mở'
                           : 'Không tìm thấy sự kiện phù hợp'}
                       </h2>
                       <p className="mt-1.5 text-sm text-slate-500 max-w-lg mx-auto">
                         {publicEvents.length === 0
-                          ? 'Hãy đăng nhập Demo Admin để tạo dữ liệu mẫu (Seed Data) hoặc liên hệ trực tiếp với Ban quản trị.'
+                          ? 'Các sự kiện mới đang được Ban quản trị cập nhật trực tiếp trên hệ thống. Bạn có thể gửi yêu cầu tổ chức sự kiện riêng hoặc liên hệ để được hỗ trợ.'
                           : 'Thử thay đổi bộ lọc danh mục, trạng thái hoặc xóa từ khóa tìm kiếm.'}
                       </p>
-                      <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
+                      <div className="mt-5 flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center justify-center gap-3">
                         {publicEvents.length > 0 && (
                           <button
                             type="button"
                             onClick={resetAllFilters}
-                            className="px-4 py-2 text-sm font-semibold text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-full cursor-pointer transition-colors"
+                            className="min-h-[42px] px-5 py-2.5 text-sm font-semibold text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-full cursor-pointer transition-colors"
                           >
                             Đặt lại bộ lọc
                           </button>
@@ -1175,18 +1287,36 @@ export function UserLayout({
                           <button
                             type="button"
                             onClick={() => onOpenAuth('login')}
-                            className="px-5 py-2.5 text-sm font-semibold text-white bg-slate-950 hover:bg-slate-800 rounded-full cursor-pointer transition-colors"
+                            className="min-h-[42px] px-5 py-2.5 text-sm font-semibold text-white bg-slate-950 hover:bg-slate-800 rounded-full cursor-pointer transition-colors"
                           >
                             Đăng nhập / Đăng ký ngay
+                          </button>
+                        )}
+                        {currentUser && currentUser.role !== 'admin' && publicEvents.length === 0 && (
+                          <button
+                            type="button"
+                            onClick={() => smoothNavigatePage('tickets', 'requests', true)}
+                            className="min-h-[42px] px-5 py-2.5 text-sm font-semibold text-white bg-slate-950 hover:bg-slate-800 rounded-full cursor-pointer transition-colors"
+                          >
+                            Tạo yêu cầu tổ chức sự kiện
+                          </button>
+                        )}
+                        {publicEvents.length === 0 && (
+                          <button
+                            type="button"
+                            onClick={() => smoothNavigatePage('contact')}
+                            className="min-h-[42px] px-5 py-2.5 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-full cursor-pointer transition-colors"
+                          >
+                            Liên hệ Ban quản trị
                           </button>
                         )}
                         {onSwitchToAdmin && publicEvents.length === 0 && (
                           <button
                             type="button"
                             onClick={onSwitchToAdmin}
-                            className="px-5 py-2.5 text-sm font-semibold text-white bg-slate-950 hover:bg-slate-800 rounded-full cursor-pointer transition-colors"
+                            className="min-h-[42px] px-5 py-2.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-full cursor-pointer transition-colors"
                           >
-                            Đi tới Admin Portal để Seed Data
+                            Mở Không gian Quản trị
                           </button>
                         )}
                       </div>
@@ -1327,7 +1457,7 @@ export function UserLayout({
                     <button
                       type="button"
                       onClick={() => smoothNavigatePage('services')}
-                      className="inline-flex items-center gap-1.5 h-9 px-4 text-xs font-semibold text-white bg-slate-950 hover:bg-slate-800 rounded-full transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                      className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 h-10 sm:h-9 px-4 text-xs font-semibold text-white bg-slate-950 hover:bg-slate-800 rounded-full transition-colors whitespace-nowrap shrink-0 cursor-pointer"
                     >
                       <span>Khám phá gói dịch vụ tổ chức</span>
                       <ArrowRight className="w-3.5 h-3.5" />
@@ -1357,7 +1487,7 @@ export function UserLayout({
                         setShowCreateRequestForm(true);
                         onNavigatePage('tickets', 'requests');
                       }}
-                      className="inline-flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-slate-950 hover:bg-slate-800 rounded-full shadow-xs transition-all duration-150 active:scale-[0.98] cursor-pointer whitespace-nowrap shrink-0"
+                      className="w-full sm:w-auto min-h-[44px] inline-flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-slate-950 hover:bg-slate-800 rounded-full shadow-xs transition-all duration-150 active:scale-[0.98] cursor-pointer whitespace-nowrap shrink-0"
                     >
                       <Plus className="w-4 h-4" />
                       <span>Tạo yêu cầu tổ chức sự kiện</span>
@@ -1366,7 +1496,7 @@ export function UserLayout({
                 </div>
 
                 {!currentUser ? (
-                  <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center">
+                  <div className="bg-white border border-slate-200 rounded-2xl p-8 sm:p-10 text-center">
                     <Ticket className="w-10 h-10 text-slate-300 mx-auto" />
                     <p className="mt-3 text-sm text-slate-600">
                       Hãy đăng nhập để xem sự kiện bạn đã đăng ký tham gia hoặc gửi yêu cầu tổ chức
@@ -1375,7 +1505,7 @@ export function UserLayout({
                     <button
                       type="button"
                       onClick={() => onOpenAuth('login')}
-                      className="mt-4 px-5 py-2.5 text-sm font-semibold text-white bg-slate-950 hover:bg-slate-800 rounded-full cursor-pointer"
+                      className="mt-4 min-h-[44px] px-5 py-2.5 text-sm font-semibold text-white bg-slate-950 hover:bg-slate-800 rounded-full cursor-pointer"
                     >
                       Đăng nhập ngay
                     </button>
@@ -1386,7 +1516,7 @@ export function UserLayout({
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div
                         ref={myEventsTabRef}
-                        className="relative inline-flex items-center gap-1 p-1 bg-slate-100 border border-slate-200/80 rounded-full"
+                        className="relative w-full sm:w-auto grid grid-cols-2 sm:inline-flex items-center gap-1 p-1 bg-slate-100 border border-slate-200/80 rounded-full"
                       >
                         <span
                           aria-hidden="true"
@@ -1406,14 +1536,17 @@ export function UserLayout({
                             setMyEventsTab('registered');
                             onNavigatePage('tickets', 'registered');
                           }}
-                          className={`relative z-10 inline-flex items-center gap-2 px-4 py-2 text-xs sm:text-sm rounded-full transition-colors cursor-pointer whitespace-nowrap ${
+                          className={`relative z-10 min-h-[40px] inline-flex items-center justify-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 text-xs sm:text-sm rounded-full transition-colors cursor-pointer whitespace-nowrap ${
                             myEventsTab === 'registered'
                               ? 'text-slate-900 font-semibold'
                               : 'text-slate-600 hover:text-slate-900 font-medium'
                           }`}
                         >
-                          <Ticket className="w-3.5 h-3.5" />
-                          <span>Đã đăng ký tham gia ({myRegistrations.length})</span>
+                          <Ticket className="w-3.5 h-3.5 shrink-0" />
+                          <span className="sm:hidden">Đã ĐK ({myRegistrations.length})</span>
+                          <span className="hidden sm:inline">
+                            Đã đăng ký tham gia ({myRegistrations.length})
+                          </span>
                         </button>
                         <button
                           ref={setMyEventsTabRef('requests')}
@@ -1422,14 +1555,17 @@ export function UserLayout({
                             setMyEventsTab('requests');
                             onNavigatePage('tickets', 'requests');
                           }}
-                          className={`relative z-10 inline-flex items-center gap-2 px-4 py-2 text-xs sm:text-sm rounded-full transition-colors cursor-pointer whitespace-nowrap ${
+                          className={`relative z-10 min-h-[40px] inline-flex items-center justify-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 text-xs sm:text-sm rounded-full transition-colors cursor-pointer whitespace-nowrap ${
                             myEventsTab === 'requests'
                               ? 'text-slate-900 font-semibold'
                               : 'text-slate-600 hover:text-slate-900 font-medium'
                           }`}
                         >
-                          <ClipboardList className="w-3.5 h-3.5" />
-                          <span>Yêu cầu tổ chức ({myRequests.length})</span>
+                          <ClipboardList className="w-3.5 h-3.5 shrink-0" />
+                          <span className="sm:hidden">Yêu cầu ({myRequests.length})</span>
+                          <span className="hidden sm:inline">
+                            Yêu cầu tổ chức ({myRequests.length})
+                          </span>
                         </button>
                       </div>
                     </div>
@@ -1516,16 +1652,16 @@ export function UserLayout({
                                       </div>
                                     </div>
 
-                                    <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
+                                    <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2.5">
                                       <span className="font-mono text-xs font-semibold text-slate-700">
                                         Mã: {reg.ticketCode}
                                       </span>
-                                      <div className="flex items-center gap-2">
+                                      <div className="flex flex-wrap items-center gap-2">
                                         {linkedEvent && (
                                           <button
                                             type="button"
                                             onClick={() => smoothOpenEventDetail(linkedEvent.id)}
-                                            className="px-3 py-1.5 text-xs font-semibold text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-full cursor-pointer transition-colors"
+                                            className="min-h-[36px] px-3.5 py-1.5 text-xs font-semibold text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-full cursor-pointer transition-colors"
                                           >
                                             Chi tiết
                                           </button>
@@ -1538,7 +1674,7 @@ export function UserLayout({
                                               setRatingValue(5);
                                               setRatingComment('');
                                             }}
-                                            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-full cursor-pointer transition-colors"
+                                            className="min-h-[36px] inline-flex items-center gap-1 px-3.5 py-1.5 text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-full cursor-pointer transition-colors"
                                           >
                                             <Star className="w-3.5 h-3.5" />
                                             <span>Đánh giá</span>
@@ -1548,7 +1684,7 @@ export function UserLayout({
                                           <button
                                             type="button"
                                             onClick={() => handleCancelTicket(reg)}
-                                            className="px-3 py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-full cursor-pointer transition-colors"
+                                            className="min-h-[36px] px-3.5 py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-full cursor-pointer transition-colors"
                                           >
                                             Hủy tham gia
                                           </button>
@@ -1557,7 +1693,7 @@ export function UserLayout({
                                     </div>
                                   </div>
 
-                                  <div className="sm:w-44 bg-slate-50 border-t sm:border-t-0 sm:border-l border-dashed border-slate-300 p-5 flex flex-col items-center justify-center text-center shrink-0">
+                                  <div className="sm:w-44 bg-slate-50 border-t sm:border-t-0 sm:border-l border-dashed border-slate-300 p-4 sm:p-5 flex flex-col items-center justify-center text-center shrink-0">
                                     <div className="p-2.5 bg-white rounded-xl border border-slate-200">
                                       <QRCodeSVG
                                         value={qrPayload}
@@ -1587,7 +1723,7 @@ export function UserLayout({
                         {showCreateRequestForm ? (
                           <div
                             ref={reqFormContainerRef}
-                            className="max-w-4xl mx-auto bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 space-y-6 animate-ef-fade-in"
+                            className="max-w-4xl mx-auto bg-white border border-slate-200 rounded-2xl p-4 sm:p-8 space-y-6 animate-ef-fade-in"
                           >
                             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-4">
                               <div>
@@ -1763,7 +1899,7 @@ export function UserLayout({
                                     className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:border-slate-900"
                                   />
                                 </div>
-                                <div className="mt-2.5 grid grid-cols-3 sm:grid-cols-6 gap-2">
+                                <div className="mt-2.5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2.5">
                                   {DEFAULT_EVENT_BANNERS.map((preset) => {
                                     const selected = reqBannerUrl === preset.url;
                                     return (
@@ -1780,9 +1916,9 @@ export function UserLayout({
                                         <img
                                           src={preset.url}
                                           alt={preset.label}
-                                          className="w-full h-12 object-cover"
+                                          className="w-full h-14 sm:h-12 object-cover"
                                         />
-                                        <div className="px-1.5 py-1 text-[10px] font-medium text-slate-700 truncate bg-white">
+                                        <div className="px-2 py-1 text-[11px] sm:text-[10px] font-medium text-slate-700 truncate bg-white">
                                           {preset.label}
                                         </div>
                                         {selected && (
@@ -1805,21 +1941,21 @@ export function UserLayout({
                                 onChangeCustomServiceName={setReqCustomServiceName}
                               />
 
-                              <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-200">
+                              <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2.5 sm:gap-3 pt-3 border-t border-slate-200">
                                 <button
                                   type="button"
                                   onClick={() => {
                                     setReqFormError(null);
                                     setShowCreateRequestForm(false);
                                   }}
-                                  className="px-4 py-2.5 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-full cursor-pointer"
+                                  className="w-full sm:w-auto min-h-[44px] px-5 py-2.5 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-full cursor-pointer"
                                 >
                                   Hủy
                                 </button>
                                 <button
                                   type="submit"
                                   disabled={reqSubmitting}
-                                  className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-semibold text-white bg-slate-950 hover:bg-slate-800 rounded-full cursor-pointer disabled:opacity-60"
+                                  className="w-full sm:w-auto min-h-[44px] inline-flex items-center justify-center gap-2 px-6 py-2.5 text-sm font-semibold text-white bg-slate-950 hover:bg-slate-800 rounded-full cursor-pointer disabled:opacity-60"
                                 >
                                   <Send className="w-4 h-4" />
                                   <span>
@@ -1912,8 +2048,8 @@ export function UserLayout({
                                           />
                                         </div>
 
-                                        <div className="lg:col-span-8 p-6 space-y-5">
-                                          <div className="flex flex-wrap items-start justify-between gap-3">
+                                        <div className="lg:col-span-8 p-4 sm:p-6 space-y-5">
+                                          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2 sm:gap-3">
                                             <div>
                                               <div className="flex flex-wrap items-center gap-2 text-xs">
                                                 <span
@@ -1942,7 +2078,7 @@ export function UserLayout({
                                               </h3>
                                             </div>
 
-                                            <div className="text-right text-xs text-slate-500 tabular-nums">
+                                            <div className="text-left sm:text-right text-xs text-slate-500 tabular-nums shrink-0">
                                               <div>Quy mô dự kiến: {ev.maxSlots} khách</div>
                                               {ev.isPublic && (
                                                 <div className="mt-0.5 font-semibold text-indigo-700">

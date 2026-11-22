@@ -399,7 +399,7 @@ export default function App() {
         <div
           key={toast.id}
           role="status"
-          className={`fixed bottom-5 right-5 z-50 max-w-sm flex items-start gap-3 px-4 py-3 rounded-xl border shadow-lg bg-white animate-ef-toast-in ${
+          className={`fixed bottom-4 left-4 right-4 sm:left-auto sm:bottom-5 sm:right-5 z-50 sm:max-w-sm flex items-start gap-3 px-4 py-3 rounded-xl border shadow-lg bg-white animate-ef-toast-in ${
             toast.type === 'error' ? 'border-rose-200' : 'border-indigo-200'
           }`}
         >
@@ -408,12 +408,12 @@ export default function App() {
           ) : (
             <CheckCircle2 className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" />
           )}
-          <p className="text-sm font-medium text-slate-800">{toast.message}</p>
+          <p className="text-sm font-medium text-slate-800 flex-1">{toast.message}</p>
           <button
             type="button"
             aria-label="Đóng thông báo"
             onClick={() => setToast(null)}
-            className="p-0.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+            className="p-1 text-slate-400 hover:text-slate-600 cursor-pointer shrink-0"
           >
             <X className="w-4 h-4" />
           </button>

@@ -105,7 +105,7 @@ export function LumaFloatingHero({
   onSelectCard,
 }: LumaFloatingHeroProps) {
   return (
-    <section className="relative overflow-hidden rounded-3xl border border-slate-200/80 bg-white px-5 py-14 sm:px-8 sm:py-20 lg:px-10 lg:py-24">
+    <section className="relative overflow-hidden rounded-3xl border border-slate-200/80 bg-white px-4 py-9 sm:px-8 sm:py-16 lg:px-10 lg:py-24">
       {/* Soft Luma-inspired Warm Ambient Radial Glows */}
       <div
         aria-hidden="true"
@@ -167,13 +167,13 @@ export function LumaFloatingHero({
 
       {/* Centered Luma Hero Copy & Primary Actions */}
       <div className="relative z-20 mx-auto max-w-xl text-center lg:max-w-[33rem] xl:max-w-xl">
-        <div className="inline-flex items-center gap-1.5 rounded-full border border-orange-200/70 bg-orange-50/80 px-3.5 py-1 text-xs font-semibold text-orange-700 animate-ef-fade-up">
-          <Sparkles className="h-3.5 w-3.5 text-rose-500" />
+        <div className="inline-flex items-center gap-1.5 rounded-full border border-orange-200/70 bg-orange-50/80 px-3 py-1 text-[11px] sm:text-xs font-semibold text-orange-700 animate-ef-fade-up">
+          <Sparkles className="h-3.5 w-3.5 text-rose-500 shrink-0" />
           <span>EventFlow · Trải nghiệm sự kiện sống động</span>
         </div>
 
         <h1
-          className="mt-5 text-4xl font-bold tracking-tight text-balance leading-[1.12] sm:text-5xl lg:text-[3.35rem] animate-ef-fade-up"
+          className="mt-4 sm:mt-5 text-[1.95rem] font-bold tracking-tight text-balance leading-[1.15] sm:text-5xl lg:text-[3.35rem] animate-ef-fade-up"
           style={{ animationDelay: '70ms' }}
         >
           <span className="block text-slate-900">Sự kiện tuyệt vời</span>
@@ -183,7 +183,7 @@ export function LumaFloatingHero({
         </h1>
 
         <p
-          className="mx-auto mt-4 max-w-md text-sm leading-relaxed text-slate-500 sm:text-[15px] animate-ef-fade-up"
+          className="mx-auto mt-3.5 sm:mt-4 max-w-md text-xs sm:text-[15px] leading-relaxed text-slate-500 animate-ef-fade-up"
           style={{ animationDelay: '130ms' }}
         >
           Khởi tạo trang sự kiện truyền cảm hứng, điều phối dịch vụ trọn gói, quản lý khách mời
@@ -191,13 +191,13 @@ export function LumaFloatingHero({
         </p>
 
         <div
-          className="mt-8 flex flex-wrap items-center justify-center gap-4 animate-ef-fade-up"
+          className="mt-6 sm:mt-8 flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3 sm:gap-4 animate-ef-fade-up"
           style={{ animationDelay: '180ms' }}
         >
           <button
             type="button"
             onClick={onCreateFirstEvent}
-            className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-slate-950 px-7 text-sm font-semibold text-white shadow-[0_14px_30px_-10px_rgba(15,23,42,0.45)] transition-all duration-200 ease-[cubic-bezier(0.34,1.32,0.64,1)] hover:-translate-y-0.5 hover:bg-slate-800 active:scale-[0.97] cursor-pointer whitespace-nowrap"
+            className="w-full sm:w-auto inline-flex h-11 sm:h-12 items-center justify-center gap-2 rounded-full bg-slate-950 px-6 sm:px-7 text-sm font-semibold text-white shadow-[0_14px_30px_-10px_rgba(15,23,42,0.45)] transition-all duration-200 ease-[cubic-bezier(0.34,1.32,0.64,1)] hover:-translate-y-0.5 hover:bg-slate-800 active:scale-[0.97] cursor-pointer whitespace-nowrap"
           >
             <span>Tạo sự kiện đầu tiên của bạn</span>
           </button>
@@ -205,7 +205,7 @@ export function LumaFloatingHero({
           <button
             type="button"
             onClick={onExploreEvents}
-            className="group inline-flex h-12 items-center gap-1.5 rounded-full px-4 text-sm font-semibold text-slate-700 transition-colors hover:text-slate-950 cursor-pointer whitespace-nowrap"
+            className="w-full sm:w-auto group inline-flex h-11 sm:h-12 items-center justify-center gap-1.5 rounded-full border border-slate-200 sm:border-transparent bg-slate-50/80 sm:bg-transparent px-4 text-sm font-semibold text-slate-700 transition-colors hover:text-slate-950 cursor-pointer whitespace-nowrap"
           >
             <span>Khám phá sự kiện</span>
             <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
@@ -213,29 +213,37 @@ export function LumaFloatingHero({
         </div>
       </div>
 
-      {/* Tablet & Mobile Floating Showcase Strip */}
-      <div className="relative z-20 mt-10 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:hidden">
-        {FLOATING_CARDS.slice(0, 4).map((card, idx) => (
-          <button
-            key={card.id}
-            type="button"
-            onClick={() => onSelectCard(card.matchCategory)}
-            style={
-              {
-                '--ef-rot': idx % 2 === 0 ? '-2deg' : '2deg',
-              } as CSSProperties
-            }
-            className="ef-floating-card rounded-2xl border border-slate-200/80 bg-white/95 p-1.5 text-left shadow-md cursor-pointer"
-          >
-            <div className="aspect-[4/3] w-full overflow-hidden rounded-xl bg-slate-100">
-              <EventBanner src={card.imageUrl} alt={card.title} className="h-full w-full" />
-            </div>
-            <div className="px-1.5 pb-1 pt-2">
-              <div className="truncate text-xs font-bold text-slate-900">{card.title}</div>
-              <div className="truncate text-[11px] text-slate-500">{card.subtitle}</div>
-            </div>
-          </button>
-        ))}
+      {/* Mobile & Tablet Showcase Strip (placed cleanly below Hero CTA without obscuring text) */}
+      <div className="relative z-20 mt-8 sm:mt-10 grid grid-cols-2 gap-2.5 sm:grid-cols-4 sm:gap-3 lg:hidden">
+        {FLOATING_CARDS.slice(0, 4).map((card, idx) => {
+          const matchedEvent = card.matchCategory
+            ? publicEvents.find((e) => e.category === card.matchCategory)
+            : undefined;
+          const displayTitle = matchedEvent ? matchedEvent.title : card.title;
+          const displaySub = matchedEvent ? matchedEvent.location : card.subtitle;
+          return (
+            <button
+              key={card.id}
+              type="button"
+              onClick={() => onSelectCard(card.matchCategory)}
+              className={`rounded-2xl border border-slate-200/85 bg-white/95 p-1.5 text-left shadow-sm transition-transform active:scale-[0.98] cursor-pointer ${
+                idx >= 2 ? 'hidden sm:block' : ''
+              }`}
+            >
+              <div className="aspect-[4/3] w-full overflow-hidden rounded-xl bg-slate-100">
+                <EventBanner
+                  src={matchedEvent?.bannerUrl || card.imageUrl}
+                  alt={displayTitle}
+                  className="h-full w-full"
+                />
+              </div>
+              <div className="px-1.5 pb-1 pt-2">
+                <div className="truncate text-xs font-bold text-slate-900">{displayTitle}</div>
+                <div className="truncate text-[11px] text-slate-500">{displaySub}</div>
+              </div>
+            </button>
+          );
+        })}
       </div>
     </section>
   );

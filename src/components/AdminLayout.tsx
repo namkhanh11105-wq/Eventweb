@@ -8,7 +8,6 @@ import {
   CheckCircle2,
   ClipboardList,
   Copy,
-  Database,
   Download,
   Edit3,
   ExternalLink,
@@ -46,13 +45,11 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { DEFAULT_EVENT_BANNERS } from '../data/seedData';
 import {
   checkInByTicketCode,
   createEvent,
   deleteEvent,
   duplicateEvent,
-  seedSampleData,
   updateContactInquiryStatus,
   updateEvent,
   updateEventInvitedGuests,
@@ -69,6 +66,7 @@ import {
   useSlidingIndicator,
 } from './MotionPrimitives';
 import {
+  DEFAULT_EVENT_BANNERS,
   EVENT_CATEGORIES,
   EVENT_STATUS_META,
   exportRegistrationsToCSV,
@@ -180,7 +178,6 @@ export function AdminLayout({
 }: AdminLayoutProps) {
   const [section, setSection] = useState<AdminSection>('overview');
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [seeding, setSeeding] = useState(false);
   const [isAdminTransitioningOut, setIsAdminTransitioningOut] = useState(false);
   const adminTimerRef = useRef<number | null>(null);
 
@@ -417,26 +414,6 @@ export function AdminLayout({
     return workspaceEvent.invitedGuests.filter((g) => g.guestType === guestFilterType);
   }, [workspaceEvent, guestFilterType]);
 
-  const sampleTicketCodes = useMemo(() => {
-    return registrations
-      .filter((r) => r.status === 'confirmed' || r.status === 'pending')
-      .slice(0, 4);
-  }, [registrations]);
-
-  async function handleSeedData() {
-    setSeeding(true);
-    try {
-      const result = await seedSampleData();
-      onNotify(
-        `Đã đồng bộ Cloud Firestore: ${result.eventsCount} sự kiện (kèm yêu cầu từ khách & khách mời VIP), ${result.registrationsCount} người tham gia, ${result.usersCount} tài khoản và thông tin liên hệ công khai.`
-      );
-    } catch (err) {
-      onNotify(err instanceof Error ? err.message : 'Không thể tạo dữ liệu mẫu.', 'error');
-    } finally {
-      setSeeding(false);
-    }
-  }
-
   function openCreateModal() {
     const start = new Date();
     start.setDate(start.getDate() + 5);
@@ -621,8 +598,9 @@ export function AdminLayout({
       id: `srv-${Date.now()}`,
       serviceKey: isCustom ? 'custom' : newServiceKey,
       serviceName,
-      quantityOrScope: newServiceScope.trim() || undefined,
-      adminNote: newServiceAdminNote.trim() || undefined,
+      quantityOrScope: newServiceScope.trim(),
+      clientNote: '',
+      adminNote: newServiceAdminNote.trim(),
       status: 'approved',
     };
 
@@ -670,11 +648,11 @@ export function AdminLayout({
       id: `gst-${Date.now()}`,
       fullName: guestFullName.trim(),
       guestType,
-      title: guestTitle.trim() || undefined,
-      organization: guestOrg.trim() || undefined,
-      email: guestEmail.trim() || undefined,
-      phone: guestPhone.trim() || undefined,
-      note: guestNote.trim() || undefined,
+      title: guestTitle.trim(),
+      organization: guestOrg.trim(),
+      email: guestEmail.trim(),
+      phone: guestPhone.trim(),
+      note: guestNote.trim(),
       rsvpStatus: 'invited',
     };
 
@@ -997,21 +975,11 @@ export function AdminLayout({
 
             <button
               type="button"
-              disabled={seeding}
-              onClick={handleSeedData}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg transition-colors cursor-pointer disabled:opacity-60 whitespace-nowrap shrink-0"
-            >
-              <Database className="w-3.5 h-3.5" />
-              <span>{seeding ? 'Đang đồng bộ...' : 'Tạo dữ liệu mẫu (Seed Data)'}</span>
-            </button>
-
-            <button
-              type="button"
               onClick={openCreateModal}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors cursor-pointer whitespace-nowrap shrink-0"
+              className="min-h-[40px] inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors cursor-pointer whitespace-nowrap shrink-0"
             >
-              <Plus className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Tạo sự kiện</span>
+              <Plus className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
+              <span>Tạo sự kiện</span>
             </button>
           </div>
         </header>
@@ -1118,29 +1086,27 @@ export function AdminLayout({
               </div>
 
               {events.length === 0 ? (
-                <div className="bg-white border border-slate-200 rounded-xl p-10 text-center">
-                  <Database className="w-10 h-10 text-indigo-300 mx-auto" />
+                <div className="bg-white border border-slate-200 rounded-xl p-8 sm:p-10 text-center">
+                  <Calendar className="w-10 h-10 text-indigo-300 mx-auto" />
                   <h2 className="mt-4 text-base font-bold text-slate-900">
-                    Chưa có dữ liệu sự kiện để thống kê
+                    Chưa có sự kiện nào trên hệ thống
                   </h2>
                   <p className="mt-1.5 text-sm text-slate-500 max-w-md mx-auto">
-                    Nhấn nút &ldquo;Tạo dữ liệu mẫu (Seed Data)&rdquo; để đồng bộ sự kiện công khai,
-                    yêu cầu từ Người dùng, dịch vụ đi kèm, khách mời và người tham gia lên
-                    Cloud Firestore.
+                    Bắt đầu bằng cách tạo sự kiện công khai mới hoặc chờ người dùng gửi yêu cầu tổ
+                    chức sự kiện từ cổng công khai.
                   </p>
                   <button
                     type="button"
-                    disabled={seeding}
-                    onClick={handleSeedData}
-                    className="mt-5 inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg cursor-pointer"
+                    onClick={openCreateModal}
+                    className="mt-5 min-h-[42px] inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg cursor-pointer"
                   >
-                    <Database className="w-4 h-4" />
-                    <span>{seeding ? 'Đang tạo dữ liệu...' : 'Tạo dữ liệu mẫu (Seed Data)'}</span>
+                    <Plus className="w-4 h-4" />
+                    <span>Tạo sự kiện mới</span>
                   </button>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                  <div className="lg:col-span-7 bg-white border border-slate-200 rounded-xl p-6">
+                  <div className="lg:col-span-7 bg-white border border-slate-200 rounded-xl p-4 sm:p-6">
                     <div className="mb-4">
                       <h2 className="text-sm font-bold text-slate-900">
                         Lượt tham gia theo từng sự kiện
@@ -1198,7 +1164,7 @@ export function AdminLayout({
                     </div>
                   </div>
 
-                  <div className="lg:col-span-5 bg-white border border-slate-200 rounded-xl p-6 flex flex-col justify-between">
+                  <div className="lg:col-span-5 bg-white border border-slate-200 rounded-xl p-4 sm:p-6 flex flex-col justify-between">
                     <div className="mb-2">
                       <h2 className="text-sm font-bold text-slate-900">
                         Phân bổ người tham gia theo Danh mục
@@ -1315,13 +1281,169 @@ export function AdminLayout({
               </div>
 
               {filteredEvents.length === 0 ? (
-                <div className="p-10 text-center text-sm text-slate-500">
-                  Chưa có sự kiện phù hợp. Hãy bấm &ldquo;Tạo sự kiện&rdquo; hoặc &ldquo;Tạo dữ liệu
-                  mẫu (Seed Data)&rdquo;.
+                <div className="p-8 sm:p-10 text-center text-sm text-slate-500">
+                  Chưa có sự kiện phù hợp trên hệ thống. Hãy bấm &ldquo;Tạo sự kiện&rdquo; để thêm
+                  mới.
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
+                <>
+                  {/* Mobile Card View (< md) */}
+                  <div className="md:hidden divide-y divide-slate-100">
+                    {filteredEvents.map((ev) => {
+                      const planMeta = PLANNING_STATUS_META[ev.planningStatus || 'confirmed'];
+                      return (
+                        <div key={ev.id} className="p-4 space-y-3">
+                          <div className="flex items-start gap-3">
+                            <EventBanner
+                              src={ev.bannerUrl}
+                              alt={ev.title}
+                              className="w-16 h-12 rounded-lg shrink-0"
+                            />
+                            <div className="min-w-0 flex-1">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  runAdminTransition(() => {
+                                    setWorkspaceEventId(ev.id);
+                                    setWorkspaceTab('services');
+                                  })
+                                }
+                                className="font-bold text-sm text-slate-900 hover:text-indigo-600 text-left line-clamp-2 flex items-start gap-1 cursor-pointer"
+                              >
+                                <span>{ev.title}</span>
+                                {ev.featured && (
+                                  <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
+                                )}
+                              </button>
+                              <div className="mt-1 text-xs text-slate-500 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                                {ev.clientName ? (
+                                  <span className="text-indigo-700 font-medium">
+                                    Yêu cầu: {ev.clientName}
+                                  </span>
+                                ) : (
+                                  <span>{ev.organizer}</span>
+                                )}
+                                <span>·</span>
+                                <span className="tabular-nums">{formatShortDateVN(ev.startTime)}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span
+                                className={`inline-block px-2 py-0.5 font-semibold rounded border ${planMeta.bgClass} ${planMeta.textClass}`}
+                              >
+                                {planMeta.label}
+                              </span>
+                              <span className="inline-flex items-center gap-1 text-slate-500">
+                                {ev.isPublic ? (
+                                  <>
+                                    <Globe className="w-3 h-3 text-emerald-600" />
+                                    <span>Công khai</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Lock className="w-3 h-3 text-slate-400" />
+                                    <span>Ẩn</span>
+                                  </>
+                                )}
+                              </span>
+                            </div>
+                            <span className="font-mono font-semibold text-slate-800 tabular-nums">
+                              {ev.registeredCount}/{ev.maxSlots} ĐK
+                            </span>
+                          </div>
+
+                          <div className="text-xs text-slate-600 flex flex-wrap gap-x-4 gap-y-1 tabular-nums">
+                            <span>{ev.requestedServices.length} dịch vụ</span>
+                            <span>{ev.invitedGuests.length} khách mời VIP</span>
+                          </div>
+
+                          <div className="space-y-2 pt-1">
+                            <select
+                              aria-label={`Trạng thái sự kiện ${ev.title}`}
+                              value={ev.status}
+                              onChange={(e) =>
+                                handleQuickEventStatus(ev.id, e.target.value as EventStatus)
+                              }
+                              className={`w-full min-h-[40px] px-3 py-2 text-xs font-semibold bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-600 cursor-pointer ${
+                                EVENT_STATUS_META[ev.status]?.textClass || 'text-slate-700'
+                              }`}
+                            >
+                              <option value="ongoing">Mở đăng ký</option>
+                              <option value="upcoming">Sắp diễn ra</option>
+                              <option value="paused">Tạm đóng</option>
+                              <option value="completed">Đã kết thúc</option>
+                              <option value="cancelled">Đã hủy</option>
+                            </select>
+
+                            <div className="flex flex-wrap items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  runAdminTransition(() => {
+                                    setWorkspaceEventId(ev.id);
+                                    setWorkspaceTab('services');
+                                  })
+                                }
+                                className="flex-1 min-h-[40px] px-3 py-2 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg cursor-pointer"
+                              >
+                                Quản lý chi tiết
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDuplicateEvent(ev)}
+                                className="min-w-[40px] min-h-[40px] inline-flex items-center justify-center text-slate-600 bg-slate-50 hover:text-indigo-600 hover:bg-indigo-50 border border-slate-200 rounded-lg cursor-pointer"
+                                title="Nhân bản sự kiện"
+                              >
+                                <Copy className="w-4 h-4" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => openEditModal(ev)}
+                                className="min-w-[40px] min-h-[40px] inline-flex items-center justify-center text-slate-600 bg-slate-50 hover:text-indigo-600 hover:bg-indigo-50 border border-slate-200 rounded-lg cursor-pointer"
+                                title="Chỉnh sửa thông tin sự kiện"
+                              >
+                                <Edit3 className="w-4 h-4" />
+                              </button>
+                              {deleteTargetId === ev.id ? (
+                                <div className="inline-flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleConfirmDelete(ev.id)}
+                                    className="min-h-[40px] px-3 py-2 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-lg cursor-pointer"
+                                  >
+                                    Xóa
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setDeleteTargetId(null)}
+                                    className="min-h-[40px] px-3 py-2 text-xs font-medium text-slate-600 bg-slate-100 rounded-lg cursor-pointer"
+                                  >
+                                    Hủy
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setDeleteTargetId(ev.id)}
+                                  className="min-w-[40px] min-h-[40px] inline-flex items-center justify-center text-slate-600 bg-slate-50 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 rounded-lg cursor-pointer"
+                                  title="Xóa sự kiện"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Desktop Table View (>= md) */}
+                  <div className="hidden md:block overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-600">
                         <th className="py-3 px-4">Sự kiện &amp; Nguồn yêu cầu</th>
@@ -1487,6 +1609,7 @@ export function AdminLayout({
                     </tbody>
                   </table>
                 </div>
+                </>
               )}
             </div>
           )}
@@ -1974,8 +2097,76 @@ export function AdminLayout({
                         Chưa có khách mời nào trong danh sách của sự kiện này.
                       </div>
                     ) : (
-                      <div className="overflow-x-auto border border-slate-200 rounded-xl">
-                        <table className="w-full text-left border-collapse">
+                      <>
+                        {/* Mobile Card View (< md) */}
+                        <div className="md:hidden space-y-3">
+                          {filteredWorkspaceGuests.map((g) => (
+                            <div
+                              key={g.id}
+                              className="p-4 rounded-xl border border-slate-200 bg-white space-y-2.5 text-xs"
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0">
+                                  <div className="font-bold text-sm text-slate-900">
+                                    {g.fullName}
+                                  </div>
+                                  {(g.title || g.organization) && (
+                                    <div className="text-slate-600 mt-0.5">
+                                      {[g.title, g.organization].filter(Boolean).join(' · ')}
+                                    </div>
+                                  )}
+                                </div>
+                                <span className="px-2 py-0.5 font-semibold rounded bg-indigo-50 text-indigo-700 border border-indigo-200 shrink-0">
+                                  {g.guestType}
+                                </span>
+                              </div>
+                              {(g.phone || g.email) && (
+                                <div className="text-slate-600 flex flex-wrap gap-x-3 gap-y-0.5">
+                                  {g.phone && <span className="tabular-nums">{g.phone}</span>}
+                                  {g.email && <span className="truncate">{g.email}</span>}
+                                </div>
+                              )}
+                              {g.note && (
+                                <div className="text-[11px] text-slate-500 bg-slate-50 px-2.5 py-1.5 rounded-lg">
+                                  {g.note}
+                                </div>
+                              )}
+                              <div className="flex items-center gap-2 pt-1">
+                                <select
+                                  disabled={savingGuests}
+                                  value={g.rsvpStatus}
+                                  onChange={(e) =>
+                                    handleGuestRsvpChange(
+                                      g.id,
+                                      e.target.value as GuestRsvpStatus
+                                    )
+                                  }
+                                  className={`flex-1 min-h-[40px] px-3 py-1.5 text-xs font-semibold bg-white border border-slate-200 rounded-lg cursor-pointer ${
+                                    GUEST_RSVP_META[g.rsvpStatus]?.textClass
+                                  }`}
+                                >
+                                  <option value="invited">Đã gửi mời</option>
+                                  <option value="confirmed">Xác nhận tham dự</option>
+                                  <option value="checked_in">Đã có mặt</option>
+                                  <option value="declined">Từ chối</option>
+                                </select>
+                                <button
+                                  type="button"
+                                  disabled={savingGuests}
+                                  onClick={() => handleRemoveGuest(g.id)}
+                                  className="min-w-[40px] min-h-[40px] inline-flex items-center justify-center text-slate-500 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 border border-slate-200 rounded-lg cursor-pointer"
+                                  title="Xóa khách mời"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Desktop Table View (>= md) */}
+                        <div className="hidden md:block overflow-x-auto border border-slate-200 rounded-xl">
+                          <table className="w-full text-left border-collapse">
                           <thead>
                             <tr className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-600">
                               <th className="py-3 px-4">Khách mời</th>
@@ -2046,6 +2237,7 @@ export function AdminLayout({
                           </tbody>
                         </table>
                       </div>
+                      </>
                     )}
                   </div>
                 )}
@@ -2066,18 +2258,18 @@ export function AdminLayout({
                           </div>
                         </div>
                       </div>
-                      <form onSubmit={handleWorkspaceQrCheckIn} className="flex gap-2">
+                      <form onSubmit={handleWorkspaceQrCheckIn} className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
                         <input
                           type="text"
                           value={wsQrInput}
                           onChange={(e) => setWsQrInput(e.target.value)}
                           placeholder="Nhập mã EF-XXXX-XXXX..."
-                          className="px-3 py-1.5 text-xs font-mono bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-600"
+                          className="min-h-[40px] flex-1 px-3 py-2 text-xs font-mono bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-600"
                         />
                         <button
                           type="submit"
                           disabled={wsCheckingIn || !wsQrInput.trim()}
-                          className="px-3.5 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg cursor-pointer disabled:opacity-50"
+                          className="min-h-[40px] px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg cursor-pointer disabled:opacity-50 whitespace-nowrap"
                         >
                           {wsCheckingIn ? 'Đang xử lý...' : 'Check-in'}
                         </button>
@@ -2128,8 +2320,77 @@ export function AdminLayout({
                         Chưa có người tham gia nào đăng ký sự kiện này.
                       </div>
                     ) : (
-                      <div className="overflow-x-auto border border-slate-200 rounded-xl">
-                        <table className="w-full text-left border-collapse">
+                      <>
+                        {/* Mobile Card View (< md) */}
+                        <div className="md:hidden space-y-3">
+                          {filteredWorkspaceRegs.map((reg) => {
+                            const statusMeta = REGISTRATION_STATUS_META[reg.status];
+                            return (
+                              <div
+                                key={reg.id}
+                                className="p-4 rounded-xl border border-slate-200 bg-white space-y-2.5 text-xs"
+                              >
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="min-w-0">
+                                    <div className="font-bold text-sm text-slate-900">
+                                      {reg.guestName}
+                                    </div>
+                                    <div className="font-mono text-[11px] font-semibold text-indigo-700 mt-0.5">
+                                      {reg.ticketCode}
+                                    </div>
+                                  </div>
+                                  <span className={`font-semibold shrink-0 ${statusMeta.textClass}`}>
+                                    {statusMeta.label}
+                                  </span>
+                                </div>
+                                <div className="text-slate-600">
+                                  {reg.guestEmail} · {reg.guestPhone}
+                                </div>
+                                {reg.note && (
+                                  <div className="text-[11px] text-slate-500 bg-slate-50 px-2.5 py-1.5 rounded-lg">
+                                    {reg.note}
+                                  </div>
+                                )}
+                                <div className="text-[11px] text-slate-400 tabular-nums">
+                                  {reg.checkedInAt
+                                    ? `Check-in: ${formatDateTimeVN(reg.checkedInAt)}`
+                                    : `ĐK: ${formatShortDateVN(reg.registeredAt)}`}
+                                </div>
+                                <div className="flex flex-wrap items-center gap-2 pt-1">
+                                  {(reg.status === 'confirmed' || reg.status === 'pending') && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleStatusChange(reg, 'attended')}
+                                      className="min-h-[40px] inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg cursor-pointer"
+                                    >
+                                      <CheckCircle2 className="w-3.5 h-3.5" />
+                                      <span>Check-in</span>
+                                    </button>
+                                  )}
+                                  <select
+                                    value={reg.status}
+                                    onChange={(e) =>
+                                      handleStatusChange(
+                                        reg,
+                                        e.target.value as RegistrationStatus
+                                      )
+                                    }
+                                    className="flex-1 min-h-[40px] px-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg cursor-pointer"
+                                  >
+                                    <option value="pending">Chờ duyệt</option>
+                                    <option value="confirmed">Đã xác nhận</option>
+                                    <option value="attended">Đã tham dự</option>
+                                    <option value="cancelled">Đã hủy</option>
+                                  </select>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Desktop Table View (>= md) */}
+                        <div className="hidden md:block overflow-x-auto border border-slate-200 rounded-xl">
+                          <table className="w-full text-left border-collapse">
                           <thead>
                             <tr className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-600">
                               <th className="py-3 px-4">Mã QR</th>
@@ -2203,6 +2464,7 @@ export function AdminLayout({
                           </tbody>
                         </table>
                       </div>
+                      </>
                     )}
                   </div>
                 )}
@@ -2230,42 +2492,24 @@ export function AdminLayout({
                     </div>
                   </div>
 
-                  <form onSubmit={handleQrCheckIn} className="flex gap-2 w-full lg:w-auto">
+                  <form onSubmit={handleQrCheckIn} className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
                     <input
                       type="text"
                       value={qrInput}
                       onChange={(e) => setQrInput(e.target.value)}
                       placeholder="Nhập mã EF-XXXX-XXXX..."
-                      className="flex-1 lg:w-64 px-3.5 py-2 text-sm font-mono border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-600"
+                      className="min-h-[42px] flex-1 lg:w-64 px-3.5 py-2 text-sm font-mono border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-600"
                     />
                     <button
                       type="submit"
                       disabled={checkingInQr || !qrInput.trim()}
-                      className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg cursor-pointer disabled:opacity-50 whitespace-nowrap shrink-0"
+                      className="min-h-[42px] inline-flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg cursor-pointer disabled:opacity-50 whitespace-nowrap shrink-0"
                     >
                       <CheckCircle2 className="w-4 h-4" />
                       <span>{checkingInQr ? 'Đang xử lý...' : 'Check-in QR'}</span>
                     </button>
                   </form>
                 </div>
-
-                {sampleTicketCodes.length > 0 && (
-                  <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100 text-xs">
-                    <span className="text-slate-500 font-medium">
-                      Mã đang chờ check-in (bấm để thử nhanh):
-                    </span>
-                    {sampleTicketCodes.map((r) => (
-                      <button
-                        key={r.id}
-                        type="button"
-                        onClick={() => setQrInput(r.ticketCode)}
-                        className="px-2.5 py-1 font-mono font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-md cursor-pointer"
-                      >
-                        {r.ticketCode} ({r.guestName})
-                      </button>
-                    ))}
-                  </div>
-                )}
               </div>
 
               <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
@@ -2339,12 +2583,79 @@ export function AdminLayout({
                 </div>
 
                 {filteredRegistrations.length === 0 ? (
-                  <div className="p-10 text-center text-sm text-slate-500">
+                  <div className="p-8 sm:p-10 text-center text-sm text-slate-500">
                     Không tìm thấy lượt đăng ký phù hợp.
                   </div>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
+                  <>
+                    {/* Mobile Card View (< md) */}
+                    <div className="md:hidden divide-y divide-slate-100">
+                      {filteredRegistrations.map((reg) => {
+                        const statusMeta = REGISTRATION_STATUS_META[reg.status];
+                        return (
+                          <div key={reg.id} className="p-4 space-y-2.5 text-xs">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <div className="font-bold text-sm text-slate-900">
+                                  {reg.guestName}
+                                </div>
+                                <div className="font-mono text-[11px] font-semibold text-indigo-700 mt-0.5">
+                                  {reg.ticketCode}
+                                </div>
+                              </div>
+                              <span className={`font-semibold shrink-0 ${statusMeta.textClass}`}>
+                                {statusMeta.label}
+                              </span>
+                            </div>
+                            <div className="text-slate-700 font-medium line-clamp-1">
+                              {reg.eventTitle}
+                            </div>
+                            <div className="text-slate-500">
+                              {reg.guestEmail} · {reg.guestPhone}
+                            </div>
+                            {reg.note && (
+                              <div className="text-[11px] text-slate-500 bg-slate-50 px-2.5 py-1.5 rounded-lg">
+                                {reg.note}
+                              </div>
+                            )}
+                            <div className="text-[11px] text-slate-400 tabular-nums">
+                              {reg.checkedInAt
+                                ? `Check-in: ${formatDateTimeVN(reg.checkedInAt)}`
+                                : `ĐK: ${formatShortDateVN(reg.registeredAt)}`}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2 pt-1">
+                              {(reg.status === 'confirmed' || reg.status === 'pending') && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleStatusChange(reg, 'attended')}
+                                  className="min-h-[40px] inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg cursor-pointer"
+                                >
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  <span>Check-in</span>
+                                </button>
+                              )}
+                              <select
+                                aria-label={`Trạng thái mã ${reg.ticketCode}`}
+                                value={reg.status}
+                                onChange={(e) =>
+                                  handleStatusChange(reg, e.target.value as RegistrationStatus)
+                                }
+                                className="flex-1 min-h-[40px] px-3 py-1.5 text-xs font-medium bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-600 cursor-pointer"
+                              >
+                                <option value="pending">Chờ duyệt</option>
+                                <option value="confirmed">Đã xác nhận</option>
+                                <option value="attended">Đã tham dự</option>
+                                <option value="cancelled">Đã hủy</option>
+                              </select>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Desktop Table View (>= md) */}
+                    <div className="hidden md:block overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
                       <thead>
                         <tr className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-600">
                           <th className="py-3 px-4">Mã QR</th>
@@ -2421,6 +2732,7 @@ export function AdminLayout({
                       </tbody>
                     </table>
                   </div>
+                  </>
                 )}
               </div>
             </div>
@@ -2437,7 +2749,41 @@ export function AdminLayout({
                   {users.length} tài khoản
                 </span>
               </div>
-              <div className="overflow-x-auto">
+              {/* Mobile Card View (< md) */}
+              <div className="md:hidden divide-y divide-slate-100">
+                {users.map((u) => (
+                  <div key={u.uid} className="p-4 space-y-1.5 text-xs">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="font-bold text-sm text-slate-900">{u.fullName}</div>
+                        {u.organization && (
+                          <div className="text-slate-500 flex items-center gap-1 mt-0.5">
+                            <Building2 className="w-3 h-3 shrink-0" />
+                            <span className="truncate">{u.organization}</span>
+                          </div>
+                        )}
+                      </div>
+                      <span
+                        className={`px-2 py-0.5 font-semibold rounded-md shrink-0 ${
+                          u.role === 'admin'
+                            ? 'bg-indigo-50 text-indigo-700'
+                            : 'bg-slate-100 text-slate-700'
+                        }`}
+                      >
+                        {u.role === 'admin' ? 'Admin' : 'User'}
+                      </span>
+                    </div>
+                    <div className="text-slate-600 truncate">{u.email}</div>
+                    <div className="flex items-center justify-between text-slate-500 tabular-nums pt-0.5">
+                      <span>{u.phone || 'Chưa có SĐT'}</span>
+                      <span>Tạo: {formatShortDateVN(u.createdAt)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Desktop Table View (>= md) */}
+              <div className="hidden md:block overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-600">
@@ -2487,7 +2833,7 @@ export function AdminLayout({
           {/* SECTION 5: PUBLIC CONTACT SETTINGS & INQUIRIES */}
           {section === 'contact' && (
             <div className="space-y-6">
-              <div className="max-w-3xl bg-white border border-slate-200 rounded-2xl p-6 sm:p-8">
+              <div className="max-w-3xl bg-white border border-slate-200 rounded-2xl p-4 sm:p-8">
                 <div className="mb-6">
                   <h2 className="text-lg font-bold text-slate-900">
                     Cấu hình thông tin liên hệ công khai
@@ -2617,7 +2963,7 @@ export function AdminLayout({
                     <button
                       type="submit"
                       disabled={savingContact}
-                      className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg cursor-pointer disabled:opacity-60"
+                      className="w-full sm:w-auto min-h-[42px] inline-flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg cursor-pointer disabled:opacity-60"
                     >
                       <Save className="w-4 h-4" />
                       <span>{savingContact ? 'Đang lưu...' : 'Lưu thông tin liên hệ'}</span>
@@ -2627,7 +2973,7 @@ export function AdminLayout({
               </div>
 
               {/* Incoming Consultation Inquiries from /lien-he */}
-              <div className="max-w-3xl bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 space-y-4">
+              <div className="max-w-3xl bg-white border border-slate-200 rounded-2xl p-4 sm:p-8 space-y-4">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <h2 className="text-base font-bold text-slate-900">
@@ -2707,20 +3053,20 @@ export function AdminLayout({
         backdropClassName="bg-slate-900/50 backdrop-blur-xs p-4"
         panelClassName="bg-white border border-slate-200 rounded-2xl w-full max-h-[92vh] overflow-y-auto shadow-2xl"
       >
-            <div className="sticky top-0 z-10 bg-white px-6 py-4 border-b border-slate-200 flex items-center justify-between">
-              <h2 id="admin-event-modal-title" className="text-lg font-bold text-slate-900">
+            <div className="sticky top-0 z-10 bg-white px-4 sm:px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+              <h2 id="admin-event-modal-title" className="text-base sm:text-lg font-bold text-slate-900">
                 {editingEventId ? 'Chỉnh sửa thông tin sự kiện' : 'Tạo sự kiện mới'}
               </h2>
               <button
                 type="button"
                 onClick={() => setEventModalOpen(false)}
-                className="p-1.5 text-slate-500 hover:bg-slate-100 rounded-lg cursor-pointer"
+                className="min-w-[38px] min-h-[38px] inline-flex items-center justify-center text-slate-500 hover:bg-slate-100 rounded-lg cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveEvent} className="p-6 space-y-5">
+            <form onSubmit={handleSaveEvent} className="p-4 sm:p-6 space-y-5">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="sm:col-span-2">
                   <label className="block text-xs font-semibold text-slate-700 mb-1.5">
@@ -2785,7 +3131,7 @@ export function AdminLayout({
                   />
                 </div>
 
-                <div className="mt-2.5 grid grid-cols-3 sm:grid-cols-6 gap-2">
+                <div className="mt-2.5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
                   {DEFAULT_EVENT_BANNERS.map((preset) => {
                     const selected = formState.bannerUrl === preset.url;
                     return (
@@ -3181,18 +3527,18 @@ export function AdminLayout({
                 />
               </div>
 
-              <div className="pt-4 border-t border-slate-200 flex items-center justify-end gap-3">
+              <div className="pt-4 border-t border-slate-200 flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2.5 sm:gap-3">
                 <button
                   type="button"
                   onClick={() => setEventModalOpen(false)}
-                  className="px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg cursor-pointer"
+                  className="w-full sm:w-auto min-h-[42px] px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg cursor-pointer"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
                   disabled={savingEvent}
-                  className="px-5 py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg cursor-pointer disabled:opacity-60"
+                  className="w-full sm:w-auto min-h-[42px] px-5 py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg cursor-pointer disabled:opacity-60"
                 >
                   {savingEvent ? 'Đang lưu...' : editingEventId ? 'Lưu thay đổi' : 'Tạo sự kiện'}
                 </button>
