@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react';
 import {
+  ArrowLeft,
   ArrowRight,
   Building2,
   CalendarDays,
+  CheckCircle2,
+  Loader2,
   Lock,
   Mail,
   Phone,
@@ -10,7 +13,7 @@ import {
   Ticket,
   User,
 } from 'lucide-react';
-import { loginAccount, registerAccount } from '../services/dataService';
+import { loginAccount, registerAccount, sendPasswordReset } from '../services/dataService';
 import { triggerPageProgress } from './MotionPrimitives';
 import type { PublicContactInfo } from '../types';
 
@@ -36,11 +39,18 @@ export function AuthScreen({
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [forgotMode, setForgotMode] = useState(false);
+  const [resetSending, setResetSending] = useState(false);
+  const [resetSuccessMsg, setResetSuccessMsg] = useState<string | null>(null);
   const [isSwitching, setIsSwitching] = useState(false);
   const switchTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     setError(null);
+    setResetSuccessMsg(null);
+    if (mode !== 'login') {
+      setForgotMode(false);
+    }
   }, [mode]);
 
   useEffect(() => {
@@ -108,6 +118,26 @@ export function AuthScreen({
       setError(err instanceof Error ? err.message : 'Không thể xử lý yêu cầu.');
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleForgotSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (resetSending) return;
+    setError(null);
+    setResetSuccessMsg(null);
+    setResetSending(true);
+    try {
+      await sendPasswordReset(email);
+      setResetSuccessMsg(
+        `Đã gửi liên kết đặt lại mật khẩu tới email ${email.trim().toLowerCase()}. Vui lòng kiểm tra Hộp thư đến (hoặc thư mục Spam / Quảng cáo) để tạo mật khẩu mới.`
+      );
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Không thể gửi email đặt lại mật khẩu.'
+      );
+    } finally {
+      setResetSending(false);
     }
   }
 
@@ -219,16 +249,22 @@ export function AuthScreen({
           }`}
         >
           <div
-            key={mode}
+            key={`${mode}-${forgotMode ? 'forgot' : 'form'}`}
             className="animate-ef-page-enter rounded-3xl border border-slate-200/85 bg-white/95 p-5 sm:p-8 shadow-[0_24px_60px_-18px_rgba(15,23,42,0.12)] backdrop-blur-md"
           >
             {/* Card Header */}
             <div className="text-center">
               <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900">
-                {mode === 'login' ? 'Đăng nhập EventFlow' : 'Tạo tài khoản mới'}
+                {forgotMode
+                  ? 'Khôi phục mật khẩu'
+                  : mode === 'login'
+                  ? 'Đăng nhập EventFlow'
+                  : 'Tạo tài khoản mới'}
               </h1>
               <p className="mt-1.5 text-sm text-slate-500">
-                {mode === 'login'
+                {forgotMode
+                  ? 'Nhập email tài khoản EventFlow để nhận liên kết đặt lại mật khẩu qua Firebase.'
+                  : mode === 'login'
                   ? 'Truy cập sự kiện đã đăng ký, mã QR và yêu cầu tổ chức sự kiện.'
                   : 'Một tài khoản thống nhất để vừa tham gia vừa đặt tổ chức sự kiện.'}
               </p>
@@ -243,163 +279,239 @@ export function AuthScreen({
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-              {mode === 'register' && (
-                <>
-                  {/* Full Name & Phone */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                    <div>
-                      <label
-                        htmlFor="auth-fullname"
-                        className="block text-xs font-semibold text-slate-700 mb-1.5"
-                      >
-                        Họ và tên
-                      </label>
-                      <div className="relative">
-                        <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                        <input
-                          id="auth-fullname"
-                          type="text"
-                          required
-                          value={fullName}
-                          onChange={(e) => setFullName(e.target.value)}
-                          placeholder="Nguyễn Văn An"
-                          className={inputClass}
-                        />
-                      </div>
-                    </div>
+            {resetSuccessMsg && (
+              <div
+                role="status"
+                className="mt-5 flex items-start gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs sm:text-sm text-emerald-900 animate-ef-fade-in"
+              >
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                <span className="leading-relaxed">{resetSuccessMsg}</span>
+              </div>
+            )}
 
-                    <div>
-                      <label
-                        htmlFor="auth-phone"
-                        className="block text-xs font-semibold text-slate-700 mb-1.5"
-                      >
-                        Số điện thoại
-                      </label>
-                      <div className="relative">
-                        <Phone className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                        <input
-                          id="auth-phone"
-                          type="tel"
-                          required
-                          value={phone}
-                          onChange={(e) => setPhone(e.target.value)}
-                          placeholder="0901 234 567"
-                          className={inputClass}
-                        />
-                      </div>
-                    </div>
+            {forgotMode ? (
+              <form onSubmit={handleForgotSubmit} className="mt-6 space-y-4">
+                <div>
+                  <label
+                    htmlFor="auth-reset-email"
+                    className="block text-xs font-semibold text-slate-700 mb-1.5"
+                  >
+                    Email đã đăng ký
+                  </label>
+                  <div className="relative">
+                    <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      id="auth-reset-email"
+                      type="email"
+                      required
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="name@company.vn"
+                      className={inputClass}
+                    />
                   </div>
+                </div>
 
+                <button
+                  type="submit"
+                  disabled={resetSending}
+                  className="ef-btn-tactile w-full h-11 inline-flex items-center justify-center gap-2 px-5 text-sm font-semibold text-white bg-slate-950 hover:bg-slate-800 disabled:opacity-60 rounded-full shadow-sm transition-all duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 cursor-pointer"
+                >
+                  {resetSending && <Loader2 className="w-4 h-4 animate-spin" />}
+                  <span>
+                    {resetSending ? 'Đang gửi email...' : 'Gửi liên kết đặt lại mật khẩu'}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setError(null);
+                    setResetSuccessMsg(null);
+                    setForgotMode(false);
+                  }}
+                  className="w-full h-10 inline-flex items-center justify-center gap-1.5 text-xs sm:text-sm font-semibold text-slate-600 hover:text-slate-950 transition-colors cursor-pointer"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>Quay lại đăng nhập</span>
+                </button>
+              </form>
+            ) : (
+              <>
+                <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+                  {mode === 'register' && (
+                    <>
+                      {/* Full Name & Phone */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                        <div>
+                          <label
+                            htmlFor="auth-fullname"
+                            className="block text-xs font-semibold text-slate-700 mb-1.5"
+                          >
+                            Họ và tên
+                          </label>
+                          <div className="relative">
+                            <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                            <input
+                              id="auth-fullname"
+                              type="text"
+                              required
+                              value={fullName}
+                              onChange={(e) => setFullName(e.target.value)}
+                              placeholder="Nguyễn Văn An"
+                              className={inputClass}
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label
+                            htmlFor="auth-phone"
+                            className="block text-xs font-semibold text-slate-700 mb-1.5"
+                          >
+                            Số điện thoại
+                          </label>
+                          <div className="relative">
+                            <Phone className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                            <input
+                              id="auth-phone"
+                              type="tel"
+                              required
+                              value={phone}
+                              onChange={(e) => setPhone(e.target.value)}
+                              placeholder="0901 234 567"
+                              className={inputClass}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label
+                          htmlFor="auth-org"
+                          className="block text-xs font-semibold text-slate-700 mb-1.5"
+                        >
+                          Đơn vị / Công ty (tùy chọn)
+                        </label>
+                        <div className="relative">
+                          <Building2 className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                          <input
+                            id="auth-org"
+                            type="text"
+                            value={organization}
+                            onChange={(e) => setOrganization(e.target.value)}
+                            placeholder="Công ty / Tổ chức của bạn..."
+                            className={inputClass}
+                          />
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {/* Email */}
                   <div>
                     <label
-                      htmlFor="auth-org"
+                      htmlFor="auth-email"
                       className="block text-xs font-semibold text-slate-700 mb-1.5"
                     >
-                      Đơn vị / Công ty (tùy chọn)
+                      Email
                     </label>
                     <div className="relative">
-                      <Building2 className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                      <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                       <input
-                        id="auth-org"
-                        type="text"
-                        value={organization}
-                        onChange={(e) => setOrganization(e.target.value)}
-                        placeholder="Công ty / Tổ chức của bạn..."
+                        id="auth-email"
+                        type="email"
+                        required
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="name@company.vn"
                         className={inputClass}
                       />
                     </div>
                   </div>
-                </>
-              )}
 
-              {/* Email */}
-              <div>
-                <label
-                  htmlFor="auth-email"
-                  className="block text-xs font-semibold text-slate-700 mb-1.5"
-                >
-                  Email
-                </label>
-                <div className="relative">
-                  <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    id="auth-email"
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="name@company.vn"
-                    className={inputClass}
-                  />
-                </div>
-              </div>
+                  {/* Password */}
+                  <div>
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                      <label
+                        htmlFor="auth-password"
+                        className="block text-xs font-semibold text-slate-700"
+                      >
+                        Mật khẩu
+                      </label>
+                      {mode === 'login' && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setError(null);
+                            setResetSuccessMsg(null);
+                            setForgotMode(true);
+                          }}
+                          className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors cursor-pointer"
+                        >
+                          Quên mật khẩu?
+                        </button>
+                      )}
+                    </div>
+                    <div className="relative">
+                      <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                      <input
+                        id="auth-password"
+                        type="password"
+                        required
+                        minLength={6}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="Tối thiểu 6 ký tự"
+                        className={inputClass}
+                      />
+                    </div>
+                  </div>
 
-              {/* Password */}
-              <div>
-                <label
-                  htmlFor="auth-password"
-                  className="block text-xs font-semibold text-slate-700 mb-1.5"
-                >
-                  Mật khẩu
-                </label>
-                <div className="relative">
-                  <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    id="auth-password"
-                    type="password"
-                    required
-                    minLength={6}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Tối thiểu 6 ký tự"
-                    className={inputClass}
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={submitting}
-                className="ef-btn-tactile w-full h-11 inline-flex items-center justify-center gap-2 px-5 text-sm font-semibold text-white bg-slate-950 hover:bg-slate-800 disabled:opacity-60 rounded-full shadow-sm transition-all duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 cursor-pointer"
-              >
-                <span>
-                  {submitting
-                    ? 'Đang xác thực...'
-                    : mode === 'login'
-                    ? 'Đăng nhập'
-                    : 'Hoàn tất đăng ký'}
-                </span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
-            </form>
-
-            {/* Footer Page Switch Link */}
-            <div className="mt-6 pt-5 border-t border-slate-100 text-center text-xs sm:text-sm text-slate-500">
-              {mode === 'login' ? (
-                <>
-                  <span>Chưa có tài khoản? </span>
                   <button
-                    type="button"
-                    onClick={() => handleSmoothSwitchMode('register')}
-                    className="font-semibold text-slate-900 hover:text-rose-600 underline underline-offset-4 transition-colors cursor-pointer"
+                    type="submit"
+                    disabled={submitting}
+                    className="ef-btn-tactile w-full h-11 inline-flex items-center justify-center gap-2 px-5 text-sm font-semibold text-white bg-slate-950 hover:bg-slate-800 disabled:opacity-60 rounded-full shadow-sm transition-all duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 cursor-pointer"
                   >
-                    Đăng ký ngay
+                    <span>
+                      {submitting
+                        ? 'Đang xác thực...'
+                        : mode === 'login'
+                        ? 'Đăng nhập'
+                        : 'Hoàn tất đăng ký'}
+                    </span>
+                    <ArrowRight className="w-4 h-4" />
                   </button>
-                </>
-              ) : (
-                <>
-                  <span>Đã có tài khoản? </span>
-                  <button
-                    type="button"
-                    onClick={() => handleSmoothSwitchMode('login')}
-                    className="font-semibold text-slate-900 hover:text-rose-600 underline underline-offset-4 transition-colors cursor-pointer"
-                  >
-                    Đăng nhập
-                  </button>
-                </>
-              )}
-            </div>
+                </form>
+
+                {/* Footer Page Switch Link */}
+                <div className="mt-6 pt-5 border-t border-slate-100 text-center text-xs sm:text-sm text-slate-500">
+                  {mode === 'login' ? (
+                    <>
+                      <span>Chưa có tài khoản? </span>
+                      <button
+                        type="button"
+                        onClick={() => handleSmoothSwitchMode('register')}
+                        className="font-semibold text-slate-900 hover:text-rose-600 underline underline-offset-4 transition-colors cursor-pointer"
+                      >
+                        Đăng ký ngay
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <span>Đã có tài khoản? </span>
+                      <button
+                        type="button"
+                        onClick={() => handleSmoothSwitchMode('login')}
+                        className="font-semibold text-slate-900 hover:text-rose-600 underline underline-offset-4 transition-colors cursor-pointer"
+                      >
+                        Đăng nhập
+                      </button>
+                    </>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         </div>
       </main>

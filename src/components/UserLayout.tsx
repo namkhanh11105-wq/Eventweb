@@ -12,8 +12,10 @@ import {
   CheckCircle2,
   ClipboardList,
   Copy,
+  Edit3,
   Layers,
   Loader2,
+  Lock,
   LogIn,
   LogOut,
   MapPin,
@@ -26,15 +28,19 @@ import {
   ShieldCheck,
   Star,
   Ticket,
+  Trash2,
   Users,
   X,
 } from 'lucide-react';
 import {
+  cancelPendingOrganizerEventRequest,
   createOrganizerEventRequest,
   submitFeedback,
+  updatePendingOrganizerEventRequest,
   updateRegistrationStatus,
 } from '../services/dataService';
 import { AccountMenuDropdown } from './AccountMenuDropdown';
+import { ConfirmModal } from './ConfirmModal';
 import { ContactPage } from './ContactPage';
 import { EventBanner } from './EventBanner';
 import { EventDetailPage } from './EventDetailPage';
@@ -68,9 +74,11 @@ import {
   formatShortDateVN,
   getEventCategoryMeta,
   matchesEventCategoryFilter,
+  normalizeEventCategory,
   PLANNING_STATUS_META,
   REGISTRATION_STATUS_META,
   SERVICE_STATUS_META,
+  STANDARD_EVENT_CATEGORIES,
   SYSTEM_SERVICE_CATALOG,
   toDatetimeLocalValue,
 } from '../utils/formatters';
@@ -112,6 +120,7 @@ interface UserLayoutProps {
   feedbacks: FeedbackItem[];
   publicContact: PublicContactInfo;
   permissionWarning?: string | null;
+  adminBadgeCount?: number;
   onNavigatePage: (
     page: 'discover' | 'services' | 'contact' | 'tickets',
     tab?: 'registered' | 'requests'
@@ -124,6 +133,20 @@ interface UserLayoutProps {
   onOpenProfileSettings: () => void;
   onLogout: () => void;
   onNotify: (message: string, type?: 'success' | 'error') => void;
+}
+
+function getRequestUpdateFingerprint(ev: EventItem): string | null {
+  const hasServiceUpdate = ev.requestedServices.some(
+    (s) => s.status !== 'pending' || Boolean(s.adminNote && s.adminNote.trim())
+  );
+  const hasAdminNote = Boolean(ev.adminResponseNote && ev.adminResponseNote.trim());
+  if (ev.planningStatus === 'pending_review' && !hasAdminNote && !hasServiceUpdate) {
+    return null;
+  }
+  const servicesSig = ev.requestedServices
+    .map((s) => `${s.id}:${s.status}:${(s.adminNote || '').trim()}`)
+    .join(',');
+  return `${ev.planningStatus}|${(ev.adminResponseNote || '').trim()}|${servicesSig}|${ev.updatedAt || ''}`;
 }
 
 export function UserLayout({
@@ -141,6 +164,7 @@ export function UserLayout({
   feedbacks,
   publicContact,
   permissionWarning,
+  adminBadgeCount = 0,
   onNavigatePage,
   onOpenEventDetail,
   onRequestServiceBooking,
@@ -161,6 +185,9 @@ export function UserLayout({
 
   const [savedEventIds, setSavedEventIds] = useState<string[]>([]);
   const [cancellingRegId, setCancellingRegId] = useState<string | null>(null);
+  const [confirmCancelTicketReg, setConfirmCancelTicketReg] = useState<RegistrationItem | null>(
+    null
+  );
   const [copiedRegId, setCopiedRegId] = useState<string | null>(null);
   const [feedbackReg, setFeedbackReg] = useState<RegistrationItem | null>(null);
   const lastFeedbackRegRef = useRef<RegistrationItem | null>(null);
@@ -175,7 +202,11 @@ export function UserLayout({
 
   const [myEventsTab, setMyEventsTab] = useState<'registered' | 'requests'>(activeMyEventsTab);
   const [showCreateRequestForm, setShowCreateRequestForm] = useState(false);
+  const [editingRequestId, setEditingRequestId] = useState<string | null>(null);
+  const [confirmCancelRequest, setConfirmCancelRequest] = useState<EventItem | null>(null);
+  const [cancellingRequestId, setCancellingRequestId] = useState<string | null>(null);
   const [bookingPackageLabel, setBookingPackageLabel] = useState<string | null>(null);
+  const [seenRequestUpdates, setSeenRequestUpdates] = useState<Record<string, string>>({});
 
   // Create event organization request state (Tab 2 of Sự kiện của tôi)
   const [reqTitle, setReqTitle] = useState('');
@@ -257,6 +288,7 @@ export function UserLayout({
 
   useEffect(() => {
     if (openCreateRequestSignal > 0) {
+      setEditingRequestId(null);
       setMyEventsTab('requests');
       setShowCreateRequestForm(true);
       if (pendingServiceBooking) {
@@ -335,6 +367,9 @@ export function UserLayout({
     if (tab) {
       setMyEventsTab(tab);
     }
+    if (!openCreateForm) {
+      setEditingRequestId(null);
+    }
     setShowCreateRequestForm(openCreateForm);
 
     if (activePage === page) {
@@ -397,6 +432,82 @@ export function UserLayout({
       confirmed: myRequests.filter((e) => e.planningStatus === 'confirmed').length,
     };
   }, [myRequests]);
+
+  useEffect(() => {
+    if (!currentUser?.uid) {
+      setSeenRequestUpdates({});
+      return;
+    }
+    try {
+      const raw = window.localStorage.getItem(`ef_seen_req_updates_${currentUser.uid}`);
+      if (raw) {
+        const parsed = JSON.parse(raw) as Record<string, string>;
+        setSeenRequestUpdates(parsed && typeof parsed === 'object' ? parsed : {});
+      } else {
+        setSeenRequestUpdates({});
+      }
+    } catch {
+      setSeenRequestUpdates({});
+    }
+  }, [currentUser?.uid]);
+
+  const unreadRequestIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (!currentUser || currentUser.role === 'admin') return ids;
+    for (const ev of myRequests) {
+      const fp = getRequestUpdateFingerprint(ev);
+      if (fp && seenRequestUpdates[ev.id] !== fp) {
+        ids.add(ev.id);
+      }
+    }
+    return ids;
+  }, [currentUser, myRequests, seenRequestUpdates]);
+
+  const hasUnreadRequestUpdates = unreadRequestIds.size > 0;
+
+  useEffect(() => {
+    if (
+      !currentUser?.uid ||
+      currentUser.role === 'admin' ||
+      activePage !== 'tickets' ||
+      myEventsTab !== 'requests' ||
+      showCreateRequestForm ||
+      unreadRequestIds.size === 0
+    ) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setSeenRequestUpdates((prev) => {
+        const next = { ...prev };
+        for (const ev of myRequests) {
+          const fp = getRequestUpdateFingerprint(ev);
+          if (fp) {
+            next[ev.id] = fp;
+          }
+        }
+        try {
+          window.localStorage.setItem(
+            `ef_seen_req_updates_${currentUser.uid}`,
+            JSON.stringify(next)
+          );
+        } catch {
+          // Ignore storage quota errors
+        }
+        return next;
+      });
+    }, 1000);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    currentUser?.uid,
+    currentUser?.role,
+    activePage,
+    myEventsTab,
+    showCreateRequestForm,
+    unreadRequestIds.size,
+    myRequests,
+  ]);
 
   const activeRegistrationMap = useMemo(() => {
     const map = new Map<string, RegistrationItem>();
@@ -542,6 +653,95 @@ export function UserLayout({
     reqFormContainerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
+  function resetRequestFormFields() {
+    setReqFormError(null);
+    setEditingRequestId(null);
+    setReqTitle('');
+    setReqCategory(EVENT_CATEGORIES[0]);
+    setReqCustomCategory('');
+    setReqOrganizerName(currentUser?.organization || currentUser?.fullName || '');
+    setReqClientName(currentUser?.fullName || '');
+    setReqClientPhone(currentUser?.phone || '');
+    setReqStartTime(defaultRequestStartDatetime(14, 8));
+    setReqEndTime(defaultRequestStartDatetime(14, 17));
+    setReqLocation('');
+    setReqMaxSlots(100);
+    setReqDescription('');
+    setReqBannerUrl('');
+    setReqGalleryImages([]);
+    setReqCustomServiceName('');
+    setBookingPackageLabel(null);
+    setReqSelectedServices(createDefaultSelectedServices());
+  }
+
+  function openNewRequestForm() {
+    resetRequestFormFields();
+    setMyEventsTab('requests');
+    setShowCreateRequestForm(true);
+    window.setTimeout(() => {
+      reqFormContainerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 120);
+  }
+
+  function openEditRequestForm(ev: EventItem) {
+    if (ev.planningStatus !== 'pending_review') {
+      onNotify(
+        'Yêu cầu đã được Ban quản trị tiếp nhận xử lý nên không thể chỉnh sửa.',
+        'error'
+      );
+      return;
+    }
+
+    const rawCat = String(ev.category || '').trim();
+    const normalizedCat = normalizeEventCategory(rawCat);
+    const isStandard = (STANDARD_EVENT_CATEGORIES as string[]).includes(normalizedCat);
+
+    const nextServices: Record<string, ServiceSelectionItem> = {};
+    for (const s of SYSTEM_SERVICE_CATALOG) {
+      const matched = ev.requestedServices.find((r) => r.serviceKey === s.key);
+      nextServices[s.key] = {
+        enabled: Boolean(matched),
+        quantityOrScope: matched?.quantityOrScope || '',
+        clientNote: matched?.clientNote || '',
+      };
+    }
+    const customSrv = ev.requestedServices.find(
+      (r) => r.serviceKey === 'custom' || !SYSTEM_SERVICE_CATALOG.some((c) => c.key === r.serviceKey)
+    );
+
+    setReqFormError(null);
+    setBookingPackageLabel(null);
+    setEditingRequestId(ev.id);
+    setReqTitle(ev.title);
+    setReqCategory(isStandard ? normalizedCat : 'Khác');
+    setReqCustomCategory(isStandard ? '' : rawCat === 'Khác' ? '' : rawCat);
+    setReqOrganizerName(ev.organizer || currentUser?.organization || currentUser?.fullName || '');
+    setReqClientName(ev.clientName || currentUser?.fullName || '');
+    setReqClientPhone(ev.clientPhone || currentUser?.phone || '');
+    setReqStartTime(toDatetimeLocalValue(ev.startTime));
+    setReqEndTime(toDatetimeLocalValue(ev.endTime));
+    setReqLocation(ev.location);
+    setReqMaxSlots(ev.maxSlots || 100);
+    setReqDescription(ev.description);
+    setReqBannerUrl(ev.bannerUrl || '');
+    setReqGalleryImages(
+      ev.galleryImages && ev.galleryImages.length > 0
+        ? ev.galleryImages.map((g, idx) => ({
+            id: g.id || `gal-${idx}`,
+            url: g.url,
+            caption: g.caption || '',
+          }))
+        : []
+    );
+    setReqSelectedServices(nextServices);
+    setReqCustomServiceName(customSrv?.serviceName || '');
+    setMyEventsTab('requests');
+    setShowCreateRequestForm(true);
+    window.setTimeout(() => {
+      reqFormContainerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 120);
+  }
+
   async function handleSubmitEventRequest(e: FormEvent) {
     e.preventDefault();
     if (reqSubmitting) return;
@@ -635,46 +835,52 @@ export function UserLayout({
       return;
     }
 
+    const requestPayload = {
+      title: reqTitle.trim(),
+      category: resolvedCategory,
+      startTime: reqStartTime,
+      endTime: reqEndTime,
+      location: reqLocation.trim(),
+      maxSlots: Math.round(safeMaxSlots),
+      description: reqDescription.trim(),
+      bannerUrl: reqBannerUrl.trim(),
+      galleryImages: reqGalleryImages,
+      organizerName:
+        reqOrganizerName.trim() ||
+        reqClientName.trim() ||
+        currentUser.fullName ||
+        'Thành viên EventFlow',
+      clientUserId: currentUser.uid || '',
+      clientName:
+        reqClientName.trim() || (currentUser.fullName ?? '').trim() || 'Thành viên EventFlow',
+      clientEmail: (currentUser.email ?? '').trim(),
+      clientPhone: reqClientPhone.trim(),
+      requestedServices: servicesPayload,
+    };
+
     setReqSubmitting(true);
     try {
-      await createOrganizerEventRequest({
-        title: reqTitle.trim(),
-        category: resolvedCategory,
-        startTime: reqStartTime,
-        endTime: reqEndTime,
-        location: reqLocation.trim(),
-        maxSlots: Math.round(safeMaxSlots),
-        description: reqDescription.trim(),
-        bannerUrl: reqBannerUrl.trim(),
-        galleryImages: reqGalleryImages,
-        organizerName:
-          reqOrganizerName.trim() || reqClientName.trim() || currentUser.fullName || 'Thành viên EventFlow',
-        clientUserId: currentUser.uid || '',
-        clientName: reqClientName.trim() || (currentUser.fullName ?? '').trim() || 'Thành viên EventFlow',
-        clientEmail: (currentUser.email ?? '').trim(),
-        clientPhone: reqClientPhone.trim(),
-        requestedServices: servicesPayload,
-      });
+      if (editingRequestId) {
+        await updatePendingOrganizerEventRequest(
+          editingRequestId,
+          currentUser.uid,
+          requestPayload
+        );
+        onNotify('Đã cập nhật yêu cầu tổ chức sự kiện thành công trên Cloud Firestore.');
+      } else {
+        await createOrganizerEventRequest(requestPayload);
+        onNotify(
+          'Đã gửi yêu cầu tổ chức sự kiện thành công lên Cloud Firestore. Ban quản trị sẽ xem xét và phản hồi sớm.'
+        );
+      }
 
-      setReqFormError(null);
-      setReqTitle('');
-      setReqCustomCategory('');
-      setReqLocation('');
-      setReqDescription('');
-      setReqBannerUrl('');
-      setReqGalleryImages([]);
-      setReqCustomServiceName('');
-      setBookingPackageLabel(null);
-      setReqSelectedServices(createDefaultSelectedServices());
+      resetRequestFormFields();
       setShowCreateRequestForm(false);
       setMyEventsTab('requests');
       window.scrollTo({ top: 0, behavior: 'smooth' });
-      onNotify(
-        'Đã gửi yêu cầu tổ chức sự kiện thành công lên Cloud Firestore. Ban quản trị sẽ xem xét và phản hồi sớm.'
-      );
     } catch (err) {
       const msg =
-        err instanceof Error ? err.message : 'Không thể gửi yêu cầu tổ chức sự kiện.';
+        err instanceof Error ? err.message : 'Không thể xử lý yêu cầu tổ chức sự kiện.';
       setReqFormError(msg);
       onNotify(msg, 'error');
     } finally {
@@ -682,12 +888,36 @@ export function UserLayout({
     }
   }
 
-  async function handleCancelTicket(reg: RegistrationItem) {
-    if (cancellingRegId) return;
-    setCancellingRegId(reg.id);
+  async function handleConfirmCancelRequest() {
+    if (!currentUser || !confirmCancelRequest || cancellingRequestId) return;
+    setCancellingRequestId(confirmCancelRequest.id);
     try {
-      await updateRegistrationStatus(reg, 'cancelled');
-      onNotify(`Đã hủy đăng ký ${reg.ticketCode} và hoàn trả chỗ trống lên Firestore.`);
+      await cancelPendingOrganizerEventRequest(
+        confirmCancelRequest.id,
+        currentUser.uid,
+        currentUser.email
+      );
+      onNotify(`Đã hủy yêu cầu "${confirmCancelRequest.title}" khỏi Cloud Firestore.`);
+      setConfirmCancelRequest(null);
+    } catch (err) {
+      onNotify(
+        err instanceof Error ? err.message : 'Không thể hủy yêu cầu tổ chức sự kiện.',
+        'error'
+      );
+    } finally {
+      setCancellingRequestId(null);
+    }
+  }
+
+  async function handleConfirmCancelTicket() {
+    if (!confirmCancelTicketReg || cancellingRegId) return;
+    setCancellingRegId(confirmCancelTicketReg.id);
+    try {
+      await updateRegistrationStatus(confirmCancelTicketReg, 'cancelled');
+      onNotify(
+        `Đã hủy đăng ký ${confirmCancelTicketReg.ticketCode} và hoàn trả chỗ trống lên Firestore.`
+      );
+      setConfirmCancelTicketReg(null);
     } catch (err) {
       onNotify(err instanceof Error ? err.message : 'Không thể hủy đăng ký.', 'error');
     } finally {
@@ -844,10 +1074,21 @@ export function UserLayout({
                   type="button"
                   role="tab"
                   aria-selected={activeNavKey === 'tickets'}
+                  title={
+                    hasUnreadRequestUpdates
+                      ? `Có ${unreadRequestIds.size} yêu cầu tổ chức vừa được Ban quản trị cập nhật`
+                      : undefined
+                  }
                   onClick={() => smoothNavigatePage('tickets')}
-                  className={navButtonClass(activeNavKey === 'tickets')}
+                  className={`${navButtonClass(activeNavKey === 'tickets')} inline-flex items-center gap-1.5`}
                 >
-                  Sự kiện của tôi
+                  <span>Sự kiện của tôi</span>
+                  {hasUnreadRequestUpdates && (
+                    <span
+                      aria-label={`Có ${unreadRequestIds.size} cập nhật mới`}
+                      className="w-2 h-2 rounded-full bg-rose-500 ring-2 ring-white/90 animate-pulse"
+                    />
+                  )}
                 </button>
               )}
             </div>
@@ -855,9 +1096,17 @@ export function UserLayout({
               <button
                 type="button"
                 onClick={onSwitchToAdmin}
-                className="px-3.5 py-1.5 rounded-full text-indigo-700 hover:bg-indigo-50 font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-indigo-700 hover:bg-indigo-50 font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer"
               >
-                Không gian Quản trị
+                <span>Không gian Quản trị</span>
+                {adminBadgeCount > 0 && (
+                  <span
+                    title={`${adminBadgeCount} yêu cầu / liên hệ cần xử lý`}
+                    className="px-1.5 py-0.5 text-[10px] font-bold leading-none bg-rose-500 text-white rounded-full tabular-nums"
+                  >
+                    {adminBadgeCount > 99 ? '99+' : adminBadgeCount}
+                  </span>
+                )}
               </button>
             )}
           </nav>
@@ -869,6 +1118,8 @@ export function UserLayout({
                 <AccountMenuDropdown
                   currentUser={currentUser}
                   variant="public"
+                  adminBadgeCount={adminBadgeCount}
+                  userNotificationDot={hasUnreadRequestUpdates}
                   onOpenProfileSettings={onOpenProfileSettings}
                   onOpenMyEvents={() => smoothNavigatePage('tickets')}
                   onOpenAdminPortal={onSwitchToAdmin}
@@ -901,9 +1152,15 @@ export function UserLayout({
             aria-label={mobileMenuOpen ? 'Đóng menu điều hướng' : 'Mở menu điều hướng'}
             aria-expanded={mobileMenuOpen}
             onClick={() => setMobileMenuOpen((prev) => !prev)}
-            className="md:hidden min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-xl text-slate-700 hover:bg-slate-100 active:scale-[0.97] transition-all cursor-pointer"
+            className="relative md:hidden min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-xl text-slate-700 hover:bg-slate-100 active:scale-[0.97] transition-all cursor-pointer"
           >
             {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            {!mobileMenuOpen && (hasUnreadRequestUpdates || adminBadgeCount > 0) && (
+              <span
+                aria-hidden="true"
+                className="absolute top-2 right-2 w-2.5 h-2.5 rounded-full bg-rose-500 ring-2 ring-white"
+              />
+            )}
           </button>
         </div>
       </header>
@@ -1038,7 +1295,15 @@ export function UserLayout({
                       : 'text-slate-700 hover:bg-slate-100 font-medium'
                   }`}
                 >
-                  <span>Sự kiện của tôi</span>
+                  <span className="inline-flex items-center gap-2">
+                    <span>Sự kiện của tôi</span>
+                    {hasUnreadRequestUpdates && (
+                      <span
+                        title="Có cập nhật mới từ Ban quản trị"
+                        className="w-2 h-2 rounded-full bg-rose-500"
+                      />
+                    )}
+                  </span>
                   <span
                     className={`text-xs font-bold px-2 py-0.5 rounded-full tabular-nums ${
                       activePage === 'tickets'
@@ -1064,7 +1329,14 @@ export function UserLayout({
                     <ShieldCheck className="w-4 h-4" />
                     <span>Không gian Quản trị viên</span>
                   </span>
-                  <ArrowRight className="w-4 h-4" />
+                  <span className="inline-flex items-center gap-2">
+                    {adminBadgeCount > 0 && (
+                      <span className="px-2 py-0.5 text-[11px] font-bold bg-rose-500 text-white rounded-full tabular-nums">
+                        {adminBadgeCount > 99 ? '99+' : adminBadgeCount}
+                      </span>
+                    )}
+                    <ArrowRight className="w-4 h-4" />
+                  </span>
                 </button>
               )}
             </nav>
@@ -1798,8 +2070,7 @@ export function UserLayout({
                     <button
                       type="button"
                       onClick={() => {
-                        setMyEventsTab('requests');
-                        setShowCreateRequestForm(true);
+                        openNewRequestForm();
                         onNavigatePage('tickets', 'requests');
                       }}
                       className="ef-btn-tactile w-full sm:w-auto min-h-[44px] inline-flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-slate-950 hover:bg-slate-800 rounded-full shadow-xs cursor-pointer whitespace-nowrap shrink-0"
@@ -1851,6 +2122,7 @@ export function UserLayout({
                           role="tab"
                           aria-selected={myEventsTab === 'registered'}
                           onClick={() => {
+                            setEditingRequestId(null);
                             setShowCreateRequestForm(false);
                             setMyEventsTab('registered');
                             onNavigatePage('tickets', 'registered');
@@ -1887,6 +2159,12 @@ export function UserLayout({
                           <span className="hidden sm:inline">
                             Yêu cầu tổ chức ({myRequests.length})
                           </span>
+                          {hasUnreadRequestUpdates && (
+                            <span
+                              title={`Có ${unreadRequestIds.size} yêu cầu vừa được Ban quản trị cập nhật`}
+                              className="w-2 h-2 rounded-full bg-rose-500 shrink-0"
+                            />
+                          )}
                         </button>
                       </div>
                     </div>
@@ -2068,7 +2346,7 @@ export function UserLayout({
                                             <button
                                               type="button"
                                               disabled={cancellingRegId === reg.id}
-                                              onClick={() => handleCancelTicket(reg)}
+                                              onClick={() => setConfirmCancelTicketReg(reg)}
                                               className="min-h-[38px] inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-full cursor-pointer transition-colors disabled:opacity-60"
                                             >
                                               {cancellingRegId === reg.id && (
@@ -2147,7 +2425,7 @@ export function UserLayout({
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    setReqFormError(null);
+                                    resetRequestFormFields();
                                     setShowCreateRequestForm(false);
                                   }}
                                   className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 mb-2 cursor-pointer"
@@ -2156,11 +2434,14 @@ export function UserLayout({
                                   <span>Quay lại danh sách yêu cầu</span>
                                 </button>
                                 <h2 className="text-xl font-bold text-slate-900">
-                                  Tạo yêu cầu tổ chức sự kiện mới
+                                  {editingRequestId
+                                    ? 'Chỉnh sửa yêu cầu tổ chức sự kiện'
+                                    : 'Tạo yêu cầu tổ chức sự kiện mới'}
                                 </h2>
                                 <p className="mt-1 text-xs sm:text-sm text-slate-500">
-                                  Điền thông tin chương trình và chọn các dịch vụ đi kèm. Yêu cầu sẽ
-                                  được đồng bộ lên Cloud Firestore để Admin phê duyệt.
+                                  {editingRequestId
+                                    ? 'Bạn có thể điều chỉnh thông tin và dịch vụ đi kèm khi yêu cầu vẫn đang ở trạng thái Chờ duyệt.'
+                                    : 'Điền thông tin chương trình và chọn các dịch vụ đi kèm. Yêu cầu sẽ được đồng bộ lên Cloud Firestore để Admin phê duyệt.'}
                                 </p>
                               </div>
                             </div>
@@ -2397,7 +2678,7 @@ export function UserLayout({
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    setReqFormError(null);
+                                    resetRequestFormFields();
                                     setShowCreateRequestForm(false);
                                   }}
                                   className="w-full sm:w-auto min-h-[44px] px-5 py-2.5 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-full cursor-pointer"
@@ -2416,7 +2697,9 @@ export function UserLayout({
                                   )}
                                   <span>
                                     {reqSubmitting
-                                      ? 'Đang gửi lên Firestore...'
+                                      ? 'Đang lưu lên Firestore...'
+                                      : editingRequestId
+                                      ? 'Lưu thay đổi yêu cầu'
                                       : 'Gửi yêu cầu tổ chức'}
                                   </span>
                                 </button>
@@ -2529,6 +2812,12 @@ export function UserLayout({
                                           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2 sm:gap-3">
                                             <div>
                                               <div className="flex flex-wrap items-center gap-2 text-xs">
+                                                {unreadRequestIds.has(ev.id) && (
+                                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 font-bold bg-rose-50 text-rose-600 border border-rose-200 rounded-md">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
+                                                    <span>Mới cập nhật</span>
+                                                  </span>
+                                                )}
                                                 <span
                                                   className={`px-2.5 py-1 font-semibold border rounded-md ${planMeta.bgClass} ${planMeta.textClass}`}
                                                 >
@@ -2780,6 +3069,43 @@ export function UserLayout({
                                               </p>
                                             )}
                                           </div>
+
+                                          {/* User Edit / Cancel Controls (Unlocked only while pending_review) */}
+                                          <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2.5">
+                                            {ev.planningStatus === 'pending_review' ? (
+                                              <>
+                                                <span className="text-xs text-slate-500">
+                                                  Bạn có thể chỉnh sửa hoặc hủy yêu cầu khi Ban quản trị chưa duyệt.
+                                                </span>
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => openEditRequestForm(ev)}
+                                                    className="min-h-[38px] inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-full cursor-pointer transition-colors"
+                                                  >
+                                                    <Edit3 className="w-3.5 h-3.5" />
+                                                    <span>Chỉnh sửa yêu cầu</span>
+                                                  </button>
+                                                  <button
+                                                    type="button"
+                                                    disabled={cancellingRequestId === ev.id}
+                                                    onClick={() => setConfirmCancelRequest(ev)}
+                                                    className="min-h-[38px] inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-full cursor-pointer transition-colors disabled:opacity-60"
+                                                  >
+                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                    <span>Hủy yêu cầu</span>
+                                                  </button>
+                                                </div>
+                                              </>
+                                            ) : (
+                                              <div className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500">
+                                                <Lock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                                <span>
+                                                  Yêu cầu đã được Ban quản trị tiếp nhận xử lý — khóa chỉnh sửa &amp; hủy trực tiếp.
+                                                </span>
+                                              </div>
+                                            )}
+                                          </div>
                                         </div>
                                       </div>
                                     </article>
@@ -2890,6 +3216,40 @@ export function UserLayout({
           </>
         )}
       </AnimatedModal>
+
+      {/* Unified Confirm Modal for Ticket Cancellation */}
+      <ConfirmModal
+        isOpen={Boolean(confirmCancelTicketReg)}
+        title="Hủy đăng ký tham gia sự kiện?"
+        description={
+          confirmCancelTicketReg
+            ? `Bạn chắc chắn muốn hủy vé ${confirmCancelTicketReg.ticketCode} cho sự kiện "${confirmCancelTicketReg.eventTitle}"? Hệ thống sẽ hoàn trả 1 chỗ trống lên Cloud Firestore.`
+            : ''
+        }
+        confirmLabel="Xác nhận hủy vé"
+        cancelLabel="Giữ lại vé"
+        tone="danger"
+        loading={Boolean(cancellingRegId)}
+        onConfirm={handleConfirmCancelTicket}
+        onCancel={() => setConfirmCancelTicketReg(null)}
+      />
+
+      {/* Unified Confirm Modal for Pending Organization Request Cancellation */}
+      <ConfirmModal
+        isOpen={Boolean(confirmCancelRequest)}
+        title="Hủy yêu cầu tổ chức sự kiện?"
+        description={
+          confirmCancelRequest
+            ? `Yêu cầu "${confirmCancelRequest.title}" sẽ bị xóa khỏi hàng đợi phê duyệt trên Cloud Firestore. Bạn không thể hoàn tác thao tác này.`
+            : ''
+        }
+        confirmLabel="Xác nhận hủy yêu cầu"
+        cancelLabel="Giữ lại yêu cầu"
+        tone="danger"
+        loading={Boolean(cancellingRequestId)}
+        onConfirm={handleConfirmCancelRequest}
+        onCancel={() => setConfirmCancelRequest(null)}
+      />
     </div>
   );
 }

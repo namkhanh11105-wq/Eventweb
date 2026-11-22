@@ -61,6 +61,7 @@ import {
   updateRegistrationStatus,
 } from '../services/dataService';
 import { AccountMenuDropdown } from './AccountMenuDropdown';
+import { ConfirmModal } from './ConfirmModal';
 import { EventBanner } from './EventBanner';
 import { EventGallerySection } from './EventGalleryLightbox';
 import { EventGalleryPicker } from './EventGalleryPicker';
@@ -309,7 +310,8 @@ export function AdminLayout({
   const [formState, setFormState] = useState<EventFormInput>(createEmptyForm);
   const [customCategory, setCustomCategory] = useState('');
   const [savingEvent, setSavingEvent] = useState(false);
-  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+  const [deleteConfirmEvent, setDeleteConfirmEvent] = useState<EventItem | null>(null);
+  const [rejectConfirmEvent, setRejectConfirmEvent] = useState<EventItem | null>(null);
 
   const workspaceEvent = useMemo(
     () => events.find((e) => e.id === workspaceEventId) || null,
@@ -585,6 +587,13 @@ export function AdminLayout({
 
   async function handlePlanningStatusChange(id: string, nextPlanning: PlanningStatus) {
     if (updatingPlanningEventId) return;
+    if (nextPlanning === 'rejected') {
+      const target = events.find((ev) => ev.id === id) || null;
+      if (target) {
+        setRejectConfirmEvent(target);
+        return;
+      }
+    }
     setUpdatingPlanningEventId(id);
     try {
       await updateEvent(id, { planningStatus: nextPlanning });
@@ -592,6 +601,30 @@ export function AdminLayout({
     } catch (err) {
       onNotify(
         err instanceof Error ? err.message : 'Không thể cập nhật tiến độ kế hoạch.',
+        'error'
+      );
+    } finally {
+      setUpdatingPlanningEventId(null);
+    }
+  }
+
+  async function handleConfirmRejectPlanning(noteValue?: string) {
+    if (!rejectConfirmEvent || updatingPlanningEventId) return;
+    setUpdatingPlanningEventId(rejectConfirmEvent.id);
+    try {
+      const trimmedNote = (noteValue ?? '').trim();
+      await updateEvent(rejectConfirmEvent.id, {
+        planningStatus: 'rejected',
+        ...(trimmedNote ? { adminResponseNote: trimmedNote } : {}),
+      });
+      if (trimmedNote && workspaceEventId === rejectConfirmEvent.id) {
+        setEventResponseDraft(trimmedNote);
+      }
+      onNotify(`Đã chuyển yêu cầu "${rejectConfirmEvent.title}" sang trạng thái Từ chối.`);
+      setRejectConfirmEvent(null);
+    } catch (err) {
+      onNotify(
+        err instanceof Error ? err.message : 'Không thể từ chối yêu cầu tổ chức.',
         'error'
       );
     } finally {
@@ -624,7 +657,7 @@ export function AdminLayout({
     setDeletingId(id);
     try {
       await deleteEvent(id);
-      setDeleteTargetId(null);
+      setDeleteConfirmEvent(null);
       if (workspaceEventId === id) {
         setWorkspaceEventId(null);
       }
@@ -916,6 +949,8 @@ export function AdminLayout({
     }
   }
 
+  const totalAdminAttentionCount = stats.pendingReviewCount + stats.newInquiriesCount;
+
   const navItems: { key: AdminSection; label: string; icon: typeof LayoutDashboard; badge?: number }[] = [
     { key: 'overview', label: 'Tổng quan', icon: LayoutDashboard },
     {
@@ -926,7 +961,12 @@ export function AdminLayout({
     },
     { key: 'registrations', label: 'Người tham gia & QR', icon: UserCheck },
     { key: 'users', label: 'Tài khoản hệ thống', icon: Users },
-    { key: 'contact', label: 'Liên hệ công khai', icon: Phone },
+    {
+      key: 'contact',
+      label: 'Liên hệ công khai',
+      icon: Phone,
+      badge: stats.newInquiriesCount > 0 ? stats.newInquiriesCount : undefined,
+    },
   ];
 
   const headerTitle =
@@ -938,7 +978,7 @@ export function AdminLayout({
     containerRef: sidebarNavRef,
     setItemRef: setSidebarNavRef,
     rect: sidebarNavPill,
-  } = useSlidingIndicator(section, stats.pendingReviewCount);
+  } = useSlidingIndicator(section, `${stats.pendingReviewCount}-${stats.newInquiriesCount}`);
 
   const wsTabDirection = useTabDirection(workspaceTab, WS_TAB_ORDER);
 
@@ -1026,8 +1066,8 @@ export function AdminLayout({
                       <span>{item.label}</span>
                     </span>
                     {item.badge !== undefined && (
-                      <span className="px-2 py-0.5 text-[11px] font-bold rounded-full bg-amber-100 text-amber-800">
-                        {item.badge}
+                      <span className="px-2 py-0.5 text-[11px] font-bold rounded-full bg-rose-500 text-white tabular-nums shadow-xs">
+                        {item.badge > 99 ? '99+' : item.badge}
                       </span>
                     )}
                   </button>
@@ -1092,9 +1132,17 @@ export function AdminLayout({
               type="button"
               aria-label="Mở menu quản trị"
               onClick={() => setSidebarOpen(true)}
-              className="lg:hidden p-2 rounded-lg text-slate-600 hover:bg-slate-100 cursor-pointer"
+              className="relative lg:hidden p-2 rounded-lg text-slate-600 hover:bg-slate-100 cursor-pointer"
             >
               <Menu className="w-5 h-5" />
+              {totalAdminAttentionCount > 0 && (
+                <span
+                  aria-label={`${totalAdminAttentionCount} mục cần xử lý`}
+                  className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 inline-flex items-center justify-center text-[10px] font-bold text-white bg-rose-500 rounded-full ring-2 ring-white tabular-nums"
+                >
+                  {totalAdminAttentionCount > 99 ? '99+' : totalAdminAttentionCount}
+                </span>
+              )}
             </button>
             <div className="min-w-0">
               <div className="text-xs text-slate-500 hidden sm:block">
@@ -1111,6 +1159,7 @@ export function AdminLayout({
               <AccountMenuDropdown
                 currentUser={currentUser}
                 variant="admin"
+                adminBadgeCount={totalAdminAttentionCount}
                 onOpenProfileSettings={onOpenProfileSettings}
                 onOpenAdminPortal={() => {
                   if (section === 'overview' && !workspaceEventId) return;
@@ -1677,38 +1726,14 @@ export function AdminLayout({
                               >
                                 <Edit3 className="w-4 h-4" />
                               </button>
-                              {deleteTargetId === ev.id ? (
-                                <div className="inline-flex items-center gap-1">
-                                  <button
-                                    type="button"
-                                    disabled={deletingId === ev.id}
-                                    onClick={() => handleConfirmDelete(ev.id)}
-                                    className="min-h-[40px] inline-flex items-center gap-1 px-3 py-2 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-lg cursor-pointer disabled:opacity-60"
-                                  >
-                                    {deletingId === ev.id && (
-                                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                    )}
-                                    <span>Xóa</span>
-                                  </button>
-                                  <button
-                                    type="button"
-                                    disabled={deletingId === ev.id}
-                                    onClick={() => setDeleteTargetId(null)}
-                                    className="min-h-[40px] px-3 py-2 text-xs font-medium text-slate-600 bg-slate-100 rounded-lg cursor-pointer"
-                                  >
-                                    Hủy
-                                  </button>
-                                </div>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => setDeleteTargetId(ev.id)}
-                                  className="min-w-[40px] min-h-[40px] inline-flex items-center justify-center text-slate-600 bg-slate-50 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 rounded-lg cursor-pointer"
-                                  title="Xóa sự kiện"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              )}
+                              <button
+                                type="button"
+                                onClick={() => setDeleteConfirmEvent(ev)}
+                                className="min-w-[40px] min-h-[40px] inline-flex items-center justify-center text-slate-600 bg-slate-50 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 rounded-lg cursor-pointer"
+                                title="Xóa sự kiện"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
                             </div>
                           </div>
                         </div>
@@ -1864,38 +1889,14 @@ export function AdminLayout({
                                 >
                                   <Edit3 className="w-4 h-4" />
                                 </button>
-                                {deleteTargetId === ev.id ? (
-                                  <div className="inline-flex items-center gap-1">
-                                    <button
-                                      type="button"
-                                      disabled={deletingId === ev.id}
-                                      onClick={() => handleConfirmDelete(ev.id)}
-                                      className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded cursor-pointer disabled:opacity-60"
-                                    >
-                                      {deletingId === ev.id && (
-                                        <Loader2 className="w-3 h-3 animate-spin" />
-                                      )}
-                                      <span>Xóa</span>
-                                    </button>
-                                    <button
-                                      type="button"
-                                      disabled={deletingId === ev.id}
-                                      onClick={() => setDeleteTargetId(null)}
-                                      className="px-2 py-1 text-xs font-medium text-slate-600 bg-slate-100 rounded cursor-pointer"
-                                    >
-                                      Hủy
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    onClick={() => setDeleteTargetId(ev.id)}
-                                    className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-md cursor-pointer"
-                                    title="Xóa sự kiện"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
-                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => setDeleteConfirmEvent(ev)}
+                                  className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-md cursor-pointer"
+                                  title="Xóa sự kiện"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
                               </div>
                             </td>
                           </tr>
@@ -4020,6 +4021,49 @@ export function AdminLayout({
               </div>
             </form>
       </AnimatedModal>
+
+      {/* Unified Confirm Modal: Delete Event */}
+      <ConfirmModal
+        isOpen={Boolean(deleteConfirmEvent)}
+        title="Xóa sự kiện khỏi hệ thống?"
+        description={
+          deleteConfirmEvent
+            ? `Sự kiện "${deleteConfirmEvent.title}" sẽ bị xóa vĩnh viễn khỏi Cloud Firestore. Thao tác này không thể hoàn tác.`
+            : ''
+        }
+        confirmLabel="Xóa sự kiện"
+        cancelLabel="Hủy bỏ"
+        tone="danger"
+        loading={Boolean(deletingId)}
+        onConfirm={() => {
+          if (deleteConfirmEvent) {
+            void handleConfirmDelete(deleteConfirmEvent.id);
+          }
+        }}
+        onCancel={() => setDeleteConfirmEvent(null)}
+      />
+
+      {/* Unified Confirm Modal: Reject Organization Request with Optional Admin Note */}
+      <ConfirmModal
+        isOpen={Boolean(rejectConfirmEvent)}
+        title="Từ chối yêu cầu tổ chức sự kiện?"
+        description={
+          rejectConfirmEvent
+            ? `Bạn chắc chắn muốn chuyển yêu cầu "${rejectConfirmEvent.title}" sang trạng thái Từ chối? Người dùng sẽ nhận được thông báo cập nhật ngay lập tức.`
+            : ''
+        }
+        confirmLabel="Xác nhận từ chối"
+        cancelLabel="Quay lại"
+        tone="warning"
+        loading={Boolean(updatingPlanningEventId)}
+        noteLabel="Lý do từ chối / gợi ý điều chỉnh gửi tới người yêu cầu (tùy chọn)"
+        notePlaceholder="Ví dụ: Thời gian dự kiến trùng với lịch bảo trì hoặc chưa đủ thông tin địa điểm..."
+        defaultNote={rejectConfirmEvent?.adminResponseNote || ''}
+        onConfirm={(note) => {
+          void handleConfirmRejectPlanning(note);
+        }}
+        onCancel={() => setRejectConfirmEvent(null)}
+      />
     </div>
   );
 }

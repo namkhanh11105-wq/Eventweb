@@ -109,6 +109,7 @@ export interface EventItem {
   rules: string;
   adminResponseNote?: string;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface PreselectedServiceBooking {
@@ -183,6 +184,7 @@ export interface EventFormInput {
   faqs: FaqItem[];
   rules: string;
   adminResponseNote?: string;
+  updatedAt?: string;
 }
 
 export interface OrganizerEventRequestInput {

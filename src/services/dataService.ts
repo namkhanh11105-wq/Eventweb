@@ -3,6 +3,7 @@ import {
   EmailAuthProvider,
   onAuthStateChanged,
   reauthenticateWithCredential,
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signOut,
   updatePassword,
@@ -210,6 +211,7 @@ function normalizeEventDoc(id: string, raw: Record<string, unknown>): EventItem 
     rules: String(raw.rules ?? 'Vui lòng mang theo mã QR xác nhận khi tham dự.'),
     adminResponseNote: String(raw.adminResponseNote ?? '').trim(),
     createdAt: String(raw.createdAt ?? new Date().toISOString()),
+    updatedAt: raw.updatedAt ? String(raw.updatedAt) : undefined,
   };
 }
 
@@ -249,6 +251,12 @@ function mapFirebaseAuthError(err: unknown): string {
   }
   if (message.includes('auth/invalid-email')) {
     return 'Địa chỉ email không hợp lệ.';
+  }
+  if (message.includes('auth/too-many-requests')) {
+    return 'Bạn đã gửi quá nhiều yêu cầu liên tiếp. Vui lòng thử lại sau ít phút.';
+  }
+  if (message.includes('auth/network-request-failed')) {
+    return 'Không thể kết nối máy chủ xác thực. Vui lòng kiểm tra kết nối mạng.';
   }
   return message || 'Đã xảy ra lỗi xác thực.';
 }
@@ -401,6 +409,24 @@ export async function loginAccount(emailInput: string, password: string): Promis
 export async function logoutAccount(): Promise<void> {
   const { auth: firebaseAuth } = requireFirebase();
   await signOut(firebaseAuth);
+}
+
+export async function sendPasswordReset(emailInput: string): Promise<void> {
+  const { auth: firebaseAuth } = requireFirebase();
+  const email = emailInput.trim().toLowerCase();
+  if (!email) {
+    throw new Error('Vui lòng nhập địa chỉ email đã đăng ký tài khoản.');
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new Error('Địa chỉ email chưa đúng định dạng.');
+  }
+
+  try {
+    firebaseAuth.languageCode = 'vi';
+    await sendPasswordResetEmail(firebaseAuth, email);
+  } catch (err) {
+    throw new Error(mapFirebaseAuthError(err));
+  }
 }
 
 export async function updateUserProfileInfo(params: {
@@ -821,6 +847,115 @@ export async function createOrganizerEventRequest(
   }
 }
 
+export async function updatePendingOrganizerEventRequest(
+  eventId: string,
+  clientUserId: string,
+  input: OrganizerEventRequestInput
+): Promise<void> {
+  const { db: firestore } = requireFirebase();
+  const eventRef = doc(firestore, 'events', eventId);
+  const nowIso = new Date().toISOString();
+  const parsedMaxSlots = Number(input.maxSlots);
+  const safeClientName = String(input.clientName ?? '').trim() || 'Thành viên EventFlow';
+  const safeBannerUrl = String(input.bannerUrl ?? '').trim();
+  const safeGalleryImages = normalizeGalleryImages(input.galleryImages);
+  assertEventMediaSizeSafe(safeBannerUrl, safeGalleryImages);
+
+  try {
+    const snap = await getDoc(eventRef);
+    if (!snap.exists()) {
+      throw new Error('Yêu cầu tổ chức sự kiện không tồn tại hoặc đã bị hủy.');
+    }
+    const current = snap.data() as EventItem;
+    const ownerMatch =
+      (current.clientUserId && current.clientUserId === clientUserId) ||
+      (input.clientEmail &&
+        current.clientEmail &&
+        current.clientEmail.toLowerCase() === input.clientEmail.trim().toLowerCase());
+    if (!ownerMatch) {
+      throw new Error('Bạn không có quyền chỉnh sửa yêu cầu tổ chức này.');
+    }
+    if ((current.planningStatus || 'pending_review') !== 'pending_review') {
+      throw new Error(
+        'Yêu cầu này đã được Ban quản trị tiếp nhận xử lý nên không thể chỉnh sửa.'
+      );
+    }
+
+    const updates = sanitizeForFirestore({
+      title: String(input.title ?? '').trim(),
+      description: String(input.description ?? '').trim(),
+      bannerUrl: safeBannerUrl,
+      galleryImages: safeGalleryImages,
+      location: String(input.location ?? '').trim(),
+      startTime: toSafeIsoDate(input.startTime, current.startTime || nowIso),
+      endTime: toSafeIsoDate(input.endTime, current.endTime || nowIso),
+      maxSlots:
+        Number.isFinite(parsedMaxSlots) && parsedMaxSlots > 0 ? Math.round(parsedMaxSlots) : 60,
+      category: String(input.category || 'Hội thảo / Workshop'),
+      organizer: String(input.organizerName ?? '').trim() || safeClientName,
+      clientName: safeClientName,
+      clientPhone: String(input.clientPhone ?? '').trim(),
+      requestedServices: normalizeServiceRequests(input.requestedServices),
+      updatedAt: nowIso,
+    });
+
+    await updateDoc(eventRef, updates);
+  } catch (err) {
+    if (
+      err instanceof Error &&
+      (err.message.includes('không tồn tại') ||
+        err.message.includes('không có quyền') ||
+        err.message.includes('tiếp nhận xử lý') ||
+        err.message.includes('dung lượng ảnh'))
+    ) {
+      throw err;
+    }
+    handleFirestoreError(err, OperationType.UPDATE, `events/${eventId}`);
+  }
+}
+
+export async function cancelPendingOrganizerEventRequest(
+  eventId: string,
+  clientUserId: string,
+  clientEmail?: string
+): Promise<void> {
+  const { db: firestore } = requireFirebase();
+  const eventRef = doc(firestore, 'events', eventId);
+
+  try {
+    const snap = await getDoc(eventRef);
+    if (!snap.exists()) {
+      throw new Error('Yêu cầu tổ chức sự kiện không tồn tại hoặc đã bị hủy trước đó.');
+    }
+    const current = snap.data() as EventItem;
+    const ownerMatch =
+      (current.clientUserId && current.clientUserId === clientUserId) ||
+      (clientEmail &&
+        current.clientEmail &&
+        current.clientEmail.toLowerCase() === clientEmail.trim().toLowerCase());
+    if (!ownerMatch) {
+      throw new Error('Bạn không có quyền hủy yêu cầu tổ chức này.');
+    }
+    if ((current.planningStatus || 'pending_review') !== 'pending_review') {
+      throw new Error(
+        'Yêu cầu này đã được Ban quản trị tiếp nhận xử lý nên không thể hủy trực tiếp.'
+      );
+    }
+
+    await deleteDoc(eventRef);
+  } catch (err) {
+    if (
+      err instanceof Error &&
+      (err.message.includes('không tồn tại') ||
+        err.message.includes('không có quyền') ||
+        err.message.includes('tiếp nhận xử lý'))
+    ) {
+      throw err;
+    }
+    handleFirestoreError(err, OperationType.DELETE, `events/${eventId}`);
+  }
+}
+
 export async function duplicateEvent(source: EventItem): Promise<EventItem> {
   return createEvent({
     title: `${source.title} (Bản sao)`,
@@ -924,6 +1059,7 @@ export async function updateEvent(id: string, input: Partial<EventFormInput>): P
     ...(input.adminResponseNote !== undefined
       ? { adminResponseNote: input.adminResponseNote.trim() }
       : {}),
+    updatedAt: new Date().toISOString(),
   });
 
   try {
@@ -940,7 +1076,10 @@ export async function updateEventServices(
   const { db: firestore } = requireFirebase();
   const safeServices = sanitizeForFirestore(normalizeServiceRequests(requestedServices));
   try {
-    await updateDoc(doc(firestore, 'events', eventId), { requestedServices: safeServices });
+    await updateDoc(doc(firestore, 'events', eventId), {
+      requestedServices: safeServices,
+      updatedAt: new Date().toISOString(),
+    });
   } catch (err) {
     handleFirestoreError(err, OperationType.UPDATE, `events/${eventId}`);
   }
@@ -953,7 +1092,10 @@ export async function updateEventInvitedGuests(
   const { db: firestore } = requireFirebase();
   const safeGuests = sanitizeForFirestore(normalizeInvitedGuests(invitedGuests));
   try {
-    await updateDoc(doc(firestore, 'events', eventId), { invitedGuests: safeGuests });
+    await updateDoc(doc(firestore, 'events', eventId), {
+      invitedGuests: safeGuests,
+      updatedAt: new Date().toISOString(),
+    });
   } catch (err) {
     handleFirestoreError(err, OperationType.UPDATE, `events/${eventId}`);
   }

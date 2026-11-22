@@ -27,6 +27,7 @@ import {
   submitFeedback,
   updateRegistrationStatus,
 } from '../services/dataService';
+import { ConfirmModal } from './ConfirmModal';
 import { EventBanner } from './EventBanner';
 import { EventGallerySection } from './EventGalleryLightbox';
 import {
@@ -852,40 +853,13 @@ export function EventDetailPage({
                   </button>
 
                   {canCancelExisting && (
-                    confirmCancelOpen ? (
-                      <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 space-y-2.5 animate-ef-fade-in">
-                        <p className="text-xs font-medium text-rose-900">
-                          Bạn chắc chắn muốn hủy đăng ký và hoàn trả chỗ trống?
-                        </p>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            disabled={cancelling}
-                            onClick={handleCancelRegistration}
-                            className="flex-1 min-h-[36px] inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-lg cursor-pointer disabled:opacity-60"
-                          >
-                            {cancelling && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                            <span>{cancelling ? 'Đang hủy...' : 'Xác nhận hủy'}</span>
-                          </button>
-                          <button
-                            type="button"
-                            disabled={cancelling}
-                            onClick={() => setConfirmCancelOpen(false)}
-                            className="min-h-[36px] px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg cursor-pointer"
-                          >
-                            Giữ lại
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => setConfirmCancelOpen(true)}
-                        className="w-full min-h-[38px] py-2 px-4 text-xs font-semibold text-rose-700 bg-white hover:bg-rose-50 border border-rose-200 rounded-xl cursor-pointer transition-colors"
-                      >
-                        Hủy đăng ký tham gia
-                      </button>
-                    )
+                    <button
+                      type="button"
+                      onClick={() => setConfirmCancelOpen(true)}
+                      className="w-full min-h-[38px] py-2 px-4 text-xs font-semibold text-rose-700 bg-white hover:bg-rose-50 border border-rose-200 rounded-xl cursor-pointer transition-colors"
+                    >
+                      Hủy đăng ký tham gia
+                    </button>
                   )}
                 </div>
               </div>
@@ -995,6 +969,22 @@ export function EventDetailPage({
           </aside>
         </div>
       </article>
+
+      <ConfirmModal
+        isOpen={confirmCancelOpen}
+        title="Hủy đăng ký tham gia sự kiện?"
+        description={
+          existingRegistration
+            ? `Bạn chắc chắn muốn hủy vé ${existingRegistration.ticketCode} cho sự kiện "${event.title}" và hoàn trả chỗ trống lên hệ thống?`
+            : 'Bạn chắc chắn muốn hủy đăng ký tham gia sự kiện này?'
+        }
+        confirmLabel="Xác nhận hủy vé"
+        cancelLabel="Giữ lại vé"
+        tone="danger"
+        loading={cancelling}
+        onConfirm={handleCancelRegistration}
+        onCancel={() => setConfirmCancelOpen(false)}
+      />
     </div>
   );
 }

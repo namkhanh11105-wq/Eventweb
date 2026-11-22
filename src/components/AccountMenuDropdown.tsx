@@ -13,6 +13,8 @@ import type { AppUser } from '../types';
 interface AccountMenuDropdownProps {
   currentUser: AppUser;
   variant?: 'public' | 'admin';
+  adminBadgeCount?: number;
+  userNotificationDot?: boolean;
   onOpenProfileSettings: () => void;
   onOpenMyEvents?: () => void;
   onOpenAdminPortal?: () => void;
@@ -23,6 +25,8 @@ interface AccountMenuDropdownProps {
 export function AccountMenuDropdown({
   currentUser,
   variant = 'public',
+  adminBadgeCount = 0,
+  userNotificationDot = false,
   onOpenProfileSettings,
   onOpenMyEvents,
   onOpenAdminPortal,
@@ -90,6 +94,13 @@ export function AccountMenuDropdown({
             <ShieldCheck className="w-2.5 h-2.5" />
             <span>Admin</span>
           </span>
+        )}
+
+        {((isAdmin && adminBadgeCount > 0) || (!isAdmin && userNotificationDot)) && (
+          <span
+            aria-label="Có cập nhật mới"
+            className="w-2 h-2 rounded-full bg-rose-500 ring-2 ring-white shrink-0"
+          />
         )}
 
         <ChevronDown
@@ -170,10 +181,17 @@ export function AccountMenuDropdown({
                     setOpen(false);
                     onOpenAdminPortal();
                   }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-indigo-700 hover:bg-indigo-50/90 transition-colors cursor-pointer text-left"
+                  className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-indigo-700 hover:bg-indigo-50/90 transition-colors cursor-pointer text-left"
                 >
-                  <ShieldCheck className="w-4 h-4 text-indigo-600 shrink-0" />
-                  <span>Không gian Quản trị</span>
+                  <span className="inline-flex items-center gap-2.5">
+                    <ShieldCheck className="w-4 h-4 text-indigo-600 shrink-0" />
+                    <span>Không gian Quản trị</span>
+                  </span>
+                  {adminBadgeCount > 0 && (
+                    <span className="px-1.5 py-0.5 text-[10px] font-bold bg-rose-500 text-white rounded-full tabular-nums">
+                      {adminBadgeCount > 99 ? '99+' : adminBadgeCount}
+                    </span>
+                  )}
                 </button>
               )}
               {variant === 'admin' && onOpenPublicSite && (
@@ -200,10 +218,21 @@ export function AccountMenuDropdown({
                   setOpen(false);
                   onOpenMyEvents();
                 }}
-                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:text-slate-950 hover:bg-slate-100/80 transition-colors cursor-pointer text-left"
+                className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:text-slate-950 hover:bg-slate-100/80 transition-colors cursor-pointer text-left"
               >
-                <Ticket className="w-4 h-4 text-slate-500 shrink-0" />
-                <span>Sự kiện của tôi</span>
+                <span className="inline-flex items-center gap-2.5">
+                  <Ticket className="w-4 h-4 text-slate-500 shrink-0" />
+                  <span>Sự kiện của tôi</span>
+                </span>
+                {userNotificationDot && (
+                  <span
+                    title="Có phản hồi hoặc cập nhật mới từ Ban quản trị"
+                    className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-bold bg-rose-50 text-rose-600 border border-rose-200 rounded-full"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                    <span>Mới</span>
+                  </span>
+                )}
               </button>
             )
           )}

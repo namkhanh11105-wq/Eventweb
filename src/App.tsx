@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { CheckCircle2, AlertCircle, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { AlertCircle, CalendarDays, CheckCircle2, X } from 'lucide-react';
 import { AuthScreen } from './components/AuthScreen';
 import { TopProgressBar, prefersReducedMotion, triggerPageProgress } from './components/MotionPrimitives';
 import { ProfileSettingsModal } from './components/ProfileSettingsModal';
@@ -361,6 +361,57 @@ export default function App() {
     }
   }
 
+  const adminBadgeCount = useMemo(() => {
+    if (currentUser?.role !== 'admin') return 0;
+    const pendingEventsCount = events.filter(
+      (e) => e.planningStatus === 'pending_review'
+    ).length;
+    const newInquiriesCount = contactInquiries.filter((i) => i.status === 'new').length;
+    return pendingEventsCount + newInquiriesCount;
+  }, [currentUser?.role, events, contactInquiries]);
+
+  const activeDetailEventTitle = useMemo(() => {
+    if (publicPage !== 'event_detail' || !selectedEventId) return '';
+    return events.find((e) => e.id === selectedEventId)?.title || '';
+  }, [publicPage, selectedEventId, events]);
+
+  useEffect(() => {
+    if (!authReady) {
+      document.title = 'Đang khởi tạo — EventFlow';
+      return;
+    }
+    if (authView !== null && !currentUser) {
+      document.title =
+        authView.mode === 'register'
+          ? 'Đăng ký tài khoản — EventFlow'
+          : 'Đăng nhập — EventFlow';
+      return;
+    }
+    if (currentUser?.role === 'admin' && portalView === 'admin') {
+      document.title = 'Quản trị hệ thống — EventFlow';
+      return;
+    }
+    switch (publicPage) {
+      case 'services':
+        document.title = 'Dịch vụ tổ chức — EventFlow';
+        break;
+      case 'contact':
+        document.title = 'Liên hệ — EventFlow';
+        break;
+      case 'tickets':
+        document.title = 'Sự kiện của tôi — EventFlow';
+        break;
+      case 'event_detail':
+        document.title = activeDetailEventTitle
+          ? `${activeDetailEventTitle} — EventFlow`
+          : 'Chi tiết sự kiện — EventFlow';
+        break;
+      default:
+        document.title = 'Khám phá sự kiện — EventFlow';
+        break;
+    }
+  }, [authReady, authView, currentUser, portalView, publicPage, activeDetailEventTitle]);
+
   const rootViewKey = !authReady
     ? 'loading'
     : authView !== null && !currentUser
@@ -379,9 +430,63 @@ export default function App() {
       >
         <div key={rootViewKey} className={rootViewKey === 'loading' ? '' : 'animate-ef-page-enter'}>
       {!authReady ? (
-        <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
-          <div className="bg-white border border-slate-200 rounded-xl px-6 py-5 text-sm font-medium text-slate-600">
-            Đang khởi tạo hệ thống EventFlow...
+        <div
+          aria-busy="true"
+          aria-label="Đang kiểm tra phiên đăng nhập EventFlow"
+          className="min-h-screen bg-[#F8FAFC] flex flex-col"
+        >
+          {/* Anti-flicker Navbar Skeleton */}
+          <div className="h-14 bg-white/85 backdrop-blur-md border-b border-slate-200/70 px-4 sm:px-6 lg:px-8 flex items-center justify-between">
+            <div className="max-w-7xl w-full mx-auto flex items-center justify-between gap-6">
+              <div className="inline-flex items-center gap-2.5">
+                <span className="w-7 h-7 rounded-lg bg-gradient-to-br from-rose-500 to-orange-500 text-white flex items-center justify-center shadow-xs">
+                  <CalendarDays className="w-4 h-4" />
+                </span>
+                <span className="text-[15px] font-bold tracking-tight text-slate-900">
+                  EventFlow
+                </span>
+              </div>
+              <div className="hidden md:flex items-center gap-2">
+                <div className="h-7 w-20 rounded-full bg-slate-200/70 animate-pulse" />
+                <div className="h-7 w-20 rounded-full bg-slate-100 animate-pulse" />
+                <div className="h-7 w-20 rounded-full bg-slate-100 animate-pulse" />
+              </div>
+              <div className="h-8 w-28 rounded-full bg-slate-200/70 animate-pulse" />
+            </div>
+          </div>
+
+          {/* Centered Brand Pulse & Soft Page Skeleton */}
+          <div className="flex-1 flex flex-col items-center justify-center px-4 py-12">
+            <div className="relative flex flex-col items-center text-center max-w-sm">
+              <div className="relative">
+                <span
+                  aria-hidden="true"
+                  className="absolute inset-0 rounded-2xl bg-rose-400/20 animate-ping"
+                />
+                <div className="relative w-12 h-12 rounded-2xl bg-gradient-to-br from-rose-500 to-orange-500 text-white flex items-center justify-center shadow-lg">
+                  <CalendarDays className="w-6 h-6" />
+                </div>
+              </div>
+              <p className="mt-4 text-sm font-semibold text-slate-800">
+                Đang xác thực phiên làm việc...
+              </p>
+              <p className="mt-1 text-xs text-slate-500">
+                Đồng bộ dữ liệu tài khoản và sự kiện từ Cloud Firestore
+              </p>
+            </div>
+
+            <div className="mt-10 max-w-5xl w-full grid grid-cols-1 sm:grid-cols-3 gap-5 opacity-60">
+              {[0, 1, 2].map((idx) => (
+                <div
+                  key={idx}
+                  className="bg-white border border-slate-200/70 rounded-2xl overflow-hidden p-3 space-y-3"
+                >
+                  <div className="aspect-[16/9] rounded-xl bg-slate-100 animate-pulse" />
+                  <div className="h-4 w-3/4 rounded bg-slate-100 animate-pulse" />
+                  <div className="h-3 w-1/2 rounded bg-slate-100 animate-pulse" />
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       ) : authView !== null && !currentUser ? (
@@ -426,6 +531,7 @@ export default function App() {
           feedbacks={feedbacks}
           publicContact={publicContact}
           permissionWarning={permissionWarning}
+          adminBadgeCount={adminBadgeCount}
           onNavigatePage={navigatePublicPage}
           onOpenEventDetail={navigateToEventDetail}
           onRequestServiceBooking={handleRequestServiceBooking}
