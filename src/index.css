@@ -47,6 +47,43 @@
   }
 }
 
+@keyframes ef-tab-slide-forward {
+  from {
+    opacity: 0;
+    filter: blur(3px);
+    transform: translate3d(14px, 0, 0);
+  }
+  to {
+    opacity: 1;
+    filter: none;
+    transform: none;
+  }
+}
+
+@keyframes ef-tab-slide-backward {
+  from {
+    opacity: 0;
+    filter: blur(3px);
+    transform: translate3d(-14px, 0, 0);
+  }
+  to {
+    opacity: 1;
+    filter: none;
+    transform: none;
+  }
+}
+
+@keyframes ef-tab-fade-in {
+  from {
+    opacity: 0;
+    filter: blur(3px);
+  }
+  to {
+    opacity: 1;
+    filter: none;
+  }
+}
+
 @keyframes ef-modal-in {
   from {
     opacity: 0;
@@ -156,6 +193,29 @@
 
 .animate-ef-fade-in {
   animation: ef-fade-in 240ms ease-out both;
+}
+
+.animate-ef-tab-forward {
+  animation: ef-tab-slide-forward 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  will-change: transform, opacity, filter;
+}
+
+.animate-ef-tab-backward {
+  animation: ef-tab-slide-backward 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  will-change: transform, opacity, filter;
+}
+
+.animate-ef-tab-fade {
+  animation: ef-tab-fade-in 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  will-change: opacity, filter;
+}
+
+.ef-sliding-pill,
+.ef-gliding-underline {
+  transition-property: transform, width, height, opacity;
+  transition-duration: 280ms;
+  transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform, width;
 }
 
 .animate-ef-modal-in {
@@ -585,6 +645,9 @@
   .animate-ef-page-enter,
   .animate-ef-detail-enter,
   .animate-ef-fade-in,
+  .animate-ef-tab-forward,
+  .animate-ef-tab-backward,
+  .animate-ef-tab-fade,
   .animate-ef-modal-in,
   .animate-ef-form-spring,
   .animate-ef-toast-in,
@@ -616,6 +679,7 @@
   .ef-btn-tactile,
   .ef-btn-tactile::after,
   .ef-sliding-pill,
+  .ef-gliding-underline,
   .ef-expand-grid {
     transition: none !important;
   }

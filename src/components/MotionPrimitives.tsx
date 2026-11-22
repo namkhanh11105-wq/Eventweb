@@ -233,15 +233,85 @@ export function useSlidingIndicator(activeKey: string, dependencySignal?: unknow
 
   useEffect(() => {
     const container = containerRef.current;
-    if (!container || typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver(() => measure());
-    ro.observe(container);
-    const activeEl = itemRefs.current.get(activeKey);
-    if (activeEl) ro.observe(activeEl);
-    return () => ro.disconnect();
+    if (!container) return;
+    let disposed = false;
+    const ro =
+      typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => measure()) : null;
+    if (ro) {
+      ro.observe(container);
+      const activeEl = itemRefs.current.get(activeKey);
+      if (activeEl) ro.observe(activeEl);
+    }
+    if (typeof document !== 'undefined' && document.fonts?.ready) {
+      document.fonts.ready.then(() => {
+        if (!disposed) measure();
+      });
+    }
+    return () => {
+      disposed = true;
+      ro?.disconnect();
+    };
   }, [activeKey, measure, dependencySignal]);
 
   return { containerRef, setItemRef, rect };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Directional Horizontal Tab Transition Hook & Viewport Wrapper              */
+/* -------------------------------------------------------------------------- */
+
+export type TabDirection = 'forward' | 'backward' | 'none';
+
+export function useTabDirection<T extends string>(
+  activeKey: T,
+  orderedKeys: readonly T[]
+): TabDirection {
+  const prevKeyRef = useRef<T>(activeKey);
+  const dirRef = useRef<TabDirection>('none');
+
+  if (prevKeyRef.current !== activeKey) {
+    const prevIdx = orderedKeys.indexOf(prevKeyRef.current);
+    const nextIdx = orderedKeys.indexOf(activeKey);
+    if (prevIdx !== -1 && nextIdx !== -1 && prevIdx !== nextIdx) {
+      dirRef.current = nextIdx > prevIdx ? 'forward' : 'backward';
+    } else {
+      dirRef.current = 'none';
+    }
+    prevKeyRef.current = activeKey;
+  }
+
+  return dirRef.current;
+}
+
+interface DirectionalTabPanelProps {
+  activeKey: string;
+  direction: TabDirection;
+  children: ReactNode;
+  className?: string;
+  viewportClassName?: string;
+}
+
+export function DirectionalTabPanel({
+  activeKey,
+  direction,
+  children,
+  className = '',
+  viewportClassName = '',
+}: DirectionalTabPanelProps) {
+  const animClass =
+    direction === 'forward'
+      ? 'animate-ef-tab-forward'
+      : direction === 'backward'
+      ? 'animate-ef-tab-backward'
+      : 'animate-ef-tab-fade';
+
+  return (
+    <div className={`overflow-x-hidden ${viewportClassName}`}>
+      <div key={activeKey} className={`${animClass} ${className}`}>
+        {children}
+      </div>
+    </div>
+  );
 }
 
 /* -------------------------------------------------------------------------- */

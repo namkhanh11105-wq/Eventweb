@@ -24,6 +24,13 @@ import {
   MAX_GALLERY_IMAGE_BYTES,
 } from '../utils/imageCompression';
 import type { EventGalleryImage } from '../types';
+import {
+  DirectionalTabPanel,
+  useSlidingIndicator,
+  useTabDirection,
+} from './MotionPrimitives';
+
+const GALLERY_PICKER_MODES = ['upload', 'url'] as const;
 
 interface EventGalleryPickerProps {
   images: EventGalleryImage[];
@@ -56,10 +63,15 @@ export function EventGalleryPicker({
 
   const remainingSlots = Math.max(0, maxImages - images.length);
 
-  const activeTabClass =
-    accentColor === 'indigo'
-      ? 'bg-indigo-600 text-white shadow-xs'
-      : 'bg-slate-950 text-white shadow-xs';
+  const modeDirection = useTabDirection(mode, GALLERY_PICKER_MODES);
+  const {
+    containerRef: modeTabRef,
+    setItemRef: setModeTabRef,
+    rect: modeTabPill,
+  } = useSlidingIndicator(mode, accentColor);
+
+  const activePillBgClass =
+    accentColor === 'indigo' ? 'bg-indigo-600' : 'bg-slate-950';
 
   const activeFocusBorder =
     accentColor === 'indigo'
@@ -222,11 +234,23 @@ export function EventGalleryPicker({
 
         {/* Input Mode Switch */}
         <div
+          ref={modeTabRef}
           role="tablist"
           aria-label="Cách thêm ảnh thư viện"
-          className="inline-flex items-center gap-1 p-1 bg-white border border-slate-200 rounded-full self-start sm:self-auto shrink-0"
+          className="relative inline-flex items-center gap-1 p-1 bg-white border border-slate-200 rounded-full self-start sm:self-auto shrink-0"
         >
+          <span
+            aria-hidden="true"
+            className={`ef-sliding-pill pointer-events-none absolute top-0 left-0 rounded-full shadow-xs transition-[transform,width,opacity] duration-[280ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${activePillBgClass}`}
+            style={{
+              width: `${modeTabPill.width}px`,
+              height: `${modeTabPill.height}px`,
+              transform: `translate3d(${modeTabPill.x}px, ${modeTabPill.y}px, 0)`,
+              opacity: modeTabPill.ready ? 1 : 0,
+            }}
+          />
           <button
+            ref={setModeTabRef('upload')}
             type="button"
             role="tab"
             aria-selected={mode === 'upload'}
@@ -234,9 +258,9 @@ export function EventGalleryPicker({
               setErrorMsg(null);
               setMode('upload');
             }}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full transition-colors cursor-pointer whitespace-nowrap ${
+            className={`relative z-10 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full transition-colors duration-200 cursor-pointer whitespace-nowrap ${
               mode === 'upload'
-                ? activeTabClass
+                ? 'text-white'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
@@ -244,6 +268,7 @@ export function EventGalleryPicker({
             <span>Tải nhiều ảnh</span>
           </button>
           <button
+            ref={setModeTabRef('url')}
             type="button"
             role="tab"
             aria-selected={mode === 'url'}
@@ -251,9 +276,9 @@ export function EventGalleryPicker({
               setErrorMsg(null);
               setMode('url');
             }}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full transition-colors cursor-pointer whitespace-nowrap ${
+            className={`relative z-10 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full transition-colors duration-200 cursor-pointer whitespace-nowrap ${
               mode === 'url'
-                ? activeTabClass
+                ? 'text-white'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
@@ -274,6 +299,7 @@ export function EventGalleryPicker({
         className="sr-only"
       />
 
+      <DirectionalTabPanel activeKey={mode} direction={modeDirection}>
       {mode === 'upload' ? (
         <div
           onDragOver={(e) => {
@@ -356,6 +382,7 @@ export function EventGalleryPicker({
           </button>
         </div>
       )}
+      </DirectionalTabPanel>
 
       {errorMsg && (
         <div

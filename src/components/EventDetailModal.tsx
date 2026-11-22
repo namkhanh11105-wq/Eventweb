@@ -22,7 +22,16 @@ import {
 import { createRegistration, submitFeedback } from '../services/dataService';
 import { EventBanner } from './EventBanner';
 import { EventGallerySection } from './EventGalleryLightbox';
-import { AnimatedModal, AnimatedProgressBar } from './MotionPrimitives';
+import {
+  AnimatedModal,
+  AnimatedProgressBar,
+  DirectionalTabPanel,
+  useSlidingIndicator,
+  useTabDirection,
+} from './MotionPrimitives';
+
+type EventModalTab = 'overview' | 'schedule' | 'info';
+const MODAL_TAB_ORDER: readonly EventModalTab[] = ['overview', 'schedule', 'info'];
 import {
   EVENT_STATUS_META,
   formatDateTimeVN,
@@ -85,6 +94,14 @@ export function EventDetailModal({
   const [comment, setComment] = useState('');
   const [submittingFeedback, setSubmittingFeedback] = useState(false);
 
+  const [detailTab, setDetailTab] = useState<EventModalTab>('overview');
+  useEffect(() => {
+    if (event?.id) {
+      setDetailTab('overview');
+    }
+  }, [event?.id]);
+  const detailTabDirection = useTabDirection(detailTab, MODAL_TAB_ORDER);
+
   const eventFeedbacks = useMemo(
     () => (activeEvent ? feedbacks.filter((f) => f.eventId === activeEvent.id) : []),
     [feedbacks, activeEvent]
@@ -95,6 +112,12 @@ export function EventDetailModal({
     const sum = eventFeedbacks.reduce((acc, f) => acc + f.rating, 0);
     return (sum / eventFeedbacks.length).toFixed(1);
   }, [eventFeedbacks]);
+
+  const {
+    containerRef: modalTabRef,
+    setItemRef: setModalTabRef,
+    rect: modalTabRect,
+  } = useSlidingIndicator(detailTab, `${activeEvent?.id || ''}-${eventFeedbacks.length}`);
 
   if (!activeEvent) return null;
 
@@ -340,17 +363,98 @@ export function EventDetailModal({
               </div>
             </div>
 
-            <section>
-              <h3 className="text-base font-bold text-slate-900">Giới thiệu sự kiện</h3>
-              <p className="mt-2.5 text-sm text-slate-600 leading-relaxed whitespace-pre-line">
-                {activeEvent.description}
-              </p>
-            </section>
+            {/* Gliding Underline Sub-Tabs */}
+            <div className="border-b border-slate-200 overflow-x-auto max-w-full">
+              <div
+                ref={modalTabRef}
+                role="tablist"
+                aria-label="Chi tiết sự kiện"
+                className="relative inline-flex items-center gap-5 sm:gap-7"
+              >
+                <span
+                  aria-hidden="true"
+                  className="ef-gliding-underline pointer-events-none absolute bottom-0 left-0 h-[2px] rounded-full bg-indigo-600 transition-[transform,width,opacity] duration-[280ms] ease-[cubic-bezier(0.22,1,0.36,1)]"
+                  style={{
+                    width: `${modalTabRect.width}px`,
+                    transform: `translate3d(${modalTabRect.x}px, 0, 0)`,
+                    opacity: modalTabRect.ready ? 1 : 0,
+                  }}
+                />
+                <button
+                  ref={setModalTabRef('overview')}
+                  type="button"
+                  role="tab"
+                  aria-selected={detailTab === 'overview'}
+                  onClick={() => setDetailTab('overview')}
+                  className={`relative z-10 py-3 text-xs sm:text-sm font-semibold transition-colors whitespace-nowrap cursor-pointer ${
+                    detailTab === 'overview'
+                      ? 'text-indigo-700'
+                      : 'text-slate-500 hover:text-slate-900'
+                  }`}
+                >
+                  Tổng quan &amp; Hình ảnh
+                </button>
+                <button
+                  ref={setModalTabRef('schedule')}
+                  type="button"
+                  role="tab"
+                  aria-selected={detailTab === 'schedule'}
+                  onClick={() => setDetailTab('schedule')}
+                  className={`relative z-10 py-3 text-xs sm:text-sm font-semibold transition-colors whitespace-nowrap cursor-pointer ${
+                    detailTab === 'schedule'
+                      ? 'text-indigo-700'
+                      : 'text-slate-500 hover:text-slate-900'
+                  }`}
+                >
+                  Lịch trình &amp; Diễn giả
+                </button>
+                <button
+                  ref={setModalTabRef('info')}
+                  type="button"
+                  role="tab"
+                  aria-selected={detailTab === 'info'}
+                  onClick={() => setDetailTab('info')}
+                  className={`relative z-10 inline-flex items-center gap-1.5 py-3 text-xs sm:text-sm font-semibold transition-colors whitespace-nowrap cursor-pointer ${
+                    detailTab === 'info'
+                      ? 'text-indigo-700'
+                      : 'text-slate-500 hover:text-slate-900'
+                  }`}
+                >
+                  <span>Quy định, FAQ &amp; Đánh giá</span>
+                  {eventFeedbacks.length > 0 && (
+                    <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-indigo-50 text-indigo-700 tabular-nums">
+                      {eventFeedbacks.length}
+                    </span>
+                  )}
+                </button>
+              </div>
+            </div>
 
-            <EventGallerySection
-              galleryImages={activeEvent.galleryImages}
-              eventTitle={activeEvent.title}
-            />
+            <DirectionalTabPanel activeKey={detailTab} direction={detailTabDirection}>
+            {detailTab === 'overview' && (
+              <div className="space-y-8">
+                <section>
+                  <h3 className="text-base font-bold text-slate-900">Giới thiệu sự kiện</h3>
+                  <p className="mt-2.5 text-sm text-slate-600 leading-relaxed whitespace-pre-line">
+                    {activeEvent.description}
+                  </p>
+                </section>
+
+                <EventGallerySection
+                  galleryImages={activeEvent.galleryImages}
+                  eventTitle={activeEvent.title}
+                />
+              </div>
+            )}
+
+            {detailTab === 'schedule' && (
+              <div className="space-y-8">
+                {!(activeEvent.speakers && activeEvent.speakers.length > 0) &&
+                  !(activeEvent.agenda && activeEvent.agenda.length > 0) && (
+                    <div className="p-6 rounded-xl border border-dashed border-slate-200 bg-slate-50/70 text-center text-xs sm:text-sm text-slate-500">
+                      Ban tổ chức đang cập nhật thêm lịch trình và danh sách diễn giả chi tiết cho sự kiện này.
+                    </div>
+                  )}
 
             {activeEvent.speakers && activeEvent.speakers.length > 0 && (
               <section>
@@ -408,6 +512,11 @@ export function EventDetailModal({
                 </div>
               </section>
             )}
+              </div>
+            )}
+
+            {detailTab === 'info' && (
+              <div className="space-y-8">
 
             {activeEvent.faqs && activeEvent.faqs.length > 0 && (
               <section>
@@ -557,6 +666,9 @@ export function EventDetailModal({
                 </div>
               )}
             </section>
+              </div>
+            )}
+            </DirectionalTabPanel>
           </div>
 
           {/* Right Sticky Registration Column */}

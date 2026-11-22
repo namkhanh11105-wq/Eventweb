@@ -68,10 +68,12 @@ import { EventImagePicker } from './EventImagePicker';
 import {
   AnimatedModal,
   AnimatedNumber,
+  DirectionalTabPanel,
   handleSpotlightMove,
   prefersReducedMotion,
   triggerPageProgress,
   useSlidingIndicator,
+  useTabDirection,
 } from './MotionPrimitives';
 import {
   EVENT_CATEGORIES,
@@ -112,6 +114,7 @@ import type {
 
 type AdminSection = 'overview' | 'events' | 'registrations' | 'users' | 'contact';
 type EventWorkspaceTab = 'services' | 'guests' | 'participants';
+const WS_TAB_ORDER: readonly EventWorkspaceTab[] = ['services', 'guests', 'participants'];
 
 interface AdminLayoutProps {
   currentUser: AppUser;
@@ -937,6 +940,8 @@ export function AdminLayout({
     rect: sidebarNavPill,
   } = useSlidingIndicator(section, stats.pendingReviewCount);
 
+  const wsTabDirection = useTabDirection(workspaceTab, WS_TAB_ORDER);
+
   const {
     containerRef: wsTabNavRef,
     setItemRef: setWsTabNavRef,
@@ -980,7 +985,7 @@ export function AdminLayout({
             <div ref={sidebarNavRef} className="relative space-y-1">
               <span
                 aria-hidden="true"
-                className="ef-sliding-pill pointer-events-none absolute top-0 left-0 rounded-lg bg-indigo-50 border border-indigo-200/70 transition-[transform,width,height,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+                className="ef-sliding-pill pointer-events-none absolute top-0 left-0 rounded-lg bg-indigo-50 border border-indigo-200/70 transition-[transform,width,height,opacity] duration-[280ms] ease-[cubic-bezier(0.22,1,0.36,1)]"
                 style={{
                   width: `${sidebarNavPill.width}px`,
                   height: `${sidebarNavPill.height}px`,
@@ -2053,31 +2058,37 @@ export function AdminLayout({
                 </div>
               )}
 
-              {/* 3 Isolated Event-Scoped Tabs with Sliding Indicator */}
+              {/* 3 Isolated Event-Scoped Tabs with Gliding Underline Indicator */}
               <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
-                <div className="border-b border-slate-200 px-4 py-2.5 overflow-x-auto bg-slate-50/70">
-                  <div ref={wsTabNavRef} className="relative inline-flex items-center gap-1.5">
+                <div className="border-b border-slate-200 px-4 sm:px-5 overflow-x-auto bg-slate-50/50">
+                  <div
+                    ref={wsTabNavRef}
+                    role="tablist"
+                    aria-label="Phân mục quản lý sự kiện"
+                    className="relative inline-flex items-center gap-4 sm:gap-6"
+                  >
                     <span
                       aria-hidden="true"
-                      className="ef-sliding-pill pointer-events-none absolute top-0 left-0 rounded-lg bg-white border border-slate-200/80 shadow-xs transition-[transform,width,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+                      className="ef-gliding-underline pointer-events-none absolute bottom-0 left-0 h-[2px] rounded-full bg-indigo-600 transition-[transform,width,opacity] duration-[280ms] ease-[cubic-bezier(0.22,1,0.36,1)]"
                       style={{
                         width: `${wsTabPill.width}px`,
-                        height: `${wsTabPill.height}px`,
-                        transform: `translate3d(${wsTabPill.x}px, ${wsTabPill.y}px, 0)`,
+                        transform: `translate3d(${wsTabPill.x}px, 0, 0)`,
                         opacity: wsTabPill.ready ? 1 : 0,
                       }}
                     />
                     <button
                       ref={setWsTabNavRef('services')}
                       type="button"
+                      role="tab"
+                      aria-selected={workspaceTab === 'services'}
                       onClick={() => {
                         triggerPageProgress();
                         setWorkspaceTab('services');
                       }}
-                      className={`relative z-10 inline-flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-lg transition-colors whitespace-nowrap cursor-pointer ${
+                      className={`relative z-10 inline-flex items-center gap-2 py-3.5 text-xs font-bold transition-colors whitespace-nowrap cursor-pointer ${
                         workspaceTab === 'services'
                           ? 'text-indigo-700'
-                          : 'text-slate-600 hover:text-slate-900'
+                          : 'text-slate-500 hover:text-slate-900'
                       }`}
                     >
                       <Wrench className="w-4 h-4" />
@@ -2089,14 +2100,16 @@ export function AdminLayout({
                     <button
                       ref={setWsTabNavRef('guests')}
                       type="button"
+                      role="tab"
+                      aria-selected={workspaceTab === 'guests'}
                       onClick={() => {
                         triggerPageProgress();
                         setWorkspaceTab('guests');
                       }}
-                      className={`relative z-10 inline-flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-lg transition-colors whitespace-nowrap cursor-pointer ${
+                      className={`relative z-10 inline-flex items-center gap-2 py-3.5 text-xs font-bold transition-colors whitespace-nowrap cursor-pointer ${
                         workspaceTab === 'guests'
                           ? 'text-indigo-700'
-                          : 'text-slate-600 hover:text-slate-900'
+                          : 'text-slate-500 hover:text-slate-900'
                       }`}
                     >
                       <BadgeCheck className="w-4 h-4" />
@@ -2108,14 +2121,16 @@ export function AdminLayout({
                     <button
                       ref={setWsTabNavRef('participants')}
                       type="button"
+                      role="tab"
+                      aria-selected={workspaceTab === 'participants'}
                       onClick={() => {
                         triggerPageProgress();
                         setWorkspaceTab('participants');
                       }}
-                      className={`relative z-10 inline-flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-lg transition-colors whitespace-nowrap cursor-pointer ${
+                      className={`relative z-10 inline-flex items-center gap-2 py-3.5 text-xs font-bold transition-colors whitespace-nowrap cursor-pointer ${
                         workspaceTab === 'participants'
                           ? 'text-indigo-700'
-                          : 'text-slate-600 hover:text-slate-900'
+                          : 'text-slate-500 hover:text-slate-900'
                       }`}
                     >
                       <UserCheck className="w-4 h-4" />
@@ -2127,9 +2142,10 @@ export function AdminLayout({
                   </div>
                 </div>
 
+                <DirectionalTabPanel activeKey={workspaceTab} direction={wsTabDirection}>
                 {/* TAB 1: REQUESTED SERVICES FOR THIS EVENT */}
                 {workspaceTab === 'services' && (
-                  <div key="ws-services" className="p-5 sm:p-6 space-y-6 animate-ef-page-enter">
+                  <div className="p-5 sm:p-6 space-y-6">
                     {/* Overall Event Response Note for Client */}
                     <div className="p-4 sm:p-5 rounded-xl bg-indigo-50/60 border border-indigo-200 space-y-3">
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -2356,7 +2372,7 @@ export function AdminLayout({
 
                 {/* TAB 2: INVITED GUESTS FOR THIS EVENT */}
                 {workspaceTab === 'guests' && (
-                  <div key="ws-guests" className="p-5 sm:p-6 space-y-6 animate-ef-page-enter">
+                  <div className="p-5 sm:p-6 space-y-6">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div>
                         <h3 className="text-sm font-bold text-slate-900">
@@ -2609,7 +2625,7 @@ export function AdminLayout({
 
                 {/* TAB 3: PARTICIPANTS REGISTERED FOR THIS SPECIFIC EVENT */}
                 {workspaceTab === 'participants' && (
-                  <div key="ws-participants" className="p-5 sm:p-6 space-y-5 animate-ef-page-enter">
+                  <div className="p-5 sm:p-6 space-y-5">
                     <div className="p-4 rounded-xl bg-indigo-50/70 border border-indigo-200 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
                       <div className="flex items-start gap-3">
                         <QrCode className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" />
@@ -2845,6 +2861,7 @@ export function AdminLayout({
                     )}
                   </div>
                 )}
+                </DirectionalTabPanel>
               </div>
             </div>
           )}

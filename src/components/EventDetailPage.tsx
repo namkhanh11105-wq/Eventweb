@@ -29,7 +29,15 @@ import {
 } from '../services/dataService';
 import { EventBanner } from './EventBanner';
 import { EventGallerySection } from './EventGalleryLightbox';
-import { AnimatedProgressBar } from './MotionPrimitives';
+import {
+  AnimatedProgressBar,
+  DirectionalTabPanel,
+  useSlidingIndicator,
+  useTabDirection,
+} from './MotionPrimitives';
+
+type EventDetailTab = 'overview' | 'schedule' | 'info';
+const DETAIL_TAB_ORDER: readonly EventDetailTab[] = ['overview', 'schedule', 'info'];
 import {
   EVENT_STATUS_META,
   formatDateTimeVN,
@@ -108,6 +116,12 @@ export function EventDetailPage({
   const [comment, setComment] = useState('');
   const [submittingFeedback, setSubmittingFeedback] = useState(false);
 
+  const [detailTab, setDetailTab] = useState<EventDetailTab>('overview');
+  useEffect(() => {
+    setDetailTab('overview');
+  }, [event.id]);
+  const detailTabDirection = useTabDirection(detailTab, DETAIL_TAB_ORDER);
+
   const eventFeedbacks = useMemo(
     () => feedbacks.filter((f) => f.eventId === event.id),
     [feedbacks, event.id]
@@ -118,6 +132,12 @@ export function EventDetailPage({
     const sum = eventFeedbacks.reduce((acc, f) => acc + f.rating, 0);
     return (sum / eventFeedbacks.length).toFixed(1);
   }, [eventFeedbacks]);
+
+  const {
+    containerRef: detailTabRef,
+    setItemRef: setDetailTabRef,
+    rect: detailTabRect,
+  } = useSlidingIndicator(detailTab, `${event.id}-${eventFeedbacks.length}`);
 
   const actualRegisteredCount =
     liveRegisteredCount !== undefined ? liveRegisteredCount : event.registeredCount;
@@ -412,17 +432,99 @@ export function EventDetailPage({
               </div>
             </div>
 
-            <section>
-              <h2 className="text-base font-bold text-slate-900">Giới thiệu sự kiện</h2>
-              <p className="mt-2.5 text-sm text-slate-600 leading-relaxed whitespace-pre-line">
-                {event.description}
-              </p>
-            </section>
+            {/* Gliding Underline Sub-Tabs for Event Details */}
+            <div className="border-b border-slate-200 overflow-x-auto max-w-full">
+              <div
+                ref={detailTabRef}
+                role="tablist"
+                aria-label="Chi tiết nội dung sự kiện"
+                className="relative inline-flex items-center gap-5 sm:gap-7"
+              >
+                <span
+                  aria-hidden="true"
+                  className="ef-gliding-underline pointer-events-none absolute bottom-0 left-0 h-[2px] rounded-full bg-indigo-600 transition-[transform,width,opacity] duration-[280ms] ease-[cubic-bezier(0.22,1,0.36,1)]"
+                  style={{
+                    width: `${detailTabRect.width}px`,
+                    transform: `translate3d(${detailTabRect.x}px, 0, 0)`,
+                    opacity: detailTabRect.ready ? 1 : 0,
+                  }}
+                />
+                <button
+                  ref={setDetailTabRef('overview')}
+                  type="button"
+                  role="tab"
+                  aria-selected={detailTab === 'overview'}
+                  onClick={() => setDetailTab('overview')}
+                  className={`relative z-10 py-3 text-xs sm:text-sm font-semibold transition-colors whitespace-nowrap cursor-pointer ${
+                    detailTab === 'overview'
+                      ? 'text-indigo-700'
+                      : 'text-slate-500 hover:text-slate-900'
+                  }`}
+                >
+                  Tổng quan &amp; Hình ảnh
+                </button>
+                <button
+                  ref={setDetailTabRef('schedule')}
+                  type="button"
+                  role="tab"
+                  aria-selected={detailTab === 'schedule'}
+                  onClick={() => setDetailTab('schedule')}
+                  className={`relative z-10 py-3 text-xs sm:text-sm font-semibold transition-colors whitespace-nowrap cursor-pointer ${
+                    detailTab === 'schedule'
+                      ? 'text-indigo-700'
+                      : 'text-slate-500 hover:text-slate-900'
+                  }`}
+                >
+                  Lịch trình &amp; Diễn giả
+                </button>
+                <button
+                  ref={setDetailTabRef('info')}
+                  type="button"
+                  role="tab"
+                  aria-selected={detailTab === 'info'}
+                  onClick={() => setDetailTab('info')}
+                  className={`relative z-10 inline-flex items-center gap-1.5 py-3 text-xs sm:text-sm font-semibold transition-colors whitespace-nowrap cursor-pointer ${
+                    detailTab === 'info'
+                      ? 'text-indigo-700'
+                      : 'text-slate-500 hover:text-slate-900'
+                  }`}
+                >
+                  <span>Quy định, FAQ &amp; Đánh giá</span>
+                  {eventFeedbacks.length > 0 && (
+                    <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-indigo-50 text-indigo-700 tabular-nums">
+                      {eventFeedbacks.length}
+                    </span>
+                  )}
+                </button>
+              </div>
+            </div>
 
-            <EventGallerySection
-              galleryImages={event.galleryImages}
-              eventTitle={event.title}
-            />
+            <DirectionalTabPanel activeKey={detailTab} direction={detailTabDirection}>
+            {detailTab === 'overview' && (
+              <div className="space-y-8">
+                <section>
+                  <h2 className="text-base font-bold text-slate-900">Giới thiệu sự kiện</h2>
+                  <p className="mt-2.5 text-sm text-slate-600 leading-relaxed whitespace-pre-line">
+                    {event.description}
+                  </p>
+                </section>
+
+                <EventGallerySection
+                  galleryImages={event.galleryImages}
+                  eventTitle={event.title}
+                />
+              </div>
+            )}
+
+            {detailTab === 'schedule' && (
+              <div className="space-y-8">
+                {!(event.speakers && event.speakers.length > 0) &&
+                  !(event.invitedGuests && event.invitedGuests.length > 0) &&
+                  !(event.agenda && event.agenda.length > 0) && (
+                    <div className="p-6 rounded-xl border border-dashed border-slate-200 bg-slate-50/70 text-center text-xs sm:text-sm text-slate-500">
+                      Ban tổ chức đang cập nhật thêm lịch trình và danh sách diễn giả chi tiết cho sự kiện này.
+                    </div>
+                  )}
 
             {/* Speakers & Invited Guests */}
             {event.speakers && event.speakers.length > 0 && (
@@ -510,6 +612,11 @@ export function EventDetailPage({
                 </div>
               </section>
             )}
+              </div>
+            )}
+
+            {detailTab === 'info' && (
+              <div className="space-y-8">
 
             {/* Event FAQs */}
             {event.faqs && event.faqs.length > 0 && (
@@ -661,6 +768,9 @@ export function EventDetailPage({
                 </div>
               )}
             </section>
+              </div>
+            )}
+            </DirectionalTabPanel>
           </div>
 
           {/* Right Sticky Registration Card */}

@@ -50,11 +50,13 @@ import {
   AnimatedModal,
   AnimatedNumber,
   AnimatedProgressBar,
+  DirectionalTabPanel,
   handle3DTiltLeave,
   handle3DTiltMove,
   RevealBlock,
   triggerPageProgress,
   useSlidingIndicator,
+  useTabDirection,
 } from './MotionPrimitives';
 import { PublicFooter } from './PublicFooter';
 import { ServicesPage } from './ServicesPage';
@@ -91,6 +93,9 @@ function defaultRequestStartDatetime(daysAhead: number, hour: number): string {
   d.setHours(hour, 0, 0, 0);
   return toDatetimeLocalValue(d.toISOString());
 }
+
+const NAV_TAB_ORDER = ['discover', 'services', 'contact', 'tickets'] as const;
+const MY_EVENTS_TAB_ORDER = ['registered', 'requests'] as const;
 
 interface UserLayoutProps {
   currentUser: AppUser | null;
@@ -339,6 +344,14 @@ export function UserLayout({
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
+
+    if (activePage !== 'event_detail') {
+      triggerPageProgress();
+      onNavigatePage(page, tab);
+      window.scrollTo({ top: 0, behavior: 'auto' });
+      return;
+    }
+
     runSmoothViewTransition(() => onNavigatePage(page, tab));
   }
 
@@ -722,7 +735,12 @@ export function UserLayout({
     }
   }
 
-  const activeNavKey = activePage === 'event_detail' ? 'discover' : activePage;
+  const activeNavKey = (
+    activePage === 'event_detail' ? 'discover' : activePage
+  ) as (typeof NAV_TAB_ORDER)[number];
+  const navDirection = useTabDirection(activeNavKey, NAV_TAB_ORDER);
+  const myEventsDirection = useTabDirection(myEventsTab, MY_EVENTS_TAB_ORDER);
+
   const {
     containerRef: navContainerRef,
     setItemRef: setNavItemRef,
@@ -740,6 +758,12 @@ export function UserLayout({
     myEventsTab,
     `${activePage}-${myRegistrations.length}-${myRequests.length}-${Boolean(currentUser)}`
   );
+
+  const {
+    containerRef: discoverCatRef,
+    setItemRef: setDiscoverCatRef,
+    rect: discoverCatPill,
+  } = useSlidingIndicator(categoryFilter, activePage);
 
   const navButtonClass = (isActive: boolean) =>
     `relative z-10 px-3.5 py-1.5 rounded-full transition-colors duration-200 whitespace-nowrap shrink-0 cursor-pointer ${
@@ -768,10 +792,15 @@ export function UserLayout({
 
           {/* Zone 2: Multi-page Navigation Links with Sliding Active Indicator Pill */}
           <nav className="hidden md:flex items-center gap-1.5 text-[13px] font-medium">
-            <div ref={navContainerRef} className="relative flex items-center gap-1">
+            <div
+              ref={navContainerRef}
+              role="tablist"
+              aria-label="Điều hướng chính"
+              className="relative flex items-center gap-1"
+            >
               <span
                 aria-hidden="true"
-                className="ef-sliding-pill pointer-events-none absolute top-0 left-0 rounded-full bg-slate-900 shadow-xs transition-[transform,width,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+                className="ef-sliding-pill pointer-events-none absolute top-0 left-0 rounded-full bg-slate-900 shadow-xs transition-[transform,width,opacity] duration-[280ms] ease-[cubic-bezier(0.22,1,0.36,1)]"
                 style={{
                   width: `${navPillRect.width}px`,
                   height: `${navPillRect.height}px`,
@@ -782,6 +811,8 @@ export function UserLayout({
               <button
                 ref={setNavItemRef('discover')}
                 type="button"
+                role="tab"
+                aria-selected={activeNavKey === 'discover'}
                 onClick={() => smoothNavigatePage('discover')}
                 className={navButtonClass(activeNavKey === 'discover')}
               >
@@ -790,6 +821,8 @@ export function UserLayout({
               <button
                 ref={setNavItemRef('services')}
                 type="button"
+                role="tab"
+                aria-selected={activeNavKey === 'services'}
                 onClick={() => smoothNavigatePage('services')}
                 className={navButtonClass(activeNavKey === 'services')}
               >
@@ -798,6 +831,8 @@ export function UserLayout({
               <button
                 ref={setNavItemRef('contact')}
                 type="button"
+                role="tab"
+                aria-selected={activeNavKey === 'contact'}
                 onClick={() => smoothNavigatePage('contact')}
                 className={navButtonClass(activeNavKey === 'contact')}
               >
@@ -807,6 +842,8 @@ export function UserLayout({
                 <button
                   ref={setNavItemRef('tickets')}
                   type="button"
+                  role="tab"
+                  aria-selected={activeNavKey === 'tickets'}
                   onClick={() => smoothNavigatePage('tickets')}
                   className={navButtonClass(activeNavKey === 'tickets')}
                 >
@@ -1101,15 +1138,18 @@ export function UserLayout({
           </div>
         )}
 
-        {/* Smooth Two-Phase Fade-Out -> Fade-In Multi-View Transition Wrapper */}
+        {/* Smooth Multi-View Directional Transition Wrapper */}
         <div
           className={`transition-[opacity,transform] duration-150 ease-out motion-reduce:transition-none motion-reduce:transform-none ${
             isTransitioningOut
-              ? 'opacity-0 scale-[0.982] pointer-events-none'
+              ? 'opacity-0 scale-[0.985] pointer-events-none'
               : 'opacity-100'
           }`}
         >
-          <div key={pageTransitionKey} className="animate-ef-page-enter">
+          <DirectionalTabPanel
+            activeKey={pageTransitionKey}
+            direction={activePage === 'event_detail' ? 'none' : navDirection}
+          >
             {activePage === 'services' && (
               <ServicesPage
                 publicContact={publicContact}
@@ -1411,32 +1451,55 @@ export function UserLayout({
                 {/* Public Open Events Grid */}
                 <section id="su-kien-dang-mo" className="space-y-6 scroll-mt-20">
                   <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                    <div className="inline-flex items-center gap-1 p-1 bg-slate-100/90 border border-slate-200/70 rounded-full overflow-x-auto max-w-full">
-                      <button
-                        type="button"
-                        onClick={() => setCategoryFilter('all')}
-                        className={`px-3.5 py-1.5 text-xs font-semibold rounded-full transition-all duration-150 whitespace-nowrap shrink-0 cursor-pointer ${
-                          categoryFilter === 'all'
-                            ? 'bg-white text-slate-900 shadow-xs'
-                            : 'text-slate-600 hover:text-slate-900'
-                        }`}
+                    <div className="overflow-x-auto max-w-full">
+                      <div
+                        ref={discoverCatRef}
+                        role="tablist"
+                        aria-label="Lọc theo danh mục sự kiện"
+                        className="relative inline-flex items-center gap-1 p-1 bg-slate-100/90 border border-slate-200/70 rounded-full"
                       >
-                        Tất cả danh mục
-                      </button>
-                      {EVENT_CATEGORIES.map((cat) => (
+                        <span
+                          aria-hidden="true"
+                          className="ef-sliding-pill pointer-events-none absolute top-0 left-0 rounded-full bg-white shadow-xs transition-[transform,width,opacity] duration-[280ms] ease-[cubic-bezier(0.22,1,0.36,1)]"
+                          style={{
+                            width: `${discoverCatPill.width}px`,
+                            height: `${discoverCatPill.height}px`,
+                            transform: `translate3d(${discoverCatPill.x}px, ${discoverCatPill.y}px, 0)`,
+                            opacity: discoverCatPill.ready ? 1 : 0,
+                          }}
+                        />
                         <button
-                          key={cat}
+                          ref={setDiscoverCatRef('all')}
                           type="button"
-                          onClick={() => setCategoryFilter(cat)}
-                          className={`px-3.5 py-1.5 text-xs font-semibold rounded-full transition-all duration-150 whitespace-nowrap shrink-0 cursor-pointer ${
-                            categoryFilter === cat
-                              ? 'bg-white text-slate-900 shadow-xs'
+                          role="tab"
+                          aria-selected={categoryFilter === 'all'}
+                          onClick={() => setCategoryFilter('all')}
+                          className={`relative z-10 px-3.5 py-1.5 text-xs font-semibold rounded-full transition-colors duration-200 whitespace-nowrap shrink-0 cursor-pointer ${
+                            categoryFilter === 'all'
+                              ? 'text-slate-900'
                               : 'text-slate-600 hover:text-slate-900'
                           }`}
                         >
-                          {cat}
+                          Tất cả danh mục
                         </button>
-                      ))}
+                        {EVENT_CATEGORIES.map((cat) => (
+                          <button
+                            key={cat}
+                            ref={setDiscoverCatRef(cat)}
+                            type="button"
+                            role="tab"
+                            aria-selected={categoryFilter === cat}
+                            onClick={() => setCategoryFilter(cat)}
+                            className={`relative z-10 px-3.5 py-1.5 text-xs font-semibold rounded-full transition-colors duration-200 whitespace-nowrap shrink-0 cursor-pointer ${
+                              categoryFilter === cat
+                                ? 'text-slate-900'
+                                : 'text-slate-600 hover:text-slate-900'
+                            }`}
+                          >
+                            {cat}
+                          </button>
+                        ))}
+                      </div>
                     </div>
 
                     <div className="text-xs font-medium text-slate-500 tabular-nums">
@@ -1768,11 +1831,13 @@ export function UserLayout({
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div
                         ref={myEventsTabRef}
+                        role="tablist"
+                        aria-label="Phân mục Sự kiện của tôi"
                         className="relative w-full sm:w-auto grid grid-cols-2 sm:inline-flex items-center gap-1 p-1 bg-slate-100 border border-slate-200/80 rounded-full"
                       >
                         <span
                           aria-hidden="true"
-                          className="ef-sliding-pill pointer-events-none absolute top-0 left-0 rounded-full bg-white shadow-xs transition-[transform,width,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+                          className="ef-sliding-pill pointer-events-none absolute top-0 left-0 rounded-full bg-white shadow-xs transition-[transform,width,opacity] duration-[280ms] ease-[cubic-bezier(0.22,1,0.36,1)]"
                           style={{
                             width: `${myEventsTabPill.width}px`,
                             height: `${myEventsTabPill.height}px`,
@@ -1783,6 +1848,8 @@ export function UserLayout({
                         <button
                           ref={setMyEventsTabRef('registered')}
                           type="button"
+                          role="tab"
+                          aria-selected={myEventsTab === 'registered'}
                           onClick={() => {
                             setShowCreateRequestForm(false);
                             setMyEventsTab('registered');
@@ -1803,6 +1870,8 @@ export function UserLayout({
                         <button
                           ref={setMyEventsTabRef('requests')}
                           type="button"
+                          role="tab"
+                          aria-selected={myEventsTab === 'requests'}
                           onClick={() => {
                             setMyEventsTab('requests');
                             onNavigatePage('tickets', 'requests');
@@ -1822,9 +1891,10 @@ export function UserLayout({
                       </div>
                     </div>
 
-                    {/* Tab 1: Đã đăng ký tham gia */}
-                    {myEventsTab === 'registered' && (
-                      <div key="tab-registered" className="animate-ef-page-enter">
+                    <DirectionalTabPanel activeKey={myEventsTab} direction={myEventsDirection}>
+                      {/* Tab 1: Đã đăng ký tham gia */}
+                      {myEventsTab === 'registered' && (
+                        <div>
                         {myRegistrations.length === 0 ? (
                           <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center">
                             <Ticket className="w-10 h-10 text-slate-300 mx-auto" />
@@ -2066,7 +2136,7 @@ export function UserLayout({
 
                     {/* Tab 2: Yêu cầu tổ chức */}
                     {myEventsTab === 'requests' && (
-                      <div key="tab-requests" className="animate-ef-page-enter space-y-6">
+                      <div className="space-y-6">
                         {showCreateRequestForm ? (
                           <div
                             ref={reqFormContainerRef}
@@ -2721,11 +2791,12 @@ export function UserLayout({
                         )}
                       </div>
                     )}
+                    </DirectionalTabPanel>
                   </div>
                 )}
               </section>
             )}
-          </div>
+          </DirectionalTabPanel>
         </div>
       </main>
 

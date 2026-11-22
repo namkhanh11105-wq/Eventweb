@@ -16,9 +16,12 @@ import {
   Volume2,
 } from 'lucide-react';
 import {
+  DirectionalTabPanel,
   handle3DTiltLeave,
   handle3DTiltMove,
   RevealBlock,
+  useSlidingIndicator,
+  useTabDirection,
 } from './MotionPrimitives';
 import {
   ENTERPRISE_PARTNERS,
@@ -72,12 +75,20 @@ const SERVICE_ICON_MAP: Record<
   },
 };
 
+const SERVICE_TAB_ORDER = SERVICE_FILTER_TABS.map((t) => t.key);
+
 export function ServicesPage({
   publicContact,
   onBookOrganization,
   onGoContact,
 }: ServicesPageProps) {
   const [eventTypeFilter, setEventTypeFilter] = useState<ServiceFilterType>('all');
+  const filterDirection = useTabDirection(eventTypeFilter, SERVICE_TAB_ORDER);
+  const {
+    containerRef: filterTabRef,
+    setItemRef: setFilterTabRef,
+    rect: filterTabPill,
+  } = useSlidingIndicator(eventTypeFilter);
 
   const filteredPackages = useMemo(() => {
     if (eventTypeFilter === 'all') return SERVICE_PACKAGE_HIGHLIGHTS;
@@ -175,33 +186,50 @@ export function ServicesPage({
             </p>
           </div>
 
-          <div
-            role="tablist"
-            aria-label="Lọc dịch vụ theo loại hình sự kiện"
-            className="inline-flex items-center gap-1 p-1 bg-slate-100/90 border border-slate-200/80 rounded-full overflow-x-auto max-w-full"
-          >
-            {SERVICE_FILTER_TABS.map((tab) => {
-              const active = eventTypeFilter === tab.key;
-              return (
-                <button
-                  key={tab.key}
-                  type="button"
-                  role="tab"
-                  aria-selected={active}
-                  onClick={() => setEventTypeFilter(tab.key)}
-                  className={`min-h-[36px] px-3.5 py-1.5 text-xs font-semibold rounded-full transition-all duration-150 whitespace-nowrap shrink-0 cursor-pointer ${
-                    active
-                      ? 'bg-slate-950 text-white shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              );
-            })}
+          <div className="overflow-x-auto max-w-full">
+            <div
+              ref={filterTabRef}
+              role="tablist"
+              aria-label="Lọc dịch vụ theo loại hình sự kiện"
+              className="relative inline-flex items-center gap-1 p-1 bg-slate-100/90 border border-slate-200/80 rounded-full"
+            >
+              <span
+                aria-hidden="true"
+                className="ef-sliding-pill pointer-events-none absolute top-0 left-0 rounded-full bg-slate-950 shadow-xs transition-[transform,width,opacity] duration-[280ms] ease-[cubic-bezier(0.22,1,0.36,1)]"
+                style={{
+                  width: `${filterTabPill.width}px`,
+                  height: `${filterTabPill.height}px`,
+                  transform: `translate3d(${filterTabPill.x}px, ${filterTabPill.y}px, 0)`,
+                  opacity: filterTabPill.ready ? 1 : 0,
+                }}
+              />
+              {SERVICE_FILTER_TABS.map((tab) => {
+                const active = eventTypeFilter === tab.key;
+                return (
+                  <button
+                    key={tab.key}
+                    ref={setFilterTabRef(tab.key)}
+                    type="button"
+                    role="tab"
+                    aria-selected={active}
+                    onClick={() => setEventTypeFilter(tab.key)}
+                    className={`relative z-10 min-h-[36px] px-3.5 py-1.5 text-xs font-semibold rounded-full transition-colors duration-200 whitespace-nowrap shrink-0 cursor-pointer ${
+                      active ? 'text-white' : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
 
+        <DirectionalTabPanel
+          activeKey={eventTypeFilter}
+          direction={filterDirection}
+          className="space-y-12"
+        >
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
           {filteredPackages.map((pkg, idx) => {
             const isWide = filteredPackages.length > 1 && idx === 0;
@@ -342,11 +370,9 @@ export function ServicesPage({
             </div>
           </RevealBlock>
         </div>
-      </section>
 
       {/* Modular System Services Catalog with direct per-service booking */}
-      <RevealBlock>
-        <section className="bg-white border border-slate-200/80 rounded-3xl p-6 sm:p-8 space-y-5">
+        <div className="bg-white border border-slate-200/80 rounded-3xl p-6 sm:p-8 space-y-5">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <div className="inline-flex items-center gap-2 text-xs font-semibold text-rose-600">
@@ -432,8 +458,9 @@ export function ServicesPage({
               );
             })}
           </div>
-        </section>
-      </RevealBlock>
+        </div>
+        </DirectionalTabPanel>
+      </section>
 
       {/* 4-Step Visual Coordination Process */}
       <RevealBlock>
