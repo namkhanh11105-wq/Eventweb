@@ -97,7 +97,7 @@ export default function App() {
     setPublicPage(page);
     setSelectedEventId(null);
     pushBrowserPath(getPathForPublicPage(page));
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: 'auto' });
   }
 
   function navigateToEventDetail(eventId: string) {
@@ -106,7 +106,7 @@ export default function App() {
     setPublicPage('event_detail');
     setSelectedEventId(eventId);
     pushBrowserPath(getPathForPublicPage('event_detail', eventId));
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: 'auto' });
   }
 
   function openAuthScreen(mode: 'login' | 'register' = 'login', role: 'user' | 'organizer' = 'user') {
