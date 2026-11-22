@@ -48,6 +48,8 @@ import {
   AnimatedModal,
   AnimatedNumber,
   AnimatedProgressBar,
+  handle3DTiltLeave,
+  handle3DTiltMove,
   RevealBlock,
   triggerPageProgress,
   useSlidingIndicator,
@@ -1816,141 +1818,195 @@ export function UserLayout({
                                   className="animate-ef-fade-up h-full"
                                 >
                                   <article
-                                    className="h-full bg-white border border-slate-200 rounded-2xl overflow-hidden flex flex-col sm:flex-row transition-all duration-200 hover:-translate-y-0.5 hover:border-orange-200 hover:shadow-md"
+                                    onMouseMove={(e) => handle3DTiltMove(e, 8, false)}
+                                    onMouseLeave={handle3DTiltLeave}
+                                    className="ef-ticket-3d h-full bg-white border border-slate-200/90 hover:border-indigo-200 rounded-2xl shadow-xs flex flex-col sm:flex-row"
                                   >
-                                  <div className="flex-1 p-5 sm:p-6 flex flex-col justify-between gap-4">
-                                    <div>
-                                      <div className="flex flex-wrap items-center justify-between gap-2">
-                                        <span
-                                          className={`px-2.5 py-0.5 text-xs font-semibold border rounded-md ${statusMeta.bgClass} ${statusMeta.textClass}`}
-                                        >
-                                          {statusMeta.label}
-                                        </span>
-                                        <span className="text-xs text-slate-400 tabular-nums">
-                                          ĐK: {formatShortDateVN(reg.registeredAt)}
-                                        </span>
-                                      </div>
-
-                                      <h3 className="mt-2.5 text-lg font-bold text-slate-900 leading-snug">
-                                        {reg.eventTitle}
-                                      </h3>
-
-                                      <div className="mt-3 space-y-1 text-xs text-slate-600">
-                                        <div>
-                                          Người tham dự:{' '}
-                                          <strong className="text-slate-900">{reg.guestName}</strong> (
-                                          {reg.guestPhone})
-                                        </div>
-                                        {linkedEvent && (
-                                          <div className="tabular-nums">
-                                            Thời gian: {formatDateTimeVN(linkedEvent.startTime)}
-                                          </div>
-                                        )}
-                                        {linkedEvent && (
-                                          <div className="truncate">Địa điểm: {linkedEvent.location}</div>
-                                        )}
-                                        {reg.checkedInAt && (
-                                          <div className="text-emerald-700 font-semibold tabular-nums">
-                                            Đã Check-in lúc: {formatDateTimeVN(reg.checkedInAt)}
-                                          </div>
-                                        )}
-                                      </div>
-
-                                      <div className="mt-3 p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-wrap items-center justify-between gap-2 text-xs">
-                                        <div className="min-w-0">
-                                          <span className="text-[11px] text-slate-500 block">
-                                            Mã đăng ký (Firestore ID)
-                                          </span>
-                                          <span className="font-mono text-[11px] font-semibold text-slate-800 break-all">
-                                            {reg.id}
-                                          </span>
-                                        </div>
-                                        <button
-                                          type="button"
-                                          onClick={() => handleCopyRegId(reg.id)}
-                                          className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-slate-700 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg cursor-pointer shrink-0"
-                                        >
-                                          {copiedRegId === reg.id ? (
-                                            <>
-                                              <Check className="w-3 h-3 text-emerald-600" />
-                                              <span>Đã chép</span>
-                                            </>
-                                          ) : (
-                                            <>
-                                              <Copy className="w-3 h-3" />
-                                              <span>Sao chép</span>
-                                            </>
-                                          )}
-                                        </button>
-                                      </div>
-                                    </div>
-
-                                    <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2.5">
-                                      <span className="font-mono text-xs font-semibold text-slate-700">
-                                        Vé QR: {reg.ticketCode}
-                                      </span>
-                                      <div className="flex flex-wrap items-center gap-2">
-                                        {linkedEvent && (
-                                          <button
-                                            type="button"
-                                            onClick={() => smoothOpenEventDetail(linkedEvent.id)}
-                                            className="min-h-[38px] px-3.5 py-1.5 text-xs font-semibold text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-full cursor-pointer transition-colors"
-                                          >
-                                            Chi tiết
-                                          </button>
-                                        )}
-                                        {canRate && (
-                                          <button
-                                            type="button"
-                                            onClick={() => {
-                                              setFeedbackReg(reg);
-                                              setRatingValue(5);
-                                              setRatingComment('');
-                                            }}
-                                            className="min-h-[38px] inline-flex items-center gap-1 px-3.5 py-1.5 text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-full cursor-pointer transition-colors"
-                                          >
-                                            <Star className="w-3.5 h-3.5" />
-                                            <span>Đánh giá</span>
-                                          </button>
-                                        )}
-                                        {canCancel && (
-                                          <button
-                                            type="button"
-                                            disabled={cancellingRegId === reg.id}
-                                            onClick={() => handleCancelTicket(reg)}
-                                            className="min-h-[38px] inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-full cursor-pointer transition-colors disabled:opacity-60"
-                                          >
-                                            {cancellingRegId === reg.id && (
-                                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                            )}
-                                            <span>
-                                              {cancellingRegId === reg.id
-                                                ? 'Đang hủy...'
-                                                : 'Hủy tham gia'}
-                                            </span>
-                                          </button>
-                                        )}
-                                      </div>
-                                    </div>
-                                  </div>
-
-                                  <div className="sm:w-44 bg-slate-50 border-t sm:border-t-0 sm:border-l border-dashed border-slate-300 p-4 sm:p-5 flex flex-col items-center justify-center text-center shrink-0">
-                                    <div className="p-2.5 bg-white rounded-xl border border-slate-200">
-                                      <QRCodeSVG
-                                        value={qrPayload}
-                                        size={104}
-                                        level="M"
-                                        fgColor={reg.status === 'cancelled' ? '#94A3B8' : '#0F172A'}
+                                    {/* Clipped Background Accent Strip & Interactive Holographic Glare Overlay */}
+                                    <div
+                                      aria-hidden="true"
+                                      className="pointer-events-none absolute inset-0 rounded-[inherit] overflow-hidden z-20"
+                                    >
+                                      <div
+                                        className={`h-1 w-full ${
+                                          reg.status === 'cancelled'
+                                            ? 'bg-slate-300'
+                                            : reg.status === 'attended'
+                                            ? 'bg-gradient-to-r from-emerald-500 via-teal-500 to-indigo-500'
+                                            : 'bg-gradient-to-r from-indigo-600 via-rose-500 to-orange-400'
+                                        }`}
                                       />
+                                      <div className="ef-ticket-glare absolute inset-0" />
                                     </div>
-                                    <span className="mt-2.5 font-mono text-[11px] font-bold text-slate-800 tracking-wide">
-                                      {reg.ticketCode}
-                                    </span>
-                                    <span className="mt-0.5 text-[11px] text-slate-500">
-                                      {reg.status === 'cancelled' ? 'Đã hủy' : 'Quét QR Check-in'}
-                                    </span>
-                                  </div>
-                                </article>
+
+                                    {/* Left Main Pass Info */}
+                                    <div className="relative z-10 flex-1 p-5 sm:p-6 flex flex-col justify-between gap-4">
+                                      <div>
+                                        <div className="flex flex-wrap items-center justify-between gap-2">
+                                          <div className="flex items-center gap-2">
+                                            <span className="font-mono text-[10px] font-bold tracking-wider uppercase text-slate-400">
+                                              E-TICKET
+                                            </span>
+                                            <span aria-hidden="true" className="text-slate-300">
+                                              ·
+                                            </span>
+                                            <span
+                                              className={`px-2.5 py-0.5 text-xs font-semibold border rounded-md ${statusMeta.bgClass} ${statusMeta.textClass}`}
+                                            >
+                                              {statusMeta.label}
+                                            </span>
+                                          </div>
+                                          <span className="text-xs text-slate-400 tabular-nums">
+                                            ĐK: {formatShortDateVN(reg.registeredAt)}
+                                          </span>
+                                        </div>
+
+                                        <h3 className="mt-2.5 text-lg font-bold text-slate-900 leading-snug">
+                                          {reg.eventTitle}
+                                        </h3>
+
+                                        <div className="mt-3 space-y-1 text-xs text-slate-600">
+                                          <div>
+                                            Người tham dự:{' '}
+                                            <strong className="text-slate-900">{reg.guestName}</strong>{' '}
+                                            {reg.guestPhone ? `(${reg.guestPhone})` : ''}
+                                          </div>
+                                          {linkedEvent && (
+                                            <div className="tabular-nums">
+                                              Thời gian: {formatDateTimeVN(linkedEvent.startTime)}
+                                            </div>
+                                          )}
+                                          {linkedEvent && (
+                                            <div className="truncate">
+                                              Địa điểm: {linkedEvent.location}
+                                            </div>
+                                          )}
+                                          {reg.checkedInAt && (
+                                            <div className="text-emerald-700 font-semibold tabular-nums">
+                                              Đã Check-in lúc: {formatDateTimeVN(reg.checkedInAt)}
+                                            </div>
+                                          )}
+                                        </div>
+
+                                        <div className="mt-3 p-2.5 rounded-xl bg-slate-50/90 border border-slate-200/80 flex flex-wrap items-center justify-between gap-2 text-xs">
+                                          <div className="min-w-0">
+                                            <span className="text-[11px] text-slate-500 block">
+                                              Mã đăng ký (Firestore ID)
+                                            </span>
+                                            <span className="font-mono text-[11px] font-semibold text-slate-800 break-all">
+                                              {reg.id}
+                                            </span>
+                                          </div>
+                                          <button
+                                            type="button"
+                                            onClick={() => handleCopyRegId(reg.id)}
+                                            className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-slate-700 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg cursor-pointer shrink-0"
+                                          >
+                                            {copiedRegId === reg.id ? (
+                                              <>
+                                                <Check className="w-3 h-3 text-emerald-600" />
+                                                <span>Đã chép</span>
+                                              </>
+                                            ) : (
+                                              <>
+                                                <Copy className="w-3 h-3" />
+                                                <span>Sao chép</span>
+                                              </>
+                                            )}
+                                          </button>
+                                        </div>
+                                      </div>
+
+                                      <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2.5">
+                                        <span className="font-mono text-xs font-semibold text-slate-700">
+                                          Vé QR: {reg.ticketCode}
+                                        </span>
+                                        <div className="flex flex-wrap items-center gap-2">
+                                          {linkedEvent && (
+                                            <button
+                                              type="button"
+                                              onClick={() => smoothOpenEventDetail(linkedEvent.id)}
+                                              className="min-h-[38px] px-3.5 py-1.5 text-xs font-semibold text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-full cursor-pointer transition-colors"
+                                            >
+                                              Chi tiết
+                                            </button>
+                                          )}
+                                          {canRate && (
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setFeedbackReg(reg);
+                                                setRatingValue(5);
+                                                setRatingComment('');
+                                              }}
+                                              className="min-h-[38px] inline-flex items-center gap-1 px-3.5 py-1.5 text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-full cursor-pointer transition-colors"
+                                            >
+                                              <Star className="w-3.5 h-3.5" />
+                                              <span>Đánh giá</span>
+                                            </button>
+                                          )}
+                                          {canCancel && (
+                                            <button
+                                              type="button"
+                                              disabled={cancellingRegId === reg.id}
+                                              onClick={() => handleCancelTicket(reg)}
+                                              className="min-h-[38px] inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-full cursor-pointer transition-colors disabled:opacity-60"
+                                            >
+                                              {cancellingRegId === reg.id && (
+                                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                              )}
+                                              <span>
+                                                {cancellingRegId === reg.id
+                                                  ? 'Đang hủy...'
+                                                  : 'Hủy tham gia'}
+                                              </span>
+                                            </button>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    {/* Right VIP Ticket Stub with Dashed Perforation Seam & Punch-Out Notches */}
+                                    <div className="relative z-10 sm:w-48 bg-slate-50/90 border-t sm:border-t-0 sm:border-l border-dashed border-slate-300 rounded-b-2xl sm:rounded-bl-none sm:rounded-r-2xl p-4 sm:p-5 flex flex-col items-center justify-center text-center shrink-0">
+                                      {/* Desktop top & bottom stub notches */}
+                                      <span
+                                        aria-hidden="true"
+                                        className="hidden sm:block pointer-events-none absolute -top-2.5 -left-2.5 w-5 h-5 rounded-full bg-[#F8FAFC] border border-slate-200/90"
+                                      />
+                                      <span
+                                        aria-hidden="true"
+                                        className="hidden sm:block pointer-events-none absolute -bottom-2.5 -left-2.5 w-5 h-5 rounded-full bg-[#F8FAFC] border border-slate-200/90"
+                                      />
+                                      {/* Mobile left & right stub notches */}
+                                      <span
+                                        aria-hidden="true"
+                                        className="sm:hidden pointer-events-none absolute -top-2.5 -left-2.5 w-5 h-5 rounded-full bg-[#F8FAFC] border border-slate-200/90"
+                                      />
+                                      <span
+                                        aria-hidden="true"
+                                        className="sm:hidden pointer-events-none absolute -top-2.5 -right-2.5 w-5 h-5 rounded-full bg-[#F8FAFC] border border-slate-200/90"
+                                      />
+
+                                      <div className="ef-ticket-qr-pop flex flex-col items-center">
+                                        <div className="p-2.5 bg-white rounded-xl border border-slate-200/90 shadow-xs">
+                                          <QRCodeSVG
+                                            value={qrPayload}
+                                            size={104}
+                                            level="M"
+                                            fgColor={reg.status === 'cancelled' ? '#94A3B8' : '#0F172A'}
+                                          />
+                                        </div>
+                                        <span className="mt-2.5 font-mono text-[11px] font-bold text-slate-800 tracking-wide">
+                                          {reg.ticketCode}
+                                        </span>
+                                        <span className="mt-0.5 text-[11px] text-slate-500">
+                                          {reg.status === 'cancelled'
+                                            ? 'Đã hủy'
+                                            : 'Quét QR Check-in'}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </article>
                                 </div>
                               );
                             })}

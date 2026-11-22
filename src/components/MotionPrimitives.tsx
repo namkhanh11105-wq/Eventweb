@@ -26,6 +26,69 @@ export function handleSpotlightMove(e: MouseEvent<HTMLElement>): void {
   target.style.setProperty('--ef-my', `${e.clientY - rect.top}px`);
 }
 
+const pendingTiltRafs = new WeakMap<HTMLElement, number>();
+
+export function canUsePointer3D(): boolean {
+  if (typeof window === 'undefined' || !window.matchMedia) return false;
+  if (prefersReducedMotion()) return false;
+  return window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+}
+
+export function handle3DTiltMove(
+  e: MouseEvent<HTMLElement>,
+  maxDeg: number = 8,
+  includeSpotlight: boolean = false
+): void {
+  if (!canUsePointer3D()) return;
+  const target = e.currentTarget;
+  const rect = target.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) return;
+
+  const clientX = e.clientX;
+  const clientY = e.clientY;
+  const px = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+  const py = Math.max(0, Math.min(1, (clientY - rect.top) / rect.height));
+
+  const prevRaf = pendingTiltRafs.get(target);
+  if (prevRaf !== undefined) {
+    cancelAnimationFrame(prevRaf);
+  }
+
+  const rafId = requestAnimationFrame(() => {
+    const rx = ((0.5 - py) * maxDeg * 2).toFixed(2);
+    const ry = ((px - 0.5) * maxDeg * 2).toFixed(2);
+
+    target.dataset.tilting = 'true';
+    target.style.setProperty('--ef-rx', `${rx}deg`);
+    target.style.setProperty('--ef-ry', `${ry}deg`);
+    target.style.setProperty('--ef-gx', `${(px * 100).toFixed(1)}%`);
+    target.style.setProperty('--ef-gy', `${(py * 100).toFixed(1)}%`);
+    target.style.setProperty('--ef-glare-opacity', '1');
+
+    if (includeSpotlight) {
+      target.style.setProperty('--ef-mx', `${(clientX - rect.left).toFixed(1)}px`);
+      target.style.setProperty('--ef-my', `${(clientY - rect.top).toFixed(1)}px`);
+    }
+
+    pendingTiltRafs.delete(target);
+  });
+
+  pendingTiltRafs.set(target, rafId);
+}
+
+export function handle3DTiltLeave(e: MouseEvent<HTMLElement>): void {
+  const target = e.currentTarget;
+  const prevRaf = pendingTiltRafs.get(target);
+  if (prevRaf !== undefined) {
+    cancelAnimationFrame(prevRaf);
+    pendingTiltRafs.delete(target);
+  }
+  delete target.dataset.tilting;
+  target.style.setProperty('--ef-rx', '0deg');
+  target.style.setProperty('--ef-ry', '0deg');
+  target.style.setProperty('--ef-glare-opacity', '0');
+}
+
 /* -------------------------------------------------------------------------- */
 /* Global Top Progress Bar Emitter + Component (Linear / GitHub / YouTube)    */
 /* -------------------------------------------------------------------------- */

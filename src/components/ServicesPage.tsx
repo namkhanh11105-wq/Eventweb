@@ -2,14 +2,24 @@ import { useMemo, useState } from 'react';
 import {
   ArrowRight,
   Building2,
+  Camera,
   CheckCircle2,
+  Coffee,
+  Frame,
   Layers,
+  Mic,
   Phone,
+  QrCode,
   ShieldCheck,
   Sparkles,
   Users,
+  Volume2,
 } from 'lucide-react';
-import { handleSpotlightMove, RevealBlock } from './MotionPrimitives';
+import {
+  handle3DTiltLeave,
+  handle3DTiltMove,
+  RevealBlock,
+} from './MotionPrimitives';
 import {
   ENTERPRISE_PARTNERS,
   ORGANIZATION_PROCESS_STEPS,
@@ -25,6 +35,42 @@ interface ServicesPageProps {
   onBookOrganization: (preset?: PreselectedServiceBooking) => void;
   onGoContact: () => void;
 }
+
+const SERVICE_ICON_MAP: Record<
+  string,
+  { icon: typeof Volume2; bgClass: string; colorClass: string }
+> = {
+  av_stage: {
+    icon: Volume2,
+    bgClass: 'bg-indigo-50 border-indigo-200/80',
+    colorClass: 'text-indigo-600',
+  },
+  mc_coordinator: {
+    icon: Mic,
+    bgClass: 'bg-rose-50 border-rose-200/80',
+    colorClass: 'text-rose-600',
+  },
+  teabreak_catering: {
+    icon: Coffee,
+    bgClass: 'bg-amber-50 border-amber-200/80',
+    colorClass: 'text-amber-600',
+  },
+  checkin_staff: {
+    icon: QrCode,
+    bgClass: 'bg-emerald-50 border-emerald-200/80',
+    colorClass: 'text-emerald-600',
+  },
+  media_pr: {
+    icon: Camera,
+    bgClass: 'bg-sky-50 border-sky-200/80',
+    colorClass: 'text-sky-600',
+  },
+  backdrop_booth: {
+    icon: Frame,
+    bgClass: 'bg-orange-50 border-orange-200/80',
+    colorClass: 'text-orange-600',
+  },
+};
 
 export function ServicesPage({
   publicContact,
@@ -161,24 +207,34 @@ export function ServicesPage({
             const isWide = filteredPackages.length > 1 && idx === 0;
             const colClass =
               filteredPackages.length === 1 ? 'lg:col-span-7' : isWide ? 'lg:col-span-7' : 'lg:col-span-5';
+            const pkgIconCfg = SERVICE_ICON_MAP[pkg.serviceKeys[0]] || SERVICE_ICON_MAP.av_stage;
+            const PkgIcon = pkgIconCfg.icon;
             return (
               <RevealBlock key={pkg.code} className={colClass} delayMs={idx * 60}>
                 <div
-                  onMouseMove={handleSpotlightMove}
-                  className="ef-spotlight-card bg-white border border-slate-200/80 rounded-3xl p-6 sm:p-7 h-full flex flex-col justify-between hover:border-orange-200"
+                  onMouseMove={(e) => handle3DTiltMove(e, 4, true)}
+                  onMouseLeave={handle3DTiltLeave}
+                  className="ef-spotlight-card ef-service-3d bg-white border border-slate-200/80 rounded-3xl p-6 sm:p-7 h-full flex flex-col justify-between hover:border-orange-200"
                 >
                   <div>
                     <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                      <span className="font-mono font-semibold text-rose-600">
-                        {pkg.code}. {pkg.tag}
-                      </span>
+                      <div className="flex items-center gap-2.5">
+                        <span
+                          className={`ef-3d-icon-pop w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 ${pkgIconCfg.bgClass} ${pkgIconCfg.colorClass}`}
+                        >
+                          <PkgIcon className="w-4 h-4" />
+                        </span>
+                        <span className="font-mono font-semibold text-rose-600">
+                          {pkg.code}. {pkg.tag}
+                        </span>
+                      </div>
                       <span className="inline-flex items-center gap-1 font-semibold text-slate-700 tabular-nums">
                         <Users className="w-3.5 h-3.5 text-slate-400" />
                         {pkg.scale}
                       </span>
                     </div>
 
-                    <h3 className="mt-3 text-xl font-bold text-slate-900">{pkg.title}</h3>
+                    <h3 className="mt-3.5 text-xl font-bold text-slate-900">{pkg.title}</h3>
                     <p className="mt-1 text-xs font-medium text-slate-500">
                       Phù hợp: {pkg.idealFor}
                     </p>
@@ -230,17 +286,24 @@ export function ServicesPage({
             delayMs={filteredPackages.length * 60}
           >
             <div
-              onMouseMove={handleSpotlightMove}
-              className="ef-spotlight-card-dark relative overflow-hidden bg-slate-950 text-white rounded-3xl p-6 sm:p-8 h-full flex flex-col justify-between"
+              onMouseMove={(e) => handle3DTiltMove(e, 4, true)}
+              onMouseLeave={handle3DTiltLeave}
+              className="ef-spotlight-card-dark ef-service-3d relative bg-slate-950 text-white rounded-3xl p-6 sm:p-8 h-full flex flex-col justify-between"
             >
               <div
                 aria-hidden="true"
-                className="pointer-events-none absolute -right-12 -top-12 h-52 w-52 rounded-full bg-gradient-to-br from-rose-500/25 via-orange-500/20 to-transparent blur-2xl"
-              />
+                className="pointer-events-none absolute inset-0 rounded-[inherit] overflow-hidden"
+              >
+                <div className="absolute -right-12 -top-12 h-52 w-52 rounded-full bg-gradient-to-br from-rose-500/25 via-orange-500/20 to-transparent blur-2xl" />
+              </div>
               <div className="relative space-y-3">
-                <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-orange-300">
-                  <Sparkles className="w-3.5 h-3.5" />
-                  <span>04. Tùy chỉnh theo yêu cầu doanh nghiệp</span>
+                <div className="flex items-center gap-2.5">
+                  <span className="ef-3d-icon-pop w-9 h-9 rounded-xl bg-white/10 border border-white/15 text-orange-300 flex items-center justify-center shrink-0">
+                    <Sparkles className="w-4 h-4" />
+                  </span>
+                  <span className="text-xs font-semibold text-orange-300">
+                    04. Tùy chỉnh theo yêu cầu doanh nghiệp
+                  </span>
                 </div>
                 <h3 className="text-xl sm:text-2xl font-bold tracking-tight">
                   Thiết kế tổ hợp dịch vụ riêng cho sự kiện của bạn
@@ -301,45 +364,61 @@ export function ServicesPage({
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredServices.map((srv, idx) => (
-              <div
-                key={srv.key}
-                style={{ animationDelay: `${Math.min(idx, 11) * 60}ms` }}
-                className="animate-ef-fade-up h-full"
-              >
+            {filteredServices.map((srv, idx) => {
+              const iconCfg = SERVICE_ICON_MAP[srv.key] || {
+                icon: Layers,
+                bgClass: 'bg-slate-100 border-slate-200',
+                colorClass: 'text-slate-700',
+              };
+              const SrvIcon = iconCfg.icon;
+              return (
                 <div
-                  onMouseMove={handleSpotlightMove}
-                  className="ef-spotlight-card h-full p-5 rounded-2xl bg-slate-50/70 border border-slate-200/80 flex flex-col justify-between gap-4 hover:bg-white hover:border-orange-200"
+                  key={srv.key}
+                  style={{ animationDelay: `${Math.min(idx, 11) * 60}ms` }}
+                  className="animate-ef-fade-up h-full"
                 >
-                  <div>
-                    <div className="flex items-center justify-between gap-2 text-[11px]">
-                      <span className="font-mono font-semibold text-slate-400">
-                        0{idx + 1}
-                      </span>
-                      <span className="font-medium text-indigo-700">
-                        {srv.recommendationHint}
-                      </span>
-                    </div>
-                    <h3 className="mt-1.5 text-sm font-bold text-slate-900">{srv.name}</h3>
-                    <p className="mt-1.5 text-xs text-slate-600 leading-relaxed">{srv.summary}</p>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      onBookOrganization({
-                        serviceKeys: [srv.key],
-                        packageTitle: srv.name,
-                      })
-                    }
-                    className="ef-btn-tactile w-full min-h-[38px] inline-flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-900 bg-white hover:bg-slate-950 hover:text-white border border-slate-200 hover:border-slate-950 rounded-full cursor-pointer"
+                  <div
+                    onMouseMove={(e) => handle3DTiltMove(e, 4, true)}
+                    onMouseLeave={handle3DTiltLeave}
+                    className="ef-spotlight-card ef-service-3d h-full p-5 rounded-2xl bg-slate-50/70 border border-slate-200/80 flex flex-col justify-between gap-4 hover:bg-white hover:border-orange-200"
                   >
-                    <span>Đặt tổ chức với dịch vụ này</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
+                    <div>
+                      <div className="flex items-start justify-between gap-3">
+                        <div
+                          className={`ef-3d-icon-pop w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 ${iconCfg.bgClass} ${iconCfg.colorClass}`}
+                        >
+                          <SrvIcon className="w-5 h-5" />
+                        </div>
+                        <div className="text-right">
+                          <span className="font-mono text-[11px] font-semibold text-slate-400 block">
+                            0{idx + 1}
+                          </span>
+                          <span className="text-[11px] font-medium text-indigo-700">
+                            {srv.recommendationHint}
+                          </span>
+                        </div>
+                      </div>
+                      <h3 className="mt-3.5 text-sm font-bold text-slate-900">{srv.name}</h3>
+                      <p className="mt-1.5 text-xs text-slate-600 leading-relaxed">{srv.summary}</p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onBookOrganization({
+                          serviceKeys: [srv.key],
+                          packageTitle: srv.name,
+                        })
+                      }
+                      className="ef-btn-tactile w-full min-h-[38px] inline-flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-900 bg-white hover:bg-slate-950 hover:text-white border border-slate-200 hover:border-slate-950 rounded-full cursor-pointer"
+                    >
+                      <span>Đặt tổ chức với dịch vụ này</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </section>
       </RevealBlock>

@@ -1,6 +1,7 @@
-import type { CSSProperties } from 'react';
+import { useEffect, useRef, type CSSProperties, type MouseEvent } from 'react';
 import { ArrowRight, Calendar, MapPin, Sparkles } from 'lucide-react';
 import { EventBanner } from './EventBanner';
+import { canUsePointer3D } from './MotionPrimitives';
 import type { EventItem } from '../types';
 
 interface FloatingCardSpec {
@@ -14,6 +15,8 @@ interface FloatingCardSpec {
   floatClass: string;
   rotateDeg: string;
   delayMs: number;
+  depthFactor: number;
+  zDepthPx: string;
 }
 
 const FLOATING_CARDS: FloatingCardSpec[] = [
@@ -28,6 +31,8 @@ const FLOATING_CARDS: FloatingCardSpec[] = [
     floatClass: 'ef-float-a',
     rotateDeg: '-6deg',
     delayMs: 0,
+    depthFactor: 0.9,
+    zDepthPx: '14px',
   },
   {
     id: 'picnic',
@@ -40,6 +45,8 @@ const FLOATING_CARDS: FloatingCardSpec[] = [
     floatClass: 'ef-float-b',
     rotateDeg: '4deg',
     delayMs: 450,
+    depthFactor: 0.45,
+    zDepthPx: '-18px',
   },
   {
     id: 'tech-summit',
@@ -52,6 +59,8 @@ const FLOATING_CARDS: FloatingCardSpec[] = [
     floatClass: 'ef-float-c',
     rotateDeg: '-3.5deg',
     delayMs: 900,
+    depthFactor: 1.35,
+    zDepthPx: '30px',
   },
   {
     id: 'music-night',
@@ -64,6 +73,8 @@ const FLOATING_CARDS: FloatingCardSpec[] = [
     floatClass: 'ef-float-b',
     rotateDeg: '6deg',
     delayMs: 250,
+    depthFactor: 0.95,
+    zDepthPx: '16px',
   },
   {
     id: 'rooftop-party',
@@ -76,6 +87,8 @@ const FLOATING_CARDS: FloatingCardSpec[] = [
     floatClass: 'ef-float-c',
     rotateDeg: '-4.5deg',
     delayMs: 700,
+    depthFactor: 0.5,
+    zDepthPx: '-14px',
   },
   {
     id: 'startup-seminar',
@@ -88,6 +101,8 @@ const FLOATING_CARDS: FloatingCardSpec[] = [
     floatClass: 'ef-float-a',
     rotateDeg: '3.5deg',
     delayMs: 1100,
+    depthFactor: 1.3,
+    zDepthPx: '28px',
   },
 ];
 
@@ -104,8 +119,61 @@ export function LumaFloatingHero({
   onExploreEvents,
   onSelectCard,
 }: LumaFloatingHeroProps) {
+  const heroRef = useRef<HTMLElement | null>(null);
+  const parallaxRafRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (parallaxRafRef.current !== null) {
+        cancelAnimationFrame(parallaxRafRef.current);
+      }
+    };
+  }, []);
+
+  function handleHeroMouseMove(e: MouseEvent<HTMLElement>) {
+    if (!canUsePointer3D()) return;
+    if (typeof window !== 'undefined' && window.innerWidth < 1024) return;
+
+    const sectionEl = heroRef.current;
+    if (!sectionEl) return;
+
+    const rect = sectionEl.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+
+    const nx = (e.clientX - rect.left) / rect.width - 0.5;
+    const ny = (e.clientY - rect.top) / rect.height - 0.5;
+
+    if (parallaxRafRef.current !== null) {
+      cancelAnimationFrame(parallaxRafRef.current);
+    }
+
+    parallaxRafRef.current = requestAnimationFrame(() => {
+      sectionEl.dataset.parallaxActive = 'true';
+      sectionEl.style.setProperty('--ef-px', `${(nx * 24).toFixed(2)}px`);
+      sectionEl.style.setProperty('--ef-py', `${(ny * 18).toFixed(2)}px`);
+      parallaxRafRef.current = null;
+    });
+  }
+
+  function handleHeroMouseLeave() {
+    if (parallaxRafRef.current !== null) {
+      cancelAnimationFrame(parallaxRafRef.current);
+      parallaxRafRef.current = null;
+    }
+    const sectionEl = heroRef.current;
+    if (!sectionEl) return;
+    delete sectionEl.dataset.parallaxActive;
+    sectionEl.style.setProperty('--ef-px', '0px');
+    sectionEl.style.setProperty('--ef-py', '0px');
+  }
+
   return (
-    <section className="relative overflow-hidden rounded-3xl border border-slate-200/80 bg-white px-4 py-9 sm:px-8 sm:py-16 lg:px-10 lg:py-24">
+    <section
+      ref={heroRef}
+      onMouseMove={handleHeroMouseMove}
+      onMouseLeave={handleHeroMouseLeave}
+      className="relative overflow-hidden rounded-3xl border border-slate-200/80 bg-white px-4 py-9 sm:px-8 sm:py-16 lg:px-10 lg:py-24"
+    >
       {/* Soft Luma-inspired Warm Ambient Radial Glows */}
       <div
         aria-hidden="true"
@@ -120,8 +188,8 @@ export function LumaFloatingHero({
         className="pointer-events-none absolute -bottom-24 right-12 h-64 w-64 rounded-full bg-rose-100/45 blur-3xl"
       />
 
-      {/* Desktop Orbiting Floating Cards */}
-      <div className="hidden lg:block">
+      {/* Desktop Multi-Layer 3D Parallax Floating Cards */}
+      <div className="ef-hero-3d-stage hidden lg:block">
         {FLOATING_CARDS.map((card) => {
           const matchedEvent = card.matchCategory
             ? publicEvents.find((e) => e.category === card.matchCategory)
@@ -130,42 +198,52 @@ export function LumaFloatingHero({
           const displaySub = matchedEvent ? matchedEvent.location : card.subtitle;
 
           return (
-            <button
+            <div
               key={card.id}
-              type="button"
-              onClick={() => onSelectCard(card.matchCategory)}
               style={
                 {
-                  '--ef-rot': card.rotateDeg,
-                  animationDelay: `${card.delayMs}ms`,
+                  '--ef-depth': card.depthFactor,
+                  '--ef-pz': card.zDepthPx,
                 } as CSSProperties
               }
-              className={`ef-floating-card ${card.floatClass} ${card.positionClass} ${card.sizeClass} absolute z-10 rounded-2xl border border-white/90 bg-white/95 p-2 text-left shadow-[0_18px_40px_-14px_rgba(15,23,42,0.16)] ring-1 ring-slate-900/5 backdrop-blur-md cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600`}
+              className={`ef-hero-parallax-layer ${card.positionClass} absolute z-10`}
             >
-              <div className="aspect-[4/3] w-full overflow-hidden rounded-xl bg-slate-100">
-                <EventBanner
-                  src={matchedEvent?.bannerUrl || card.imageUrl}
-                  alt={displayTitle}
-                  className="h-full w-full"
-                />
-              </div>
-              <div className="px-1.5 pb-1 pt-2">
-                <div className="truncate text-xs font-bold text-slate-900">{displayTitle}</div>
-                <div className="mt-0.5 flex items-center gap-1 truncate text-[11px] text-slate-500">
-                  {matchedEvent ? (
-                    <MapPin className="h-3 w-3 shrink-0 text-rose-500" />
-                  ) : (
-                    <Calendar className="h-3 w-3 shrink-0 text-orange-500" />
-                  )}
-                  <span className="truncate">{displaySub}</span>
+              <button
+                type="button"
+                onClick={() => onSelectCard(card.matchCategory)}
+                style={
+                  {
+                    '--ef-rot': card.rotateDeg,
+                    animationDelay: `${card.delayMs}ms`,
+                  } as CSSProperties
+                }
+                className={`ef-floating-card ${card.floatClass} ${card.sizeClass} rounded-2xl border border-white/90 bg-white/95 p-2 text-left shadow-[0_18px_40px_-14px_rgba(15,23,42,0.16)] ring-1 ring-slate-900/5 backdrop-blur-md cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600`}
+              >
+                <div className="aspect-[4/3] w-full overflow-hidden rounded-xl bg-slate-100">
+                  <EventBanner
+                    src={matchedEvent?.bannerUrl || card.imageUrl}
+                    alt={displayTitle}
+                    className="h-full w-full"
+                  />
                 </div>
-              </div>
-            </button>
+                <div className="px-1.5 pb-1 pt-2">
+                  <div className="truncate text-xs font-bold text-slate-900">{displayTitle}</div>
+                  <div className="mt-0.5 flex items-center gap-1 truncate text-[11px] text-slate-500">
+                    {matchedEvent ? (
+                      <MapPin className="h-3 w-3 shrink-0 text-rose-500" />
+                    ) : (
+                      <Calendar className="h-3 w-3 shrink-0 text-orange-500" />
+                    )}
+                    <span className="truncate">{displaySub}</span>
+                  </div>
+                </div>
+              </button>
+            </div>
           );
         })}
       </div>
 
-      {/* Centered Luma Hero Copy & Primary Actions */}
+      {/* Centered Luma Hero Copy & Primary Actions (kept flat & steady for legibility) */}
       <div className="relative z-20 mx-auto max-w-xl text-center lg:max-w-[33rem] xl:max-w-xl">
         <div className="inline-flex items-center gap-1.5 rounded-full border border-orange-200/70 bg-orange-50/80 px-3 py-1 text-[11px] sm:text-xs font-semibold text-orange-700 animate-ef-fade-up">
           <Sparkles className="h-3.5 w-3.5 text-rose-500 shrink-0" />

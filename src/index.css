@@ -334,6 +334,113 @@
   }
 }
 
+/* -------------------------------------------------------------------------- */
+/* Stripe & Apple Inspired 3D Depth Utilities (60fps GPU-only Transforms)     */
+/* -------------------------------------------------------------------------- */
+
+.ef-hero-3d-stage {
+  perspective: 1200px;
+  transform-style: preserve-3d;
+}
+
+.ef-hero-parallax-layer {
+  transform: translate3d(
+    calc(var(--ef-px, 0px) * var(--ef-depth, 1)),
+    calc(var(--ef-py, 0px) * var(--ef-depth, 1)),
+    var(--ef-pz, 0px)
+  );
+  transition: transform 540ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+
+[data-parallax-active="true"] .ef-hero-parallax-layer {
+  transition: transform 115ms ease-out;
+}
+
+.ef-ticket-3d {
+  position: relative;
+  transform-style: preserve-3d;
+  transform: perspective(1000px) rotateX(var(--ef-rx, 0deg)) rotateY(var(--ef-ry, 0deg));
+  transition:
+    transform 480ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 380ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 240ms ease;
+  will-change: transform;
+}
+
+.ef-ticket-3d[data-tilting="true"] {
+  transition:
+    transform 95ms ease-out,
+    box-shadow 260ms ease,
+    border-color 220ms ease;
+}
+
+.ef-ticket-glare {
+  background: radial-gradient(
+    360px circle at var(--ef-gx, 50%) var(--ef-gy, 50%),
+    rgba(255, 255, 255, 0.56) 0%,
+    rgba(244, 63, 94, 0.14) 28%,
+    rgba(99, 102, 241, 0.14) 52%,
+    transparent 76%
+  );
+  opacity: var(--ef-glare-opacity, 0);
+  transition: opacity 320ms cubic-bezier(0.22, 1, 0.36, 1);
+  mix-blend-mode: soft-light;
+}
+
+.ef-ticket-qr-pop {
+  transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+
+.ef-service-3d {
+  transform-style: preserve-3d;
+  transform: perspective(1000px) rotateX(var(--ef-rx, 0deg)) rotateY(var(--ef-ry, 0deg))
+    translate3d(0, var(--ef-hover-y, 0px), 0);
+  transition:
+    transform 440ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 320ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 220ms ease,
+    background-color 220ms ease;
+  will-change: transform;
+}
+
+.ef-service-3d[data-tilting="true"] {
+  transition:
+    transform 95ms ease-out,
+    box-shadow 240ms ease,
+    border-color 220ms ease,
+    background-color 220ms ease;
+}
+
+.ef-3d-icon-pop {
+  transition:
+    transform 300ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 300ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .ef-ticket-3d:hover {
+    box-shadow:
+      0 26px 50px -16px rgba(15, 23, 42, 0.2),
+      0 10px 24px -12px rgba(99, 102, 241, 0.16);
+  }
+
+  .ef-ticket-3d:hover .ef-ticket-qr-pop {
+    transform: translateZ(18px);
+  }
+
+  .ef-service-3d:hover {
+    --ef-hover-y: -3px;
+  }
+
+  .ef-service-3d:hover .ef-3d-icon-pop {
+    transform: translateZ(16px);
+    box-shadow: 0 10px 22px -8px rgba(15, 23, 42, 0.18);
+  }
+}
+
 /* Tactile Press & Subtle Hover Light Sheen for Primary Action Buttons */
 .ef-btn-tactile {
   position: relative;
@@ -504,10 +611,24 @@
   .ef-spotlight-card-dark,
   .ef-spotlight-card-dark::before,
   .ef-spotlight-card-dark::after,
+  .ef-hero-parallax-layer,
+  .ef-ticket-3d,
+  .ef-ticket-glare,
+  .ef-ticket-qr-pop,
+  .ef-service-3d,
+  .ef-3d-icon-pop,
   .ef-btn-tactile,
   .ef-btn-tactile::after,
   .ef-sliding-pill,
   .ef-expand-grid {
     transition: none !important;
+  }
+
+  .ef-hero-parallax-layer,
+  .ef-ticket-3d,
+  .ef-ticket-qr-pop,
+  .ef-service-3d,
+  .ef-3d-icon-pop {
+    transform: none !important;
   }
 }
