@@ -25,6 +25,7 @@ import {
   Users,
   X,
 } from 'lucide-react';
+import { DEFAULT_EVENT_BANNERS } from '../data/seedData';
 import { submitFeedback, updateRegistrationStatus } from '../services/dataService';
 import { EventBanner } from './EventBanner';
 import { EventDetailModal } from './EventDetailModal';
@@ -236,31 +237,31 @@ export function UserLayout({
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
-      {/* Top Navigation Bar */}
-      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-sm border-b border-slate-200/80">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-6">
+    <div className="min-h-screen bg-[#F8FAFC] flex flex-col">
+      {/* Sleek Frosted Top Navigation Bar */}
+      <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-200/70">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between gap-6">
           {/* Zone 1: Brand */}
           <button
             type="button"
             onClick={() => setActiveTab('discover')}
-            className="inline-flex items-center gap-2.5 text-base font-bold tracking-tight text-slate-900 whitespace-nowrap shrink-0 cursor-pointer"
+            className="inline-flex items-center gap-2.5 text-[15px] font-bold tracking-tight text-slate-900 whitespace-nowrap shrink-0 cursor-pointer transition-opacity hover:opacity-85"
           >
-            <span className="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center">
+            <span className="w-7 h-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center">
               <CalendarDays className="w-4 h-4" />
             </span>
             <span>EventFlow</span>
           </button>
 
           {/* Zone 2: Clean Single-line Nav Links */}
-          <nav className="hidden md:flex items-center gap-6 text-sm font-medium">
+          <nav className="hidden md:flex items-center gap-6 text-[13px] font-medium">
             <button
               type="button"
               onClick={() => setActiveTab('discover')}
-              className={`h-16 inline-flex items-center border-b-2 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+              className={`h-14 inline-flex items-center border-b-2 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
                 activeTab === 'discover'
-                  ? 'border-indigo-600 text-indigo-600 font-semibold'
-                  : 'border-transparent text-slate-600 hover:text-slate-900'
+                  ? 'border-indigo-600 text-slate-900 font-semibold'
+                  : 'border-transparent text-slate-500 hover:text-slate-900'
               }`}
             >
               Khám phá
@@ -268,14 +269,14 @@ export function UserLayout({
             <button
               type="button"
               onClick={() => scrollToSection('dich-vu-noi-bat')}
-              className="h-16 inline-flex items-center border-b-2 border-transparent text-slate-600 hover:text-slate-900 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              className="h-14 inline-flex items-center border-b-2 border-transparent text-slate-500 hover:text-slate-900 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             >
               Dịch vụ
             </button>
             <button
               type="button"
               onClick={() => scrollToSection('lien-he-admin')}
-              className="h-16 inline-flex items-center border-b-2 border-transparent text-slate-600 hover:text-slate-900 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              className="h-14 inline-flex items-center border-b-2 border-transparent text-slate-500 hover:text-slate-900 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             >
               Liên hệ
             </button>
@@ -283,10 +284,10 @@ export function UserLayout({
               <button
                 type="button"
                 onClick={() => setActiveTab('tickets')}
-                className={`h-16 inline-flex items-center border-b-2 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                className={`h-14 inline-flex items-center border-b-2 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
                   activeTab === 'tickets'
-                    ? 'border-indigo-600 text-indigo-600 font-semibold'
-                    : 'border-transparent text-slate-600 hover:text-slate-900'
+                    ? 'border-indigo-600 text-slate-900 font-semibold'
+                    : 'border-transparent text-slate-500 hover:text-slate-900'
                 }`}
               >
                 Đã đăng ký ({myRegistrations.length})
@@ -296,7 +297,7 @@ export function UserLayout({
               <button
                 type="button"
                 onClick={onSwitchToOrganizer}
-                className="h-16 inline-flex items-center border-b-2 border-transparent text-sky-700 hover:text-sky-800 font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                className="h-14 inline-flex items-center border-b-2 border-transparent text-sky-700 hover:text-sky-800 font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer"
               >
                 Cổng Tổ chức
               </button>
@@ -305,7 +306,7 @@ export function UserLayout({
               <button
                 type="button"
                 onClick={onSwitchToAdmin}
-                className="h-16 inline-flex items-center border-b-2 border-transparent text-indigo-700 hover:text-indigo-800 font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                className="h-14 inline-flex items-center border-b-2 border-transparent text-indigo-700 hover:text-indigo-800 font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer"
               >
                 Cổng Quản trị
               </button>
@@ -316,7 +317,7 @@ export function UserLayout({
           <div className="hidden md:flex items-center gap-3 shrink-0">
             {currentUser ? (
               <div className="flex items-center gap-3 pl-4 border-l border-slate-200/80">
-                <div className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-200/80 text-slate-700 text-xs font-bold flex items-center justify-center shrink-0">
+                <div className="w-7 h-7 rounded-lg bg-slate-100 border border-slate-200/80 text-slate-700 text-xs font-bold flex items-center justify-center shrink-0">
                   {currentUser.fullName.trim().charAt(0).toUpperCase() || 'U'}
                 </div>
                 <div className="leading-tight min-w-0">
@@ -334,25 +335,25 @@ export function UserLayout({
                 <button
                   type="button"
                   onClick={onLogout}
-                  className="ml-1 inline-flex items-center gap-1.5 h-9 px-3 text-xs font-medium text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200/80 rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                  className="ml-1 inline-flex items-center gap-1.5 h-8 px-2.5 text-xs font-medium text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200/80 rounded-lg transition-all duration-150 active:scale-[0.98] whitespace-nowrap shrink-0 cursor-pointer"
                 >
                   <LogOut className="w-3.5 h-3.5" />
                   <span>Đăng xuất</span>
                 </button>
               </div>
             ) : (
-              <div className="flex items-center gap-2.5 pl-4 border-l border-slate-200/80">
+              <div className="flex items-center gap-2 pl-4 border-l border-slate-200/80">
                 <button
                   type="button"
                   onClick={() => onOpenAuth('login', 'user')}
-                  className="h-9 px-3 text-xs font-semibold text-slate-700 hover:text-slate-900 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                  className="h-8 px-3 text-xs font-semibold text-slate-700 hover:text-slate-900 rounded-lg hover:bg-slate-100/70 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
                 >
                   Đăng nhập
                 </button>
                 <button
                   type="button"
                   onClick={() => onOpenAuth('register', 'user')}
-                  className="inline-flex items-center gap-1.5 h-9 px-4 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                  className="inline-flex items-center gap-1.5 h-8 px-3.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-all duration-150 active:scale-[0.98] whitespace-nowrap shrink-0 cursor-pointer"
                 >
                   <LogIn className="w-3.5 h-3.5" />
                   <span>Đăng ký</span>
@@ -487,37 +488,37 @@ export function UserLayout({
         )}
 
         {activeTab === 'discover' ? (
-          <div className="space-y-10">
-            {/* Refined Minimalist SaaS Hero Section */}
+          <div className="space-y-12">
+            {/* Luma / Linear Inspired Balanced 2-Column Hero */}
             <section className="bg-white border border-slate-200/80 rounded-2xl p-6 sm:p-8 lg:p-10 space-y-6">
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-stretch">
-                {/* Hero Left: Badge + Crisp Title + Concise Description + Compact Actions */}
-                <div className="lg:col-span-7 flex flex-col justify-between">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
+                {/* Left: Eyebrow, Crisp Title, Short Description & Primary Actions */}
+                <div className="lg:col-span-7 flex flex-col justify-between py-1">
                   <div>
-                    <div className="inline-flex items-center gap-1.5 text-xs font-medium text-indigo-700 bg-indigo-50/80 border border-indigo-200/60 px-2.5 py-1 rounded-md animate-ef-fade-up">
+                    <div className="inline-flex items-center gap-1.5 text-xs font-medium text-indigo-700 bg-indigo-50/70 border border-indigo-200/60 px-2.5 py-1 rounded-md animate-ef-fade-up">
                       <Sparkles className="w-3.5 h-3.5" />
                       <span>Nền tảng Tổ chức &amp; Vận hành Sự kiện</span>
                     </div>
 
                     <h1
-                      className="mt-4 text-2xl sm:text-3xl lg:text-[2.125rem] font-bold text-slate-900 tracking-tight text-balance leading-[1.22] max-w-2xl animate-ef-fade-up"
+                      className="mt-4 text-2xl sm:text-3xl lg:text-[2.25rem] font-bold text-slate-900 tracking-tight text-balance leading-[1.2] max-w-2xl animate-ef-fade-up"
                       style={{ animationDelay: '60ms' }}
                     >
-                      Quản lý sự kiện, dịch vụ và check-in{' '}
+                      Tổ chức sự kiện, điều phối dịch vụ và check-in{' '}
                       <span className="text-indigo-600">trên một hệ thống tập trung</span>
                     </h1>
 
                     <p
-                      className="mt-3 text-sm sm:text-[15px] text-slate-600 leading-relaxed max-w-xl line-clamp-3 animate-ef-fade-up"
+                      className="mt-3.5 text-sm sm:text-[15px] text-slate-600 leading-relaxed max-w-xl animate-ef-fade-up"
                       style={{ animationDelay: '110ms' }}
                     >
-                      Kết nối Người tham gia đăng ký sự kiện, Khách hàng doanh nghiệp gửi yêu cầu
-                      tổ chức và Ban quản trị điều phối khách mời, check-in QR đồng bộ theo thời
-                      gian thực.
+                      Đồng bộ 3 vai trò theo thời gian thực: Người tham gia đăng ký giữ chỗ,
+                      Khách hàng gửi yêu cầu tổ chức kèm dịch vụ và Ban quản trị vận hành khách mời,
+                      check-in QR.
                     </p>
                   </div>
 
-                  {/* Compact CTA Row */}
+                  {/* Action Buttons */}
                   <div
                     className="mt-6 flex flex-wrap items-center gap-2.5 animate-ef-fade-up"
                     style={{ animationDelay: '150ms' }}
@@ -527,7 +528,7 @@ export function UserLayout({
                         <button
                           type="button"
                           onClick={() => onOpenAuth('register', 'user')}
-                          className="inline-flex items-center gap-2 h-10 px-4 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors cursor-pointer whitespace-nowrap"
+                          className="inline-flex items-center gap-2 h-10 px-4 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-all duration-150 active:scale-[0.98] cursor-pointer whitespace-nowrap"
                         >
                           <UserCheck className="w-4 h-4" />
                           <span>Đăng ký tham gia</span>
@@ -536,7 +537,7 @@ export function UserLayout({
                         <button
                           type="button"
                           onClick={() => onOpenAuth('register', 'organizer')}
-                          className="inline-flex items-center gap-2 h-10 px-4 text-sm font-semibold text-slate-800 bg-white hover:bg-slate-50 border border-slate-200/90 rounded-lg transition-colors cursor-pointer whitespace-nowrap"
+                          className="inline-flex items-center gap-2 h-10 px-4 text-sm font-semibold text-slate-800 bg-white hover:bg-slate-50 border border-slate-200/90 rounded-xl transition-all duration-150 active:scale-[0.98] cursor-pointer whitespace-nowrap"
                         >
                           <Building2 className="w-4 h-4 text-indigo-600" />
                           <span>Đặt tổ chức sự kiện</span>
@@ -544,10 +545,10 @@ export function UserLayout({
                         <button
                           type="button"
                           onClick={() => scrollToSection('lien-he-admin')}
-                          className="inline-flex items-center gap-1.5 h-10 px-3 text-sm font-medium text-slate-600 hover:text-indigo-600 rounded-lg transition-colors cursor-pointer whitespace-nowrap"
+                          className="inline-flex items-center gap-1.5 h-10 px-3 text-sm font-medium text-slate-600 hover:text-indigo-600 rounded-xl transition-colors cursor-pointer whitespace-nowrap"
                         >
                           <Phone className="w-4 h-4" />
-                          <span>Liên hệ tư vấn</span>
+                          <span>Liên hệ Ban quản trị</span>
                         </button>
                       </>
                     ) : (
@@ -555,7 +556,7 @@ export function UserLayout({
                         <button
                           type="button"
                           onClick={() => scrollToSection('su-kien-cong-khai')}
-                          className="inline-flex items-center gap-2 h-10 px-4 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors cursor-pointer whitespace-nowrap"
+                          className="inline-flex items-center gap-2 h-10 px-4 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-all duration-150 active:scale-[0.98] cursor-pointer whitespace-nowrap"
                         >
                           <Calendar className="w-4 h-4" />
                           <span>Xem sự kiện đang mở</span>
@@ -564,7 +565,7 @@ export function UserLayout({
                           <button
                             type="button"
                             onClick={onSwitchToOrganizer}
-                            className="inline-flex items-center gap-2 h-10 px-4 text-sm font-semibold text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200/80 rounded-lg transition-colors cursor-pointer whitespace-nowrap"
+                            className="inline-flex items-center gap-2 h-10 px-4 text-sm font-semibold text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200/80 rounded-xl transition-all duration-150 active:scale-[0.98] cursor-pointer whitespace-nowrap"
                           >
                             <Building2 className="w-4 h-4" />
                             <span>Cổng Khách hàng Tổ chức</span>
@@ -574,7 +575,7 @@ export function UserLayout({
                           <button
                             type="button"
                             onClick={onSwitchToAdmin}
-                            className="inline-flex items-center gap-2 h-10 px-4 text-sm font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200/80 rounded-lg transition-colors cursor-pointer whitespace-nowrap"
+                            className="inline-flex items-center gap-2 h-10 px-4 text-sm font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200/80 rounded-xl transition-all duration-150 active:scale-[0.98] cursor-pointer whitespace-nowrap"
                           >
                             <ShieldCheck className="w-4 h-4" />
                             <span>Cổng Quản trị</span>
@@ -585,60 +586,88 @@ export function UserLayout({
                   </div>
                 </div>
 
-                {/* Hero Right: Harmonized Admin Contact Card */}
+                {/* Right: Visual System Overview Preview + Public Admin Contact Card */}
                 <div
-                  className="lg:col-span-5 rounded-xl bg-slate-50/70 border border-slate-200/80 p-5 flex flex-col justify-between gap-4 animate-ef-fade-up"
+                  className="lg:col-span-5 rounded-2xl bg-slate-50/70 border border-slate-200/80 overflow-hidden flex flex-col justify-between animate-ef-fade-up"
                   style={{ animationDelay: '140ms' }}
                 >
-                  <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-200/70">
-                    <div>
-                      <div className="text-[11px] font-semibold text-indigo-600">
-                        Liên hệ Ban quản trị
+                  {/* Visual Platform Overview Top */}
+                  <div className="p-4 pb-3.5 space-y-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-16 h-11 rounded-lg overflow-hidden bg-slate-200 shrink-0 border border-slate-200/80">
+                        <EventBanner
+                          src={featuredEvent?.bannerUrl || DEFAULT_EVENT_BANNERS[0].url}
+                          alt={featuredEvent?.title || 'EventFlow Platform Preview'}
+                          className="w-full h-full"
+                        />
                       </div>
-                      <div className="mt-0.5 text-sm font-bold text-slate-900">
-                        {publicContact.adminName}
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[11px] font-semibold text-indigo-600">
+                          Tổng quan vận hành trực tiếp
+                        </div>
+                        <div className="text-xs font-bold text-slate-900 truncate">
+                          {featuredEvent ? featuredEvent.title : publicContact.organizationName}
+                        </div>
                       </div>
                     </div>
-                    <span className="text-[11px] font-medium text-slate-500 whitespace-nowrap">
-                      Hỗ trợ trực tiếp
-                    </span>
+
+                    <div className="grid grid-cols-3 gap-2 pt-1 text-center">
+                      <div className="bg-white border border-slate-200/70 rounded-lg py-2 px-2">
+                        <div className="text-[11px] text-slate-500">Công khai</div>
+                        <div className="text-sm font-bold text-slate-900 tabular-nums">
+                          <AnimatedNumber value={heroMetrics.totalEvents} />
+                        </div>
+                      </div>
+                      <div className="bg-white border border-slate-200/70 rounded-lg py-2 px-2">
+                        <div className="text-[11px] text-slate-500">Tham gia</div>
+                        <div className="text-sm font-bold text-slate-900 tabular-nums">
+                          <AnimatedNumber value={heroMetrics.totalRegistrations} />
+                        </div>
+                      </div>
+                      <div className="bg-white border border-slate-200/70 rounded-lg py-2 px-2">
+                        <div className="text-[11px] text-slate-500">Lấp đầy</div>
+                        <div className="text-sm font-bold text-indigo-600 tabular-nums">
+                          <AnimatedNumber value={heroMetrics.avgFillRate} suffix="%" />
+                        </div>
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="space-y-2.5 text-xs">
-                    <a
-                      href={`tel:${publicContact.phone.replace(/\s+/g, '')}`}
-                      className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-white border border-slate-200/80 hover:border-indigo-300 transition-colors"
-                    >
-                      <span className="inline-flex items-center gap-2 text-slate-600 font-medium">
-                        <Phone className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                        <span>Điện thoại</span>
+                  {/* Harmonized Public Admin Contact Block */}
+                  <div className="border-t border-slate-200/80 bg-white/80 p-4 space-y-2.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[11px] font-semibold text-slate-500">
+                        Liên hệ Ban quản trị · {publicContact.adminName}
                       </span>
-                      <span className="font-semibold text-slate-900 tabular-nums">
-                        {publicContact.phone}
-                      </span>
-                    </a>
+                      <span className="text-[11px] font-medium text-emerald-700">Công khai</span>
+                    </div>
 
-                    <a
-                      href={`mailto:${publicContact.email}`}
-                      className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-white border border-slate-200/80 hover:border-indigo-300 transition-colors"
-                    >
-                      <span className="inline-flex items-center gap-2 text-slate-600 font-medium">
-                        <Mail className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                        <span>Email</span>
-                      </span>
-                      <span className="font-semibold text-slate-900 truncate">
-                        {publicContact.email}
-                      </span>
-                    </a>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-2 text-xs">
+                      <a
+                        href={`tel:${publicContact.phone.replace(/\s+/g, '')}`}
+                        className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-slate-50/80 border border-slate-200/80 hover:border-indigo-300 hover:bg-white transition-colors"
+                      >
+                        <span className="inline-flex items-center gap-2 text-slate-600 font-medium">
+                          <Phone className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                          <span>Điện thoại</span>
+                        </span>
+                        <span className="font-semibold text-slate-900 tabular-nums">
+                          {publicContact.phone}
+                        </span>
+                      </a>
 
-                    <div className="flex items-center justify-between gap-3 px-1 pt-0.5 text-[11px] text-slate-500">
-                      <span className="inline-flex items-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                        <span>{publicContact.workingHours}</span>
-                      </span>
-                      <span className="tabular-nums font-medium text-slate-600">
-                        {publicContact.hotline}
-                      </span>
+                      <a
+                        href={`mailto:${publicContact.email}`}
+                        className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-slate-50/80 border border-slate-200/80 hover:border-indigo-300 hover:bg-white transition-colors"
+                      >
+                        <span className="inline-flex items-center gap-2 text-slate-600 font-medium">
+                          <Mail className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                          <span>Email</span>
+                        </span>
+                        <span className="font-semibold text-slate-900 truncate">
+                          {publicContact.email}
+                        </span>
+                      </a>
                     </div>
                   </div>
                 </div>
@@ -696,34 +725,6 @@ export function UserLayout({
                   )}
                 </div>
               </div>
-
-              {/* Clean Hairline-Divided Metrics Strip */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-slate-200/80 border border-slate-200/80 rounded-xl bg-slate-50/40">
-                <div className="px-4 py-3.5">
-                  <div className="text-xs text-slate-500">Sự kiện công khai</div>
-                  <div className="mt-1 text-xl font-bold text-slate-900 tabular-nums">
-                    <AnimatedNumber value={heroMetrics.totalEvents} />
-                  </div>
-                </div>
-                <div className="px-4 py-3.5">
-                  <div className="text-xs text-slate-500">Lượt đăng ký tham gia</div>
-                  <div className="mt-1 text-xl font-bold text-slate-900 tabular-nums">
-                    <AnimatedNumber value={heroMetrics.totalRegistrations} />
-                  </div>
-                </div>
-                <div className="px-4 py-3.5">
-                  <div className="text-xs text-slate-500">Tỷ lệ lấp đầy</div>
-                  <div className="mt-1 text-xl font-bold text-indigo-600 tabular-nums">
-                    <AnimatedNumber value={heroMetrics.avgFillRate} suffix="%" />
-                  </div>
-                </div>
-                <div className="px-4 py-3.5">
-                  <div className="text-xs text-slate-500">Tỷ lệ check-in</div>
-                  <div className="mt-1 text-xl font-bold text-emerald-600 tabular-nums">
-                    <AnimatedNumber value={heroMetrics.checkInRate} suffix="%" />
-                  </div>
-                </div>
-              </div>
             </section>
 
             {/* Public Service Overview & Highlight Packages */}
@@ -751,21 +752,21 @@ export function UserLayout({
                   )}
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
                   {SERVICE_PACKAGE_HIGHLIGHTS.map((pkg, idx) => (
-                    <RevealBlock key={pkg.code} delayMs={idx * 50}>
-                      <div className="bg-white border border-slate-200/80 rounded-xl p-5 h-full flex flex-col justify-between transition-colors hover:border-indigo-200">
+                    <RevealBlock key={pkg.code} delayMs={idx * 65}>
+                      <div className="bg-white border border-slate-200/80 rounded-2xl p-6 h-full flex flex-col justify-between transition-all duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-[0_12px_28px_-14px_rgba(15,23,42,0.12)]">
                         <div>
                           <div className="text-xs font-mono font-semibold text-indigo-600">
                             {pkg.code}. Gói tiêu chuẩn
                           </div>
-                          <h3 className="mt-1.5 text-base font-bold text-slate-900">{pkg.title}</h3>
+                          <h3 className="mt-2 text-base font-bold text-slate-900">{pkg.title}</h3>
                           <p className="mt-1.5 text-sm text-slate-600 leading-relaxed">
                             {pkg.description}
                           </p>
                         </div>
 
-                        <ul className="mt-4 pt-3.5 border-t border-slate-100 space-y-1.5 text-xs text-slate-600">
+                        <ul className="mt-5 pt-4 border-t border-slate-100 space-y-2 text-xs text-slate-600">
                           {pkg.included.map((item) => (
                             <li key={item} className="flex items-center gap-2">
                               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
@@ -778,7 +779,7 @@ export function UserLayout({
                   ))}
                 </div>
 
-                <div className="bg-white border border-slate-200/80 rounded-xl p-5 space-y-3.5">
+                <div className="bg-white border border-slate-200/80 rounded-2xl p-6 space-y-4">
                   <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
                     <Layers className="w-4 h-4 text-indigo-600" />
                     <span>Hạng mục dịch vụ đi kèm có thể yêu cầu trên hệ thống</span>
@@ -787,7 +788,7 @@ export function UserLayout({
                     {SYSTEM_SERVICE_CATALOG.map((srv) => (
                       <div
                         key={srv.key}
-                        className="p-3.5 rounded-lg bg-slate-50/70 border border-slate-200/70"
+                        className="p-3.5 rounded-xl bg-slate-50/70 border border-slate-200/70 transition-colors duration-150 hover:bg-white hover:border-indigo-200"
                       >
                         <div className="text-xs font-semibold text-slate-900">{srv.name}</div>
                         <p className="mt-1 text-xs text-slate-500 leading-relaxed">{srv.summary}</p>
@@ -806,8 +807,8 @@ export function UserLayout({
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                   {ENTERPRISE_PARTNERS.map((partner, idx) => (
-                    <RevealBlock key={partner.name} delayMs={idx * 40}>
-                      <div className="bg-white border border-slate-200/80 rounded-xl px-3.5 py-2.5 flex items-center justify-between gap-2 transition-colors hover:border-indigo-200">
+                    <RevealBlock key={partner.name} delayMs={idx * 45}>
+                      <div className="bg-white border border-slate-200/80 rounded-xl px-3.5 py-2.5 flex items-center justify-between gap-2 transition-all duration-150 hover:-translate-y-0.5 hover:border-indigo-200">
                         <div className="min-w-0">
                           <div className="text-xs font-semibold text-slate-900 truncate">
                             {partner.name}
@@ -829,7 +830,7 @@ export function UserLayout({
                   <h2 className="text-base font-bold text-slate-900">Sự kiện công khai tiêu biểu</h2>
                   <article
                     onClick={() => setSelectedEvent(featuredEvent)}
-                    className="group bg-white border border-slate-200/80 rounded-xl overflow-hidden grid grid-cols-1 lg:grid-cols-12 items-stretch transition-all duration-200 hover:border-indigo-300 hover:shadow-sm cursor-pointer"
+                    className="group bg-white border border-slate-200/80 rounded-2xl overflow-hidden grid grid-cols-1 lg:grid-cols-12 items-stretch transition-all duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-0.5 hover:border-indigo-300 hover:shadow-[0_14px_30px_-14px_rgba(79,70,229,0.16)] cursor-pointer"
                   >
                     <div className="lg:col-span-6 aspect-video lg:aspect-auto bg-slate-100 overflow-hidden">
                       <EventBanner
@@ -840,20 +841,21 @@ export function UserLayout({
                     </div>
                     <div className="lg:col-span-6 p-6 sm:p-8 flex flex-col justify-between gap-5">
                       <div>
-                        <div className="flex flex-wrap items-center gap-2 text-xs">
-                          <span className="px-2.5 py-1 font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-md">
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                          <span className="font-semibold text-indigo-600">
                             {featuredEvent.category}
                           </span>
+                          <span aria-hidden="true">·</span>
                           <span
-                            className={`px-2.5 py-1 font-semibold border rounded-md ${
-                              EVENT_STATUS_META[featuredEvent.status].bgClass
-                            } ${EVENT_STATUS_META[featuredEvent.status].textClass}`}
+                            className={`font-semibold ${
+                              EVENT_STATUS_META[featuredEvent.status].textClass
+                            }`}
                           >
                             {EVENT_STATUS_META[featuredEvent.status].label}
                           </span>
                         </div>
 
-                        <h3 className="mt-3 text-xl sm:text-2xl font-bold text-slate-900 leading-snug">
+                        <h3 className="mt-2.5 text-xl sm:text-2xl font-bold text-slate-900 leading-snug group-hover:text-indigo-700 transition-colors">
                           {featuredEvent.title}
                         </h3>
 
@@ -886,7 +888,7 @@ export function UserLayout({
                             e.stopPropagation();
                             setSelectedEvent(featuredEvent);
                           }}
-                          className="px-5 py-2.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors cursor-pointer whitespace-nowrap"
+                          className="h-10 px-4 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-all duration-150 active:scale-[0.98] cursor-pointer whitespace-nowrap"
                         >
                           Xem chi tiết &amp; Đăng ký
                         </button>
@@ -898,17 +900,17 @@ export function UserLayout({
             )}
 
             {/* Public Open Events List */}
-            <section id="su-kien-cong-khai" className="space-y-5 scroll-mt-20">
+            <section id="su-kien-cong-khai" className="space-y-6 scroll-mt-20">
               <RevealBlock>
                 <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+                  <div className="inline-flex items-center gap-1 p-1 bg-slate-100/80 border border-slate-200/70 rounded-xl overflow-x-auto max-w-full">
                     <button
                       type="button"
                       onClick={() => setCategoryFilter('all')}
-                      className={`px-3.5 py-2 text-xs font-semibold rounded-lg border transition-all duration-200 whitespace-nowrap shrink-0 cursor-pointer ${
+                      className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all duration-150 whitespace-nowrap shrink-0 cursor-pointer ${
                         categoryFilter === 'all'
-                          ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
-                          : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
+                          ? 'bg-white text-slate-900 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
                       }`}
                     >
                       Tất cả danh mục
@@ -918,10 +920,10 @@ export function UserLayout({
                         key={cat}
                         type="button"
                         onClick={() => setCategoryFilter(cat)}
-                        className={`px-3.5 py-2 text-xs font-semibold rounded-lg border transition-all duration-200 whitespace-nowrap shrink-0 cursor-pointer ${
+                        className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all duration-150 whitespace-nowrap shrink-0 cursor-pointer ${
                           categoryFilter === cat
-                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
-                            : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
+                            ? 'bg-white text-slate-900 shadow-xs'
+                            : 'text-slate-600 hover:text-slate-900'
                         }`}
                       >
                         {cat}
@@ -1019,21 +1021,16 @@ export function UserLayout({
                       <article
                         key={ev.id}
                         onClick={() => setSelectedEvent(ev)}
-                        style={{ animationDelay: `${Math.min(idx, 5) * 45}ms` }}
-                        className="group animate-ef-fade-up bg-white border border-slate-200/80 rounded-xl overflow-hidden flex flex-col justify-between transition-all duration-200 hover:-translate-y-0.5 hover:border-indigo-300 hover:shadow-sm cursor-pointer"
+                        style={{ animationDelay: `${Math.min(idx, 5) * 50}ms` }}
+                        className="group animate-ef-fade-up bg-white border border-slate-200/80 rounded-2xl overflow-hidden flex flex-col justify-between transition-all duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-1 hover:border-indigo-300 hover:shadow-[0_14px_30px_-14px_rgba(79,70,229,0.16)] active:scale-[0.99] cursor-pointer"
                       >
                         <div>
                           <div className="relative aspect-video w-full overflow-hidden bg-slate-100">
                             <EventBanner
                               src={ev.bannerUrl}
                               alt={ev.title}
-                              className="w-full h-full transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.02]"
+                              className="w-full h-full transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.03]"
                             />
-                            <div className="absolute top-3 left-3 flex items-center gap-1.5">
-                              <span className="px-2.5 py-1 text-[11px] font-semibold bg-white/95 text-slate-900 rounded-md shadow-xs">
-                                {ev.category}
-                              </span>
-                            </div>
                             <div className="absolute top-3 right-3 flex items-center gap-1.5">
                               {myReg && (
                                 <span className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold bg-emerald-600 text-white rounded-md shadow-xs">
@@ -1048,7 +1045,7 @@ export function UserLayout({
                                   e.stopPropagation();
                                   toggleSaveEvent(ev.id);
                                 }}
-                                className={`p-1.5 rounded-md shadow-xs cursor-pointer transition-colors ${
+                                className={`p-1.5 rounded-md shadow-xs cursor-pointer transition-all duration-150 hover:scale-105 ${
                                   isSaved
                                     ? 'bg-indigo-600 text-white'
                                     : 'bg-white/95 text-slate-600 hover:text-indigo-600'
@@ -1063,19 +1060,23 @@ export function UserLayout({
 
                           <div className="p-5">
                             <div className="flex items-center justify-between gap-2 text-xs">
-                              <div className="flex items-center gap-1.5 tabular-nums text-slate-500">
-                                <span className={`font-semibold ${statusMeta.textClass}`}>
+                              <div className="flex items-center gap-1.5 tabular-nums text-slate-500 truncate">
+                                <span className="font-semibold text-indigo-600 truncate">
+                                  {ev.category}
+                                </span>
+                                <span aria-hidden="true">·</span>
+                                <span className={`font-medium ${statusMeta.textClass}`}>
                                   {statusMeta.label}
                                 </span>
                                 <span aria-hidden="true">·</span>
                                 <span>{formatShortDateVN(ev.startTime)}</span>
                               </div>
-                              <span className="font-semibold text-indigo-700 tabular-nums">
-                                Còn {remaining} chỗ
+                              <span className="font-semibold text-slate-700 tabular-nums shrink-0">
+                                Còn {remaining}
                               </span>
                             </div>
 
-                            <h3 className="mt-2 text-base font-bold text-slate-900 leading-snug line-clamp-2 group-hover:text-indigo-700 transition-colors">
+                            <h3 className="mt-2.5 text-base font-bold text-slate-900 leading-snug line-clamp-2 group-hover:text-indigo-700 transition-colors">
                               {ev.title}
                             </h3>
 
@@ -1108,7 +1109,7 @@ export function UserLayout({
                                 <BadgeCheck className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
                               )}
                             </span>
-                            <span className="text-xs font-semibold text-indigo-600 whitespace-nowrap shrink-0 inline-flex items-center gap-1">
+                            <span className="text-xs font-semibold text-indigo-600 whitespace-nowrap shrink-0 inline-flex items-center gap-1 transition-transform duration-150 group-hover:translate-x-0.5">
                               {myReg ? 'Xem trạng thái →' : 'Đăng ký ngay →'}
                             </span>
                           </div>

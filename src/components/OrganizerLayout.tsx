@@ -216,28 +216,28 @@ export function OrganizerLayout({
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
-      {/* Top Navbar */}
-      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-sm border-b border-slate-200/80">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-6">
+      {/* Sleek Frosted Top Navbar */}
+      <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-200/70">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between gap-6">
           <button
             type="button"
             onClick={() => setTab('requests')}
-            className="inline-flex items-center gap-2.5 text-base font-bold tracking-tight text-slate-900 whitespace-nowrap shrink-0 cursor-pointer"
+            className="inline-flex items-center gap-2.5 text-[15px] font-bold tracking-tight text-slate-900 whitespace-nowrap shrink-0 cursor-pointer"
           >
-            <span className="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center">
+            <span className="w-7 h-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center">
               <Building2 className="w-4 h-4" />
             </span>
             <span>EventFlow Organizer</span>
           </button>
 
-          <nav className="hidden md:flex items-center gap-6 text-sm font-medium">
+          <nav className="hidden md:flex items-center gap-6 text-[13px] font-medium">
             <button
               type="button"
               onClick={() => setTab('requests')}
-              className={`h-16 inline-flex items-center border-b-2 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+              className={`h-14 inline-flex items-center border-b-2 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
                 tab === 'requests'
-                  ? 'border-indigo-600 text-indigo-600 font-semibold'
-                  : 'border-transparent text-slate-600 hover:text-slate-900'
+                  ? 'border-indigo-600 text-slate-900 font-semibold'
+                  : 'border-transparent text-slate-500 hover:text-slate-900'
               }`}
             >
               Yêu cầu của tôi ({myRequests.length})
@@ -245,10 +245,10 @@ export function OrganizerLayout({
             <button
               type="button"
               onClick={() => setTab('create')}
-              className={`h-16 inline-flex items-center border-b-2 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+              className={`h-14 inline-flex items-center border-b-2 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
                 tab === 'create'
-                  ? 'border-indigo-600 text-indigo-600 font-semibold'
-                  : 'border-transparent text-slate-600 hover:text-slate-900'
+                  ? 'border-indigo-600 text-slate-900 font-semibold'
+                  : 'border-transparent text-slate-500 hover:text-slate-900'
               }`}
             >
               Gửi yêu cầu mới
@@ -256,10 +256,10 @@ export function OrganizerLayout({
             <button
               type="button"
               onClick={() => setTab('public_events')}
-              className={`h-16 inline-flex items-center border-b-2 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+              className={`h-14 inline-flex items-center border-b-2 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
                 tab === 'public_events'
-                  ? 'border-indigo-600 text-indigo-600 font-semibold'
-                  : 'border-transparent text-slate-600 hover:text-slate-900'
+                  ? 'border-indigo-600 text-slate-900 font-semibold'
+                  : 'border-transparent text-slate-500 hover:text-slate-900'
               }`}
             >
               Sự kiện công khai
@@ -267,7 +267,7 @@ export function OrganizerLayout({
             <button
               type="button"
               onClick={onViewPublicLanding}
-              className="h-16 inline-flex items-center gap-1.5 border-b-2 border-transparent text-slate-600 hover:text-indigo-600 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              className="h-14 inline-flex items-center gap-1.5 border-b-2 border-transparent text-slate-500 hover:text-indigo-600 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             >
               <Globe className="w-3.5 h-3.5" />
               <span>Trang giới thiệu</span>
@@ -275,7 +275,7 @@ export function OrganizerLayout({
           </nav>
 
           <div className="hidden md:flex items-center gap-3 pl-4 border-l border-slate-200/80 shrink-0">
-            <div className="w-8 h-8 rounded-lg bg-sky-50 border border-sky-200/80 text-sky-700 text-xs font-bold flex items-center justify-center shrink-0">
+            <div className="w-7 h-7 rounded-lg bg-sky-50 border border-sky-200/80 text-sky-700 text-xs font-bold flex items-center justify-center shrink-0">
               {currentUser.fullName.trim().charAt(0).toUpperCase() || 'O'}
             </div>
             <div className="leading-tight min-w-0">
@@ -289,7 +289,7 @@ export function OrganizerLayout({
             <button
               type="button"
               onClick={onLogout}
-              className="ml-1 inline-flex items-center gap-1.5 h-9 px-3 text-xs font-medium text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200/80 rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              className="ml-1 inline-flex items-center gap-1.5 h-8 px-2.5 text-xs font-medium text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200/80 rounded-lg transition-all duration-150 active:scale-[0.98] whitespace-nowrap shrink-0 cursor-pointer"
             >
               <LogOut className="w-3.5 h-3.5" />
               <span>Đăng xuất</span>
