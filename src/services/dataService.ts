@@ -64,6 +64,88 @@ function resolveUserRole(email: string, storedRole?: unknown): UserRole {
   return 'user';
 }
 
+function toSafeIsoDate(
+  value: string | undefined | null,
+  fallback: string = new Date().toISOString()
+): string {
+  if (!value || !String(value).trim()) {
+    return fallback;
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return fallback;
+  }
+  return parsed.toISOString();
+}
+
+/**
+ * Recursively strip `undefined` values from objects and arrays before writing to Firestore.
+ * Converts NaN/Infinity numbers to 0 and Date instances to ISO strings.
+ */
+export function sanitizeForFirestore<T>(value: T): T {
+  if (value === null || value === undefined) {
+    return value;
+  }
+  if (value instanceof Date) {
+    return (Number.isNaN(value.getTime())
+      ? new Date().toISOString()
+      : value.toISOString()) as unknown as T;
+  }
+  if (typeof value === 'number') {
+    return (Number.isFinite(value) ? value : 0) as unknown as T;
+  }
+  if (Array.isArray(value)) {
+    const cleaned = value
+      .filter((item) => item !== undefined)
+      .map((item) => sanitizeForFirestore(item));
+    return cleaned as unknown as T;
+  }
+  if (typeof value === 'object') {
+    const result: Record<string, unknown> = {};
+    for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
+      if (val !== undefined) {
+        result[key] = sanitizeForFirestore(val);
+      }
+    }
+    return result as T;
+  }
+  return value;
+}
+
+function normalizeServiceRequests(
+  services?: EventServiceRequest[]
+): EventServiceRequest[] {
+  if (!Array.isArray(services)) return [];
+  return services
+    .filter((srv) => Boolean(srv && (srv.serviceName || srv.serviceKey)))
+    .map((srv, idx) => ({
+      id: String(srv.id || `srv-${Date.now()}-${idx}`),
+      serviceKey: String(srv.serviceKey || 'custom'),
+      serviceName: String(srv.serviceName ?? '').trim(),
+      quantityOrScope: String(srv.quantityOrScope ?? '').trim(),
+      clientNote: String(srv.clientNote ?? '').trim(),
+      adminNote: String(srv.adminNote ?? '').trim(),
+      status: srv.status || 'pending',
+    }));
+}
+
+function normalizeInvitedGuests(guests?: EventGuest[]): EventGuest[] {
+  if (!Array.isArray(guests)) return [];
+  return guests
+    .filter((g) => Boolean(g && g.fullName))
+    .map((g, idx) => ({
+      id: String(g.id || `guest-${Date.now()}-${idx}`),
+      fullName: String(g.fullName ?? '').trim(),
+      title: String(g.title ?? '').trim(),
+      organization: String(g.organization ?? '').trim(),
+      email: String(g.email ?? '').trim(),
+      phone: String(g.phone ?? '').trim(),
+      guestType: g.guestType || 'Khách mời',
+      rsvpStatus: g.rsvpStatus || 'invited',
+      note: String(g.note ?? '').trim(),
+    }));
+}
+
 function normalizeEventDoc(id: string, raw: Record<string, unknown>): EventItem {
   return {
     id,
@@ -83,15 +165,15 @@ function normalizeEventDoc(id: string, raw: Record<string, unknown>): EventItem 
     organizer: String(raw.organizer ?? 'EventFlow Enterprise'),
     organizerVerified: raw.organizerVerified !== false,
     featured: Boolean(raw.featured),
-    clientUserId: raw.clientUserId ? String(raw.clientUserId) : undefined,
-    clientName: raw.clientName ? String(raw.clientName) : undefined,
-    clientEmail: raw.clientEmail ? String(raw.clientEmail) : undefined,
-    clientPhone: raw.clientPhone ? String(raw.clientPhone) : undefined,
+    clientUserId: raw.clientUserId ? String(raw.clientUserId) : '',
+    clientName: raw.clientName ? String(raw.clientName) : '',
+    clientEmail: raw.clientEmail ? String(raw.clientEmail) : '',
+    clientPhone: raw.clientPhone ? String(raw.clientPhone) : '',
     requestedServices: Array.isArray(raw.requestedServices)
-      ? (raw.requestedServices as EventServiceRequest[])
+      ? normalizeServiceRequests(raw.requestedServices as EventServiceRequest[])
       : [],
     invitedGuests: Array.isArray(raw.invitedGuests)
-      ? (raw.invitedGuests as EventGuest[])
+      ? normalizeInvitedGuests(raw.invitedGuests as EventGuest[])
       : [],
     speakers: Array.isArray(raw.speakers) ? (raw.speakers as EventItem['speakers']) : [],
     agenda: Array.isArray(raw.agenda) ? (raw.agenda as EventItem['agenda']) : [],
@@ -221,7 +303,7 @@ export async function registerAccount(params: {
       createdAt: new Date().toISOString(),
     };
     try {
-      await setDoc(doc(firestore, 'users', cred.user.uid), profile);
+      await setDoc(doc(firestore, 'users', cred.user.uid), sanitizeForFirestore(profile));
     } catch (writeErr) {
       handleFirestoreError(writeErr, OperationType.CREATE, `users/${cred.user.uid}`, false);
     }
@@ -393,7 +475,11 @@ export async function updatePublicContact(
   };
 
   try {
-    await setDoc(doc(firestore, 'site_settings', 'public_contact'), payload, { merge: true });
+    await setDoc(
+      doc(firestore, 'site_settings', 'public_contact'),
+      sanitizeForFirestore(payload),
+      { merge: true }
+    );
     return payload;
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, 'site_settings/public_contact');
@@ -506,23 +592,25 @@ export async function seedSampleData(): Promise<{
   try {
     const batch = writeBatch(firestore);
     for (const u of users) {
-      batch.set(doc(firestore, 'users', u.uid), u, { merge: true });
+      batch.set(doc(firestore, 'users', u.uid), sanitizeForFirestore(u), { merge: true });
     }
     for (const ev of events) {
-      batch.set(doc(firestore, 'events', ev.id), ev);
+      batch.set(doc(firestore, 'events', ev.id), sanitizeForFirestore(ev));
     }
     for (const reg of registrations) {
-      batch.set(doc(firestore, 'registrations', reg.id), reg);
+      batch.set(doc(firestore, 'registrations', reg.id), sanitizeForFirestore(reg));
     }
     for (const fb of feedbacks) {
-      batch.set(doc(firestore, 'feedbacks', fb.id), fb);
+      batch.set(doc(firestore, 'feedbacks', fb.id), sanitizeForFirestore(fb));
     }
     await batch.commit();
 
     try {
-      await setDoc(doc(firestore, 'site_settings', 'public_contact'), publicContact, {
-        merge: true,
-      });
+      await setDoc(
+        doc(firestore, 'site_settings', 'public_contact'),
+        sanitizeForFirestore(publicContact),
+        { merge: true }
+      );
     } catch {
       // Ignore if Firestore rules restrict site_settings separately
     }
@@ -542,36 +630,55 @@ export async function seedSampleData(): Promise<{
 export async function createEvent(input: EventFormInput): Promise<EventItem> {
   const { db: firestore } = requireFirebase();
   const newId = `evt-${Date.now()}`;
-  const eventDoc: EventItem = {
+  const nowIso = new Date().toISOString();
+  const parsedMaxSlots = Number(input.maxSlots);
+  const eventDoc: EventItem = sanitizeForFirestore({
     id: newId,
-    title: input.title.trim(),
-    description: input.description.trim(),
-    bannerUrl: input.bannerUrl.trim(),
-    location: input.location.trim(),
-    startTime: new Date(input.startTime).toISOString(),
-    endTime: new Date(input.endTime).toISOString(),
-    maxSlots: Number(input.maxSlots) || 50,
+    title: String(input.title ?? '').trim(),
+    description: String(input.description ?? '').trim(),
+    bannerUrl: String(input.bannerUrl ?? '').trim(),
+    location: String(input.location ?? '').trim(),
+    startTime: toSafeIsoDate(input.startTime, nowIso),
+    endTime: toSafeIsoDate(input.endTime, nowIso),
+    maxSlots: Number.isFinite(parsedMaxSlots) && parsedMaxSlots > 0 ? Math.round(parsedMaxSlots) : 50,
     registeredCount: 0,
     checkedInCount: 0,
-    status: input.status,
+    status: input.status || 'upcoming',
     planningStatus: input.planningStatus || 'confirmed',
     isPublic: input.isPublic !== false,
-    category: input.category,
-    organizer: input.organizer.trim() || 'EventFlow Enterprise',
+    category: String(input.category || 'Hội nghị công nghệ'),
+    organizer: String(input.organizer ?? '').trim() || 'EventFlow Enterprise',
     organizerVerified: input.organizerVerified !== false,
     featured: Boolean(input.featured),
-    ...(input.clientUserId ? { clientUserId: input.clientUserId } : {}),
-    ...(input.clientName ? { clientName: input.clientName } : {}),
-    ...(input.clientEmail ? { clientEmail: input.clientEmail } : {}),
-    ...(input.clientPhone ? { clientPhone: input.clientPhone } : {}),
-    requestedServices: input.requestedServices || [],
-    invitedGuests: input.invitedGuests || [],
-    speakers: input.speakers.filter((s) => s.name.trim()),
-    agenda: input.agenda.filter((a) => a.time.trim() || a.title.trim()),
-    faqs: input.faqs.filter((f) => f.question.trim() && f.answer.trim()),
-    rules: input.rules.trim(),
-    createdAt: new Date().toISOString(),
-  };
+    clientUserId: String(input.clientUserId ?? '').trim(),
+    clientName: String(input.clientName ?? '').trim(),
+    clientEmail: String(input.clientEmail ?? '').trim(),
+    clientPhone: String(input.clientPhone ?? '').trim(),
+    requestedServices: normalizeServiceRequests(input.requestedServices),
+    invitedGuests: normalizeInvitedGuests(input.invitedGuests),
+    speakers: (input.speakers || [])
+      .filter((s) => s.name?.trim())
+      .map((s) => ({
+        name: s.name.trim(),
+        role: String(s.role ?? '').trim(),
+        company: String(s.company ?? '').trim(),
+      })),
+    agenda: (input.agenda || [])
+      .filter((a) => a.time?.trim() || a.title?.trim())
+      .map((a) => ({
+        time: String(a.time ?? '').trim(),
+        title: String(a.title ?? '').trim(),
+        speaker: String(a.speaker ?? '').trim(),
+      })),
+    faqs: (input.faqs || [])
+      .filter((f) => f.question?.trim() && f.answer?.trim())
+      .map((f) => ({
+        question: f.question.trim(),
+        answer: f.answer.trim(),
+      })),
+    rules: String(input.rules ?? '').trim(),
+    createdAt: nowIso,
+  });
 
   try {
     await setDoc(doc(firestore, 'events', newId), eventDoc);
@@ -587,39 +694,43 @@ export async function createOrganizerEventRequest(
 ): Promise<EventItem> {
   const { db: firestore } = requireFirebase();
   const newId = `evt-req-${Date.now()}`;
-  const eventDoc: EventItem = {
+  const nowIso = new Date().toISOString();
+  const parsedMaxSlots = Number(input.maxSlots);
+  const safeClientName = String(input.clientName ?? '').trim() || 'Thành viên EventFlow';
+
+  const eventDoc: EventItem = sanitizeForFirestore({
     id: newId,
-    title: input.title.trim(),
-    description: input.description.trim(),
-    bannerUrl: input.bannerUrl.trim(),
-    location: input.location.trim(),
-    startTime: new Date(input.startTime).toISOString(),
-    endTime: new Date(input.endTime).toISOString(),
-    maxSlots: Number(input.maxSlots) || 60,
+    title: String(input.title ?? '').trim(),
+    description: String(input.description ?? '').trim(),
+    bannerUrl: String(input.bannerUrl ?? '').trim(),
+    location: String(input.location ?? '').trim(),
+    startTime: toSafeIsoDate(input.startTime, nowIso),
+    endTime: toSafeIsoDate(input.endTime, nowIso),
+    maxSlots: Number.isFinite(parsedMaxSlots) && parsedMaxSlots > 0 ? Math.round(parsedMaxSlots) : 60,
     registeredCount: 0,
     checkedInCount: 0,
     status: 'upcoming',
     planningStatus: 'pending_review',
     isPublic: false,
-    category: input.category,
-    organizer: input.organizerName.trim() || input.clientName,
+    category: String(input.category || 'Hội nghị công nghệ'),
+    organizer: String(input.organizerName ?? '').trim() || safeClientName,
     organizerVerified: false,
     featured: false,
-    clientUserId: input.clientUserId,
-    clientName: input.clientName,
-    clientEmail: input.clientEmail,
-    clientPhone: input.clientPhone,
-    requestedServices: input.requestedServices,
+    clientUserId: String(input.clientUserId ?? '').trim(),
+    clientName: safeClientName,
+    clientEmail: String(input.clientEmail ?? '').trim(),
+    clientPhone: String(input.clientPhone ?? '').trim(),
+    requestedServices: normalizeServiceRequests(input.requestedServices),
     invitedGuests: [],
     speakers: [],
     agenda: [
-      { time: '08:30 - 09:00', title: 'Đón khách & Check-in QR' },
-      { time: '09:00 - 11:30', title: 'Chương trình chính thức' },
+      { time: '08:30 - 09:00', title: 'Đón khách & Check-in QR', speaker: '' },
+      { time: '09:00 - 11:30', title: 'Chương trình chính thức', speaker: '' },
     ],
     faqs: [],
     rules: 'Vui lòng mang theo mã QR xác nhận khi tham dự sự kiện.',
-    createdAt: new Date().toISOString(),
-  };
+    createdAt: nowIso,
+  });
 
   try {
     await setDoc(doc(firestore, 'events', newId), eventDoc);
@@ -661,14 +772,14 @@ export async function duplicateEvent(source: EventItem): Promise<EventItem> {
 
 export async function updateEvent(id: string, input: Partial<EventFormInput>): Promise<void> {
   const { db: firestore } = requireFirebase();
-  const updates: Record<string, unknown> = {
+  const updates = sanitizeForFirestore<Record<string, unknown>>({
     ...(input.title !== undefined ? { title: input.title.trim() } : {}),
     ...(input.description !== undefined ? { description: input.description.trim() } : {}),
     ...(input.bannerUrl !== undefined ? { bannerUrl: input.bannerUrl.trim() } : {}),
     ...(input.location !== undefined ? { location: input.location.trim() } : {}),
-    ...(input.startTime !== undefined ? { startTime: new Date(input.startTime).toISOString() } : {}),
-    ...(input.endTime !== undefined ? { endTime: new Date(input.endTime).toISOString() } : {}),
-    ...(input.maxSlots !== undefined ? { maxSlots: Number(input.maxSlots) } : {}),
+    ...(input.startTime !== undefined ? { startTime: toSafeIsoDate(input.startTime) } : {}),
+    ...(input.endTime !== undefined ? { endTime: toSafeIsoDate(input.endTime) } : {}),
+    ...(input.maxSlots !== undefined ? { maxSlots: Number(input.maxSlots) || 50 } : {}),
     ...(input.status !== undefined ? { status: input.status } : {}),
     ...(input.planningStatus !== undefined ? { planningStatus: input.planningStatus } : {}),
     ...(input.isPublic !== undefined ? { isPublic: input.isPublic } : {}),
@@ -679,20 +790,45 @@ export async function updateEvent(id: string, input: Partial<EventFormInput>): P
       : {}),
     ...(input.featured !== undefined ? { featured: input.featured } : {}),
     ...(input.requestedServices !== undefined
-      ? { requestedServices: input.requestedServices }
+      ? { requestedServices: normalizeServiceRequests(input.requestedServices) }
       : {}),
-    ...(input.invitedGuests !== undefined ? { invitedGuests: input.invitedGuests } : {}),
+    ...(input.invitedGuests !== undefined
+      ? { invitedGuests: normalizeInvitedGuests(input.invitedGuests) }
+      : {}),
     ...(input.speakers !== undefined
-      ? { speakers: input.speakers.filter((s) => s.name.trim()) }
+      ? {
+          speakers: input.speakers
+            .filter((s) => s.name?.trim())
+            .map((s) => ({
+              name: s.name.trim(),
+              role: String(s.role ?? '').trim(),
+              company: String(s.company ?? '').trim(),
+            })),
+        }
       : {}),
     ...(input.agenda !== undefined
-      ? { agenda: input.agenda.filter((a) => a.time.trim() || a.title.trim()) }
+      ? {
+          agenda: input.agenda
+            .filter((a) => a.time?.trim() || a.title?.trim())
+            .map((a) => ({
+              time: String(a.time ?? '').trim(),
+              title: String(a.title ?? '').trim(),
+              speaker: String(a.speaker ?? '').trim(),
+            })),
+        }
       : {}),
     ...(input.faqs !== undefined
-      ? { faqs: input.faqs.filter((f) => f.question.trim() && f.answer.trim()) }
+      ? {
+          faqs: input.faqs
+            .filter((f) => f.question?.trim() && f.answer?.trim())
+            .map((f) => ({
+              question: f.question.trim(),
+              answer: f.answer.trim(),
+            })),
+        }
       : {}),
     ...(input.rules !== undefined ? { rules: input.rules.trim() } : {}),
-  };
+  });
 
   try {
     await updateDoc(doc(firestore, 'events', id), updates);
@@ -706,8 +842,9 @@ export async function updateEventServices(
   requestedServices: EventServiceRequest[]
 ): Promise<void> {
   const { db: firestore } = requireFirebase();
+  const safeServices = sanitizeForFirestore(normalizeServiceRequests(requestedServices));
   try {
-    await updateDoc(doc(firestore, 'events', eventId), { requestedServices });
+    await updateDoc(doc(firestore, 'events', eventId), { requestedServices: safeServices });
   } catch (err) {
     handleFirestoreError(err, OperationType.UPDATE, `events/${eventId}`);
   }
@@ -718,8 +855,9 @@ export async function updateEventInvitedGuests(
   invitedGuests: EventGuest[]
 ): Promise<void> {
   const { db: firestore } = requireFirebase();
+  const safeGuests = sanitizeForFirestore(normalizeInvitedGuests(invitedGuests));
   try {
-    await updateDoc(doc(firestore, 'events', eventId), { invitedGuests });
+    await updateDoc(doc(firestore, 'events', eventId), { invitedGuests: safeGuests });
   } catch (err) {
     handleFirestoreError(err, OperationType.UPDATE, `events/${eventId}`);
   }
@@ -738,20 +876,20 @@ export async function createRegistration(input: RegistrationInput): Promise<Regi
   const { db: firestore } = requireFirebase();
   const newId = `reg-${Date.now()}`;
   const ticketCode = generateTicketCode();
-  const regDoc: RegistrationItem = {
+  const regDoc: RegistrationItem = sanitizeForFirestore({
     id: newId,
-    eventId: input.eventId,
-    eventTitle: input.eventTitle,
-    userId: input.userId,
-    guestName: input.guestName.trim(),
-    guestEmail: input.guestEmail.trim(),
-    guestPhone: input.guestPhone.trim(),
-    note: input.note.trim(),
+    eventId: String(input.eventId ?? '').trim(),
+    eventTitle: String(input.eventTitle ?? '').trim(),
+    userId: String(input.userId ?? '').trim(),
+    guestName: String(input.guestName ?? '').trim(),
+    guestEmail: String(input.guestEmail ?? '').trim(),
+    guestPhone: String(input.guestPhone ?? '').trim(),
+    note: String(input.note ?? '').trim(),
     ticketCode,
     status: 'confirmed',
     registeredAt: new Date().toISOString(),
     checkedInAt: null,
-  };
+  });
 
   try {
     const dupSnap = await getDocs(
@@ -899,16 +1037,16 @@ export async function submitFeedback(params: {
 }): Promise<FeedbackItem> {
   const { db: firestore } = requireFirebase();
   const fbId = `fb-${params.eventId}-${params.userId}`;
-  const feedback: FeedbackItem = {
+  const feedback: FeedbackItem = sanitizeForFirestore({
     id: fbId,
     eventId: params.eventId,
     eventTitle: params.eventTitle,
     userId: params.userId,
     userName: params.userName,
     rating: Math.min(5, Math.max(1, Math.round(params.rating))),
-    comment: params.comment.trim(),
+    comment: String(params.comment ?? '').trim(),
     createdAt: new Date().toISOString(),
-  };
+  });
 
   try {
     await setDoc(doc(firestore, 'feedbacks', fbId), feedback);
@@ -924,16 +1062,16 @@ export async function createContactInquiry(
 ): Promise<ContactInquiry> {
   const { db: firestore } = requireFirebase();
   const inquiryId = `inq-${Date.now()}`;
-  const docData: ContactInquiry = {
+  const docData: ContactInquiry = sanitizeForFirestore({
     id: inquiryId,
-    fullName: input.fullName.trim(),
-    contactInfo: input.contactInfo.trim(),
-    topic: input.topic.trim() || 'Tư vấn tổ chức sự kiện',
-    message: input.message.trim(),
+    fullName: String(input.fullName ?? '').trim(),
+    contactInfo: String(input.contactInfo ?? '').trim(),
+    topic: String(input.topic ?? '').trim() || 'Tư vấn tổ chức sự kiện',
+    message: String(input.message ?? '').trim(),
     status: 'new',
     ...(input.userId ? { userId: input.userId } : {}),
     createdAt: new Date().toISOString(),
-  };
+  });
 
   try {
     await setDoc(doc(firestore, 'contact_inquiries', inquiryId), docData);

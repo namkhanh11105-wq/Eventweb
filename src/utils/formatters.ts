@@ -21,39 +21,172 @@ export const EVENT_CATEGORIES: EventCategory[] = [
 export interface SystemServiceOption {
   key: string;
   name: string;
+  shortName: string;
   summary: string;
+  recommendationHint: string;
+  quantityPlaceholder: string;
+  notePlaceholder: string;
+  quantityChips: string[];
+  noteChips: string[];
 }
 
 export const SYSTEM_SERVICE_CATALOG: SystemServiceOption[] = [
   {
     key: 'av_stage',
     name: 'Âm thanh, Ánh sáng & Màn hình LED',
+    shortName: 'Âm thanh & LED',
     summary: 'Hệ thống PA hội trường, micro không dây, ánh sáng sân khấu và kỹ thuật viên trực.',
+    recommendationHint: 'Phổ biến',
+    quantityPlaceholder: 'Ví dụ: Hội trường 150 khách, 1 LED P3',
+    notePlaceholder: 'Yêu cầu micro cài áo, ánh sáng sân khấu, test kỹ thuật...',
+    quantityChips: ['Gói 100 khách + 2 mic', '1 LED P3 + 4 micro', 'Hội trường 300+ khách'],
+    noteChips: ['Có 2 micro cài áo', 'Chạy thử trước 1 ngày', 'Hỗ trợ livestream'],
   },
   {
     key: 'mc_coordinator',
     name: 'MC & Điều phối chương trình',
+    shortName: 'MC điều phối',
     summary: 'MC song ngữ/chuyên nghiệp, điều phối kịch bản timeline và hỗ trợ diễn giả.',
+    recommendationHint: 'Khuyên dùng > 50 khách',
+    quantityPlaceholder: 'Ví dụ: 1 MC + 1 điều phối hậu trường',
+    notePlaceholder: 'Ngôn ngữ dẫn (Việt / Song ngữ), phong cách trang trọng hay trẻ trung...',
+    quantityChips: ['1 MC chuyên nghiệp', '1 MC song ngữ Anh–Việt', '1 MC + 2 điều phối'],
+    noteChips: ['Dẫn song ngữ Anh–Việt', 'Phong cách trang trọng', 'Kèm duyệt kịch bản trước'],
   },
   {
     key: 'teabreak_catering',
     name: 'Tiệc Tea-break & Catering',
+    shortName: 'Tiệc Tea-break',
     summary: 'Bàn tiệc trà giữa giờ, bánh ngọt, cà phê và phục vụ theo số lượng khách.',
+    recommendationHint: 'Tăng trải nghiệm',
+    quantityPlaceholder: 'Ví dụ: 100 suất, phục vụ 1 hoặc 2 lượt',
+    notePlaceholder: 'Ghi chú khẩu vị, món chay, menu ít ngọt hoặc giờ phục vụ...',
+    quantityChips: ['50 suất', '100 suất', '200 suất'],
+    noteChips: ['Menu ít ngọt', 'Cà phê máy & nước ép', 'Có lựa chọn món chay'],
   },
   {
     key: 'checkin_staff',
     name: 'Nhân sự Lễ tân & Check-in QR',
+    shortName: 'Nhân sự Check-in QR',
     summary: 'Đội ngũ đón khách, quét mã QR E-Ticket và cấp phát thẻ đeo đại biểu.',
+    recommendationHint: 'Tiêu chuẩn',
+    quantityPlaceholder: 'Ví dụ: 2 Lễ tân + 2 Check-in QR',
+    notePlaceholder: 'Yêu cầu trang phục, quầy VIP riêng, cấp phát thẻ đeo hoặc quà...',
+    quantityChips: ['2 Lễ tân + 2 Check-in QR', '4 nhân sự', '6 nhân sự + làn VIP'],
+    noteChips: ['Có máy quét QR', 'Cấp thẻ đeo & bộ kit', 'Đón khách VIP riêng'],
   },
   {
     key: 'media_pr',
     name: 'Truyền thông, Quay phim & Chụp ảnh',
+    shortName: 'Quay chụp & Media',
     summary: 'Nhiếp ảnh sự kiện, quay recap highlight và truyền thông trước/sau chương trình.',
+    recommendationHint: 'Tạo dấu ấn',
+    quantityPlaceholder: 'Ví dụ: 2 máy ảnh + 1 quay phim',
+    notePlaceholder: 'Yêu cầu video recap, thời hạn trả ảnh nhanh, phỏng vấn khách mời...',
+    quantityChips: ['Chụp ảnh + Video Recap', '2 máy ảnh + 1 quay 4K', '1 thợ ảnh toàn buổi'],
+    noteChips: ['Trả ảnh chọn lọc trong 24h', 'Video recap 60–90 giây', 'Phỏng vấn diễn giả / VIP'],
   },
   {
     key: 'backdrop_booth',
     name: 'Thiết kế Backdrop & Khu vực Check-in',
+    shortName: 'Backdrop & Check-in',
     summary: 'Thiết kế, thi công backdrop, standee định hướng và bàn tiếp đón chuẩn thương hiệu.',
+    recommendationHint: 'Ấn tượng đầu tiên',
+    quantityPlaceholder: 'Ví dụ: 1 Backdrop 4x2.5m + 4 Standee',
+    notePlaceholder: 'Kích thước sảnh, bục chụp ảnh, màu sắc nhận diện thương hiệu...',
+    quantityChips: ['Backdrop 4x2.5m + 2 Standee', 'Backdrop 6x3m + Photo Booth', '2 Standee + Bàn đón khách'],
+    noteChips: ['Thi công hoàn thiện từ tối hôm trước', 'Theo bộ nhận diện thương hiệu', 'Kèm thảm đỏ & bục chụp ảnh'],
+  },
+];
+
+export interface ServiceComboPreset {
+  id: string;
+  label: string;
+  subtitle: string;
+  badge: string;
+  services: Record<string, { quantityOrScope: string; clientNote: string }>;
+}
+
+export const SERVICE_COMBO_PRESETS: ServiceComboPreset[] = [
+  {
+    id: 'workshop',
+    label: 'Combo Hội thảo / Workshop',
+    subtitle: 'Âm thanh LED • Tea-break • Check-in QR',
+    badge: '3 hạng mục',
+    services: {
+      av_stage: {
+        quantityOrScope: 'Gói 100 khách + 2 mic',
+        clientNote: 'Có 2 micro cài áo • Chạy thử trước 1 ngày',
+      },
+      teabreak_catering: {
+        quantityOrScope: '100 suất',
+        clientNote: 'Menu ít ngọt • Cà phê máy & nước ép',
+      },
+      checkin_staff: {
+        quantityOrScope: '2 Lễ tân + 2 Check-in QR',
+        clientNote: 'Có máy quét QR • Cấp thẻ đeo & bộ kit',
+      },
+    },
+  },
+  {
+    id: 'gala',
+    label: 'Combo Ra mắt / Gala',
+    subtitle: 'Trọn gói sân khấu, MC, Backdrop, Media & Tiệc',
+    badge: '5 hạng mục',
+    services: {
+      av_stage: {
+        quantityOrScope: 'Hội trường 300+ khách',
+        clientNote: 'Chạy thử trước 1 ngày • Hỗ trợ ánh sáng sân khấu',
+      },
+      mc_coordinator: {
+        quantityOrScope: '1 MC + 2 điều phối',
+        clientNote: 'Dẫn song ngữ Anh–Việt • Kèm duyệt kịch bản trước',
+      },
+      backdrop_booth: {
+        quantityOrScope: 'Backdrop 6x3m + Photo Booth',
+        clientNote: 'Theo bộ nhận diện thương hiệu • Kèm thảm đỏ & bục chụp ảnh',
+      },
+      media_pr: {
+        quantityOrScope: '2 máy ảnh + 1 quay 4K',
+        clientNote: 'Video recap 60–90 giây • Trả ảnh chọn lọc trong 24h',
+      },
+      teabreak_catering: {
+        quantityOrScope: '200 suất',
+        clientNote: 'Cà phê máy & nước ép • Phục vụ khu vực đón khách',
+      },
+    },
+  },
+  {
+    id: 'compact',
+    label: 'Combo Sự kiện gọn nhẹ',
+    subtitle: 'Nhân sự Check-in QR • Backdrop đón khách',
+    badge: '2 hạng mục',
+    services: {
+      checkin_staff: {
+        quantityOrScope: '2 Lễ tân + 2 Check-in QR',
+        clientNote: 'Có máy quét QR',
+      },
+      backdrop_booth: {
+        quantityOrScope: '2 Standee + Bàn đón khách',
+        clientNote: 'Theo bộ nhận diện thương hiệu',
+      },
+    },
+  },
+  {
+    id: 'training',
+    label: 'Combo Đào tạo nội bộ',
+    subtitle: 'Âm thanh trình chiếu • Tiệc trà giữa giờ',
+    badge: '2 hạng mục',
+    services: {
+      av_stage: {
+        quantityOrScope: 'Gói 100 khách + 2 mic',
+        clientNote: 'Hỗ trợ kết nối trình chiếu slide và âm thanh rõ',
+      },
+      teabreak_catering: {
+        quantityOrScope: '50 suất',
+        clientNote: 'Menu ít ngọt • Cà phê máy & nước ép',
+      },
+    },
   },
 ];
 

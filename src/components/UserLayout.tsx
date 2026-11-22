@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import {
+  AlertCircle,
   ArrowLeft,
   ArrowRight,
   BadgeCheck,
@@ -34,6 +35,10 @@ import {
 import { ContactPage } from './ContactPage';
 import { EventBanner } from './EventBanner';
 import { EventDetailPage } from './EventDetailPage';
+import {
+  EventServiceSelector,
+  type ServiceSelectionItem,
+} from './EventServiceSelector';
 import { LumaFloatingHero } from './LumaFloatingHero';
 import {
   AnimatedModal,
@@ -153,12 +158,9 @@ export function UserLayout({
   const [reqDescription, setReqDescription] = useState('');
   const [reqBannerUrl, setReqBannerUrl] = useState(DEFAULT_EVENT_BANNERS[0].url);
   const [reqSelectedServices, setReqSelectedServices] = useState<
-    Record<string, { enabled: boolean; quantityOrScope: string; clientNote: string }>
+    Record<string, ServiceSelectionItem>
   >(() => {
-    const initial: Record<
-      string,
-      { enabled: boolean; quantityOrScope: string; clientNote: string }
-    > = {};
+    const initial: Record<string, ServiceSelectionItem> = {};
     for (const s of SYSTEM_SERVICE_CATALOG) {
       initial[s.key] = {
         enabled: s.key === 'av_stage' || s.key === 'checkin_staff',
@@ -170,6 +172,20 @@ export function UserLayout({
   });
   const [reqCustomServiceName, setReqCustomServiceName] = useState('');
   const [reqSubmitting, setReqSubmitting] = useState(false);
+  const [reqFormError, setReqFormError] = useState<string | null>(null);
+  const reqFormContainerRef = useRef<HTMLDivElement | null>(null);
+
+  function createDefaultSelectedServices(): Record<string, ServiceSelectionItem> {
+    const initial: Record<string, ServiceSelectionItem> = {};
+    for (const s of SYSTEM_SERVICE_CATALOG) {
+      initial[s.key] = {
+        enabled: s.key === 'av_stage' || s.key === 'checkin_staff',
+        quantityOrScope: '',
+        clientNote: '',
+      };
+    }
+    return initial;
+  }
 
   useEffect(() => {
     setMyEventsTab(activeMyEventsTab);
@@ -394,24 +410,53 @@ export function UserLayout({
     smoothNavigatePage('tickets', 'requests', true);
   }
 
-  function toggleRequestService(key: string) {
-    setReqSelectedServices((prev) => ({
-      ...prev,
-      [key]: {
-        ...(prev[key] || { quantityOrScope: '', clientNote: '' }),
-        enabled: !prev[key]?.enabled,
-      },
-    }));
+  function failRequestValidation(message: string) {
+    setReqFormError(message);
+    onNotify(message, 'error');
+    reqFormContainerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   async function handleSubmitEventRequest(e: FormEvent) {
     e.preventDefault();
+    setReqFormError(null);
+
     if (!currentUser) {
       onOpenAuth('login');
       return;
     }
-    if (!reqTitle.trim() || !reqLocation.trim() || !reqDescription.trim()) {
-      onNotify('Vui lòng điền đầy đủ tên, địa điểm và mô tả sự kiện.', 'error');
+
+    const missingFields: string[] = [];
+    if (!reqTitle.trim()) missingFields.push('Tên sự kiện');
+    if (!reqStartTime.trim() || !reqEndTime.trim()) missingFields.push('Thời gian tổ chức');
+    if (!reqLocation.trim()) missingFields.push('Địa điểm tổ chức');
+    if (!reqDescription.trim()) missingFields.push('Mô tả sự kiện');
+
+    if (missingFields.length > 0) {
+      failRequestValidation(
+        `Vui lòng điền đầy đủ thông tin bắt buộc: ${missingFields.join(', ')}.`
+      );
+      return;
+    }
+
+    if (!reqOrganizerName.trim()) {
+      failRequestValidation('Vui lòng nhập đơn vị hoặc người đứng tên tổ chức.');
+      return;
+    }
+
+    const startMs = new Date(reqStartTime).getTime();
+    const endMs = new Date(reqEndTime).getTime();
+    if (Number.isNaN(startMs) || Number.isNaN(endMs)) {
+      failRequestValidation('Thời gian bắt đầu hoặc kết thúc chưa hợp lệ.');
+      return;
+    }
+    if (endMs <= startMs) {
+      failRequestValidation('Thời gian kết thúc phải sau thời gian bắt đầu sự kiện.');
+      return;
+    }
+
+    const safeMaxSlots = Number(reqMaxSlots);
+    if (!Number.isFinite(safeMaxSlots) || safeMaxSlots < 10) {
+      failRequestValidation('Quy mô khách dự kiến cần tối thiểu 10 người.');
       return;
     }
 
@@ -421,8 +466,9 @@ export function UserLayout({
       id: `srv-${Date.now()}-${idx}`,
       serviceKey: s.key,
       serviceName: s.name,
-      quantityOrScope: reqSelectedServices[s.key]?.quantityOrScope.trim() || undefined,
-      clientNote: reqSelectedServices[s.key]?.clientNote.trim() || undefined,
+      quantityOrScope: (reqSelectedServices[s.key]?.quantityOrScope ?? '').trim(),
+      clientNote: (reqSelectedServices[s.key]?.clientNote ?? '').trim(),
+      adminNote: '',
       status: 'pending',
     }));
 
@@ -431,48 +477,56 @@ export function UserLayout({
         id: `srv-custom-${Date.now()}`,
         serviceKey: 'custom',
         serviceName: reqCustomServiceName.trim(),
+        quantityOrScope: '',
+        clientNote: '',
+        adminNote: '',
         status: 'pending',
       });
     }
 
     if (servicesPayload.length === 0) {
-      onNotify('Vui lòng chọn ít nhất 1 dịch vụ đi kèm cho sự kiện.', 'error');
+      failRequestValidation(
+        'Vui lòng chọn ít nhất 1 dịch vụ đi kèm hoặc chọn nhanh một Combo ở phía trên.'
+      );
       return;
     }
 
     setReqSubmitting(true);
     try {
       await createOrganizerEventRequest({
-        title: reqTitle,
-        category: reqCategory,
+        title: reqTitle.trim(),
+        category: reqCategory || EVENT_CATEGORIES[0],
         startTime: reqStartTime,
         endTime: reqEndTime,
-        location: reqLocation,
-        maxSlots: reqMaxSlots,
-        description: reqDescription,
-        bannerUrl: reqBannerUrl,
-        organizerName: reqOrganizerName || currentUser.fullName,
-        clientUserId: currentUser.uid,
-        clientName: currentUser.fullName,
-        clientEmail: currentUser.email,
-        clientPhone: currentUser.phone,
+        location: reqLocation.trim(),
+        maxSlots: Math.round(safeMaxSlots),
+        description: reqDescription.trim(),
+        bannerUrl: reqBannerUrl.trim() || DEFAULT_EVENT_BANNERS[0].url,
+        organizerName: reqOrganizerName.trim() || currentUser.fullName || 'Thành viên EventFlow',
+        clientUserId: currentUser.uid || '',
+        clientName: (currentUser.fullName ?? '').trim() || 'Thành viên EventFlow',
+        clientEmail: (currentUser.email ?? '').trim(),
+        clientPhone: (currentUser.phone ?? '').trim(),
         requestedServices: servicesPayload,
       });
 
-      onNotify(
-        'Đã gửi yêu cầu tổ chức sự kiện lên Cloud Firestore. Ban quản trị sẽ duyệt và phản hồi sớm.'
-      );
+      setReqFormError(null);
       setReqTitle('');
       setReqLocation('');
       setReqDescription('');
       setReqCustomServiceName('');
+      setReqSelectedServices(createDefaultSelectedServices());
       setShowCreateRequestForm(false);
       setMyEventsTab('requests');
-    } catch (err) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
       onNotify(
-        err instanceof Error ? err.message : 'Không thể gửi yêu cầu tổ chức sự kiện.',
-        'error'
+        'Đã gửi yêu cầu tổ chức sự kiện thành công lên Cloud Firestore. Ban quản trị sẽ xem xét và phản hồi sớm.'
       );
+    } catch (err) {
+      const msg =
+        err instanceof Error ? err.message : 'Không thể gửi yêu cầu tổ chức sự kiện.';
+      setReqFormError(msg);
+      onNotify(msg, 'error');
     } finally {
       setReqSubmitting(false);
     }
@@ -1531,12 +1585,18 @@ export function UserLayout({
                     {myEventsTab === 'requests' && (
                       <div key="tab-requests" className="animate-ef-page-enter space-y-6">
                         {showCreateRequestForm ? (
-                          <div className="max-w-4xl mx-auto bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 space-y-6">
+                          <div
+                            ref={reqFormContainerRef}
+                            className="max-w-4xl mx-auto bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 space-y-6 animate-ef-fade-in"
+                          >
                             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-4">
                               <div>
                                 <button
                                   type="button"
-                                  onClick={() => setShowCreateRequestForm(false)}
+                                  onClick={() => {
+                                    setReqFormError(null);
+                                    setShowCreateRequestForm(false);
+                                  }}
                                   className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 mb-2 cursor-pointer"
                                 >
                                   <ArrowLeft className="w-3.5 h-3.5" />
@@ -1552,7 +1612,27 @@ export function UserLayout({
                               </div>
                             </div>
 
-                            <form onSubmit={handleSubmitEventRequest} className="space-y-6">
+                            {reqFormError && (
+                              <div
+                                role="alert"
+                                className="flex items-start gap-2.5 p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs sm:text-sm animate-ef-fade-in"
+                              >
+                                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                                <div className="flex-1 font-medium leading-relaxed">
+                                  {reqFormError}
+                                </div>
+                                <button
+                                  type="button"
+                                  aria-label="Đóng thông báo lỗi"
+                                  onClick={() => setReqFormError(null)}
+                                  className="p-0.5 text-rose-500 hover:text-rose-700 rounded cursor-pointer"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            )}
+
+                            <form onSubmit={handleSubmitEventRequest} noValidate className="space-y-6">
                               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                                 <div className="sm:col-span-2">
                                   <label className="block text-xs font-semibold text-slate-700 mb-1.5">
@@ -1716,105 +1796,22 @@ export function UserLayout({
                                 </div>
                               </div>
 
-                              {/* System Services Checklist */}
-                              <div className="p-4 sm:p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-4">
-                                <div>
-                                  <h3 className="text-sm font-bold text-slate-900">
-                                    Chọn dịch vụ đi kèm từ EventFlow
-                                  </h3>
-                                  <p className="text-xs text-slate-500 mt-0.5">
-                                    Chọn các hạng mục bạn muốn Ban quản trị hỗ trợ chuẩn bị (chưa
-                                    thu phí trực tuyến ở bước này).
-                                  </p>
-                                </div>
-
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                  {SYSTEM_SERVICE_CATALOG.map((srv) => {
-                                    const state = reqSelectedServices[srv.key];
-                                    const enabled = Boolean(state?.enabled);
-                                    return (
-                                      <div
-                                        key={srv.key}
-                                        className={`rounded-xl border p-3.5 transition-colors ${
-                                          enabled
-                                            ? 'bg-white border-slate-900/40 shadow-xs'
-                                            : 'bg-white/70 border-slate-200'
-                                        }`}
-                                      >
-                                        <label className="flex items-start gap-2.5 cursor-pointer">
-                                          <input
-                                            type="checkbox"
-                                            checked={enabled}
-                                            onChange={() => toggleRequestService(srv.key)}
-                                            className="mt-0.5 w-4 h-4 accent-slate-900 rounded"
-                                          />
-                                          <div>
-                                            <div className="text-xs font-bold text-slate-900">
-                                              {srv.name}
-                                            </div>
-                                            <div className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
-                                              {srv.summary}
-                                            </div>
-                                          </div>
-                                        </label>
-
-                                        {enabled && (
-                                          <div className="mt-3 pt-3 border-t border-slate-100 space-y-2 animate-ef-fade-in">
-                                            <input
-                                              type="text"
-                                              value={state?.quantityOrScope || ''}
-                                              onChange={(e) =>
-                                                setReqSelectedServices((prev) => ({
-                                                  ...prev,
-                                                  [srv.key]: {
-                                                    ...prev[srv.key],
-                                                    quantityOrScope: e.target.value,
-                                                  },
-                                                }))
-                                              }
-                                              placeholder="Số lượng / Quy mô (vd: 100 suất, 2 nhân sự...)"
-                                              className="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-md focus:bg-white focus:outline-none focus:border-slate-900"
-                                            />
-                                            <input
-                                              type="text"
-                                              value={state?.clientNote || ''}
-                                              onChange={(e) =>
-                                                setReqSelectedServices((prev) => ({
-                                                  ...prev,
-                                                  [srv.key]: {
-                                                    ...prev[srv.key],
-                                                    clientNote: e.target.value,
-                                                  },
-                                                }))
-                                              }
-                                              placeholder="Ghi chú yêu cầu riêng..."
-                                              className="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-md focus:bg-white focus:outline-none focus:border-slate-900"
-                                            />
-                                          </div>
-                                        )}
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-
-                                <div>
-                                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                                    Dịch vụ bổ sung khác (tùy chọn)
-                                  </label>
-                                  <input
-                                    type="text"
-                                    value={reqCustomServiceName}
-                                    onChange={(e) => setReqCustomServiceName(e.target.value)}
-                                    placeholder="Ví dụ: Phiên dịch cabin song ngữ, khu trưng bày sản phẩm..."
-                                    className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-slate-900"
-                                  />
-                                </div>
-                              </div>
+                              {/* Enhanced Services Selector with Combo Presets & Quick Chips */}
+                              <EventServiceSelector
+                                selectedServices={reqSelectedServices}
+                                customServiceName={reqCustomServiceName}
+                                expectedGuestCount={reqMaxSlots}
+                                onChangeSelectedServices={setReqSelectedServices}
+                                onChangeCustomServiceName={setReqCustomServiceName}
+                              />
 
                               <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-200">
                                 <button
                                   type="button"
-                                  onClick={() => setShowCreateRequestForm(false)}
+                                  onClick={() => {
+                                    setReqFormError(null);
+                                    setShowCreateRequestForm(false);
+                                  }}
                                   className="px-4 py-2.5 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-full cursor-pointer"
                                 >
                                   Hủy

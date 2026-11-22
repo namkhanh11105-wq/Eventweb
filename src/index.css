@@ -264,6 +264,25 @@
   animation: ef-blob-drift-b 19s ease-in-out infinite;
 }
 
+.ef-expand-grid {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 200ms ease;
+}
+
+.ef-expand-grid[data-expanded="true"] {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.ef-expand-inner {
+  overflow: hidden;
+  min-height: 0;
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
@@ -288,7 +307,8 @@
   .ef-floating-card,
   .ef-floating-card::after,
   .ef-card-sheen::after,
-  .ef-sliding-pill {
+  .ef-sliding-pill,
+  .ef-expand-grid {
     transition: none !important;
   }
 }
