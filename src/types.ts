@@ -98,7 +98,14 @@ export interface EventItem {
   agenda: AgendaItem[];
   faqs?: FaqItem[];
   rules: string;
+  adminResponseNote?: string;
   createdAt: string;
+}
+
+export interface PreselectedServiceBooking {
+  serviceKeys: string[];
+  suggestedCategory?: EventCategory | string;
+  packageTitle?: string;
 }
 
 export type RegistrationStatus = 'pending' | 'confirmed' | 'attended' | 'cancelled';
@@ -165,6 +172,7 @@ export interface EventFormInput {
   agenda: AgendaItem[];
   faqs: FaqItem[];
   rules: string;
+  adminResponseNote?: string;
 }
 
 export interface OrganizerEventRequestInput {

@@ -1,3 +1,4 @@
+import { useMemo, useState } from 'react';
 import {
   ArrowRight,
   Building2,
@@ -8,18 +9,20 @@ import {
   Sparkles,
   Users,
 } from 'lucide-react';
-import { RevealBlock } from './MotionPrimitives';
+import { handleSpotlightMove, RevealBlock } from './MotionPrimitives';
 import {
   ENTERPRISE_PARTNERS,
   ORGANIZATION_PROCESS_STEPS,
+  SERVICE_FILTER_TABS,
   SERVICE_PACKAGE_HIGHLIGHTS,
   SYSTEM_SERVICE_CATALOG,
+  type ServiceFilterType,
 } from '../utils/formatters';
-import type { PublicContactInfo } from '../types';
+import type { PreselectedServiceBooking, PublicContactInfo } from '../types';
 
 interface ServicesPageProps {
   publicContact: PublicContactInfo;
-  onBookOrganization: () => void;
+  onBookOrganization: (preset?: PreselectedServiceBooking) => void;
   onGoContact: () => void;
 }
 
@@ -28,9 +31,17 @@ export function ServicesPage({
   onBookOrganization,
   onGoContact,
 }: ServicesPageProps) {
-  const pkg1 = SERVICE_PACKAGE_HIGHLIGHTS[0];
-  const pkg2 = SERVICE_PACKAGE_HIGHLIGHTS[1];
-  const pkg3 = SERVICE_PACKAGE_HIGHLIGHTS[2];
+  const [eventTypeFilter, setEventTypeFilter] = useState<ServiceFilterType>('all');
+
+  const filteredPackages = useMemo(() => {
+    if (eventTypeFilter === 'all') return SERVICE_PACKAGE_HIGHLIGHTS;
+    return SERVICE_PACKAGE_HIGHLIGHTS.filter((pkg) => pkg.eventType === eventTypeFilter);
+  }, [eventTypeFilter]);
+
+  const filteredServices = useMemo(() => {
+    if (eventTypeFilter === 'all') return SYSTEM_SERVICE_CATALOG;
+    return SYSTEM_SERVICE_CATALOG.filter((srv) => srv.eventTypes.includes(eventTypeFilter));
+  }, [eventTypeFilter]);
 
   return (
     <div className="space-y-12">
@@ -63,8 +74,8 @@ export function ServicesPage({
             <div className="pt-2 flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3">
               <button
                 type="button"
-                onClick={onBookOrganization}
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 h-11 px-6 text-sm font-semibold text-white bg-slate-950 hover:bg-slate-800 rounded-full shadow-sm transition-all duration-200 ease-[cubic-bezier(0.34,1.32,0.64,1)] hover:-translate-y-0.5 active:scale-[0.98] cursor-pointer whitespace-nowrap"
+                onClick={() => onBookOrganization()}
+                className="ef-btn-tactile w-full sm:w-auto inline-flex items-center justify-center gap-2 h-11 px-6 text-sm font-semibold text-white bg-slate-950 hover:bg-slate-800 rounded-full shadow-sm hover:-translate-y-0.5 cursor-pointer whitespace-nowrap"
               >
                 <span>Đặt dịch vụ / Đăng ký tổ chức</span>
                 <ArrowRight className="w-4 h-4" />
@@ -105,157 +116,123 @@ export function ServicesPage({
         </div>
       </section>
 
-      {/* Bento Grid Service Packages */}
+      {/* Filter Bar by Event Type + Bento Service Packages */}
       <section className="space-y-5">
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-3">
+        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
           <div>
             <h2 className="text-xl font-bold text-slate-900 tracking-tight">
-              Các gói dịch vụ tổ chức theo mô hình Bento Grid
+              Gói dịch vụ tổ chức theo quy mô &amp; loại hình sự kiện
             </h2>
             <p className="mt-1 text-sm text-slate-600 max-w-2xl">
-              Lựa chọn mô hình tổ chức phù hợp với mục tiêu chương trình và quy mô khách mời của
-              doanh nghiệp.
+              Lọc theo loại sự kiện để chọn nhanh gói giải pháp hoặc bấm đặt trực tiếp từng hạng mục
+              dịch vụ đi kèm.
             </p>
           </div>
-          <span className="text-xs text-slate-500">
-            Tùy chỉnh hạng mục linh hoạt khi gửi yêu cầu tổ chức
-          </span>
+
+          <div
+            role="tablist"
+            aria-label="Lọc dịch vụ theo loại hình sự kiện"
+            className="inline-flex items-center gap-1 p-1 bg-slate-100/90 border border-slate-200/80 rounded-full overflow-x-auto max-w-full"
+          >
+            {SERVICE_FILTER_TABS.map((tab) => {
+              const active = eventTypeFilter === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => setEventTypeFilter(tab.key)}
+                  className={`min-h-[36px] px-3.5 py-1.5 text-xs font-semibold rounded-full transition-all duration-150 whitespace-nowrap shrink-0 cursor-pointer ${
+                    active
+                      ? 'bg-slate-950 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-          {/* Bento Card 01 (Wide 7 cols) */}
-          <RevealBlock className="lg:col-span-7" delayMs={0}>
-            <div className="ef-card-sheen bg-white border border-slate-200/80 rounded-3xl p-6 sm:p-7 h-full flex flex-col justify-between transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-1 hover:border-orange-200 hover:shadow-[0_18px_36px_-14px_rgba(15,23,42,0.12)]">
-              <div>
-                <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                  <span className="font-mono font-semibold text-rose-600">
-                    {pkg1.code}. Gói chủ lực
-                  </span>
-                  <span className="inline-flex items-center gap-1 font-semibold text-slate-700 tabular-nums">
-                    <Users className="w-3.5 h-3.5 text-slate-400" />
-                    {pkg1.scale}
-                  </span>
-                </div>
-
-                <h3 className="mt-3 text-xl font-bold text-slate-900">{pkg1.title}</h3>
-                <p className="mt-1 text-xs font-medium text-slate-500">
-                  Phù hợp: {pkg1.idealFor}
-                </p>
-                <p className="mt-2.5 text-sm text-slate-600 leading-relaxed">{pkg1.description}</p>
-
-                <ul className="mt-5 pt-4 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs text-slate-700">
-                  {pkg1.included.map((item) => (
-                    <li key={item} className="flex items-start gap-2">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
-                      <span>{item}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              <div className="mt-6 pt-4 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <span className="text-xs text-slate-500">Hỗ trợ đồng bộ đại biểu &amp; diễn giả</span>
-                <button
-                  type="button"
-                  onClick={onBookOrganization}
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 h-10 px-4 text-xs font-semibold text-white bg-slate-950 hover:bg-slate-800 rounded-full transition-colors cursor-pointer whitespace-nowrap"
+          {filteredPackages.map((pkg, idx) => {
+            const isWide = filteredPackages.length > 1 && idx === 0;
+            const colClass =
+              filteredPackages.length === 1 ? 'lg:col-span-7' : isWide ? 'lg:col-span-7' : 'lg:col-span-5';
+            return (
+              <RevealBlock key={pkg.code} className={colClass} delayMs={idx * 60}>
+                <div
+                  onMouseMove={handleSpotlightMove}
+                  className="ef-spotlight-card bg-white border border-slate-200/80 rounded-3xl p-6 sm:p-7 h-full flex flex-col justify-between hover:border-orange-200"
                 >
-                  <span>Đặt gói dịch vụ này</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-          </RevealBlock>
+                  <div>
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                      <span className="font-mono font-semibold text-rose-600">
+                        {pkg.code}. {pkg.tag}
+                      </span>
+                      <span className="inline-flex items-center gap-1 font-semibold text-slate-700 tabular-nums">
+                        <Users className="w-3.5 h-3.5 text-slate-400" />
+                        {pkg.scale}
+                      </span>
+                    </div>
 
-          {/* Bento Card 02 (5 cols) */}
-          <RevealBlock className="lg:col-span-5" delayMs={60}>
-            <div className="ef-card-sheen bg-white border border-slate-200/80 rounded-3xl p-6 sm:p-7 h-full flex flex-col justify-between transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-1 hover:border-indigo-200 hover:shadow-[0_18px_36px_-14px_rgba(15,23,42,0.12)]">
-              <div>
-                <div className="flex items-center justify-between gap-2 text-xs">
-                  <span className="font-mono font-semibold text-indigo-600">
-                    {pkg2.code}. Tương tác chuyên sâu
-                  </span>
-                  <span className="inline-flex items-center gap-1 font-semibold text-slate-700 tabular-nums">
-                    <Users className="w-3.5 h-3.5 text-slate-400" />
-                    {pkg2.scale}
-                  </span>
+                    <h3 className="mt-3 text-xl font-bold text-slate-900">{pkg.title}</h3>
+                    <p className="mt-1 text-xs font-medium text-slate-500">
+                      Phù hợp: {pkg.idealFor}
+                    </p>
+                    <p className="mt-2.5 text-sm text-slate-600 leading-relaxed">
+                      {pkg.description}
+                    </p>
+
+                    <ul
+                      className={`mt-5 pt-4 border-t border-slate-100 grid grid-cols-1 ${
+                        isWide ? 'sm:grid-cols-2' : ''
+                      } gap-2.5 text-xs text-slate-700`}
+                    >
+                      {pkg.included.map((item) => (
+                        <li key={item} className="flex items-start gap-2">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                          <span>{item}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  <div className="mt-6 pt-4 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <span className="text-xs text-slate-500 tabular-nums">
+                      Tự động chọn sẵn {pkg.serviceKeys.length} hạng mục tiêu chuẩn
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onBookOrganization({
+                          serviceKeys: pkg.serviceKeys,
+                          suggestedCategory: pkg.suggestedCategory,
+                          packageTitle: pkg.title,
+                        })
+                      }
+                      className="ef-btn-tactile w-full sm:w-auto min-h-[42px] inline-flex items-center justify-center gap-1.5 px-4 text-xs font-semibold text-white bg-slate-950 hover:bg-slate-800 rounded-full cursor-pointer whitespace-nowrap"
+                    >
+                      <span>Đặt tổ chức với dịch vụ này</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
+              </RevealBlock>
+            );
+          })}
 
-                <h3 className="mt-3 text-lg font-bold text-slate-900">{pkg2.title}</h3>
-                <p className="mt-1 text-xs font-medium text-slate-500">
-                  Phù hợp: {pkg2.idealFor}
-                </p>
-                <p className="mt-2.5 text-sm text-slate-600 leading-relaxed">{pkg2.description}</p>
-
-                <ul className="mt-5 pt-4 border-t border-slate-100 space-y-2 text-xs text-slate-700">
-                  {pkg2.included.map((item) => (
-                    <li key={item} className="flex items-start gap-2">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
-                      <span>{item}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              <div className="mt-6 pt-4 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={onBookOrganization}
-                  className="w-full h-10 px-4 inline-flex items-center justify-center gap-2 text-xs font-semibold text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-full transition-colors cursor-pointer"
-                >
-                  <span>Đặt gói Workshop</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-          </RevealBlock>
-
-          {/* Bento Card 03 (5 cols) */}
-          <RevealBlock className="lg:col-span-5" delayMs={110}>
-            <div className="ef-card-sheen bg-white border border-slate-200/80 rounded-3xl p-6 sm:p-7 h-full flex flex-col justify-between transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-1 hover:border-rose-200 hover:shadow-[0_18px_36px_-14px_rgba(15,23,42,0.12)]">
-              <div>
-                <div className="flex items-center justify-between gap-2 text-xs">
-                  <span className="font-mono font-semibold text-orange-600">
-                    {pkg3.code}. Sự kiện trang trọng
-                  </span>
-                  <span className="inline-flex items-center gap-1 font-semibold text-slate-700 tabular-nums">
-                    <Users className="w-3.5 h-3.5 text-slate-400" />
-                    {pkg3.scale}
-                  </span>
-                </div>
-
-                <h3 className="mt-3 text-lg font-bold text-slate-900">{pkg3.title}</h3>
-                <p className="mt-1 text-xs font-medium text-slate-500">
-                  Phù hợp: {pkg3.idealFor}
-                </p>
-                <p className="mt-2.5 text-sm text-slate-600 leading-relaxed">{pkg3.description}</p>
-
-                <ul className="mt-5 pt-4 border-t border-slate-100 space-y-2 text-xs text-slate-700">
-                  {pkg3.included.map((item) => (
-                    <li key={item} className="flex items-start gap-2">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
-                      <span>{item}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              <div className="mt-6 pt-4 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={onBookOrganization}
-                  className="w-full h-10 px-4 inline-flex items-center justify-center gap-2 text-xs font-semibold text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-full transition-colors cursor-pointer"
-                >
-                  <span>Đặt gói Gala &amp; Vinh danh</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-          </RevealBlock>
-
-          {/* Bento Card 04: Custom Enterprise Contrast Tile (7 cols) */}
-          <RevealBlock className="lg:col-span-7" delayMs={150}>
-            <div className="ef-card-sheen relative overflow-hidden bg-slate-950 text-white rounded-3xl p-6 sm:p-8 h-full flex flex-col justify-between transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-1 hover:shadow-[0_20px_42px_-12px_rgba(15,23,42,0.35)]">
+          {/* Custom Enterprise Contrast Tile */}
+          <RevealBlock
+            className={filteredPackages.length === 1 ? 'lg:col-span-5' : 'lg:col-span-7'}
+            delayMs={filteredPackages.length * 60}
+          >
+            <div
+              onMouseMove={handleSpotlightMove}
+              className="ef-spotlight-card-dark relative overflow-hidden bg-slate-950 text-white rounded-3xl p-6 sm:p-8 h-full flex flex-col justify-between"
+            >
               <div
                 aria-hidden="true"
                 className="pointer-events-none absolute -right-12 -top-12 h-52 w-52 rounded-full bg-gradient-to-br from-rose-500/25 via-orange-500/20 to-transparent blur-2xl"
@@ -280,10 +257,10 @@ export function ServicesPage({
                 </div>
                 <button
                   type="button"
-                  onClick={onBookOrganization}
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 h-11 px-6 text-xs sm:text-sm font-semibold text-slate-950 bg-white hover:bg-slate-100 rounded-full transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] cursor-pointer whitespace-nowrap"
+                  onClick={() => onBookOrganization()}
+                  className="ef-btn-tactile w-full sm:w-auto inline-flex items-center justify-center gap-2 h-11 px-6 text-xs sm:text-sm font-semibold text-slate-950 bg-white hover:bg-slate-100 rounded-full hover:scale-[1.02] cursor-pointer whitespace-nowrap"
                 >
-                  <span>Đặt dịch vụ / Đăng ký tổ chức</span>
+                  <span>Tự chọn dịch vụ &amp; Đặt tổ chức</span>
                   <ArrowRight className="w-4 h-4" />
                 </button>
               </div>
@@ -292,66 +269,109 @@ export function ServicesPage({
         </div>
       </section>
 
-      {/* Modular System Services Catalog */}
+      {/* Modular System Services Catalog with direct per-service booking */}
       <RevealBlock>
         <section className="bg-white border border-slate-200/80 rounded-3xl p-6 sm:p-8 space-y-5">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <div className="inline-flex items-center gap-2 text-xs font-semibold text-rose-600">
                 <Layers className="w-4 h-4" />
-                <span>Danh mục hạng mục dịch vụ đi kèm</span>
+                <span>Danh mục hạng mục dịch vụ đi kèm ({filteredServices.length})</span>
               </div>
               <h2 className="mt-1 text-lg font-bold text-slate-900">
-                Tùy chọn linh hoạt từng hạng mục khi gửi yêu cầu tổ chức
+                Chọn trực tiếp từng hạng mục để mở sẵn trong biểu mẫu tổ chức
               </h2>
             </div>
             <button
               type="button"
-              onClick={onBookOrganization}
+              onClick={() =>
+                onBookOrganization({
+                  serviceKeys: filteredServices.map((s) => s.key),
+                  packageTitle:
+                    eventTypeFilter === 'all'
+                      ? 'Toàn bộ hạng mục EventFlow'
+                      : SERVICE_FILTER_TABS.find((t) => t.key === eventTypeFilter)?.label,
+                })
+              }
               className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-900 hover:text-rose-600 cursor-pointer whitespace-nowrap transition-colors"
             >
-              <span>Chọn dịch vụ &amp; gửi yêu cầu</span>
+              <span>Chọn toàn bộ {filteredServices.length} hạng mục đang hiển thị</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {SYSTEM_SERVICE_CATALOG.map((srv, idx) => (
+            {filteredServices.map((srv, idx) => (
               <div
                 key={srv.key}
-                className="ef-card-sheen p-4 rounded-2xl bg-slate-50/70 border border-slate-200/80 transition-all duration-200 hover:-translate-y-0.5 hover:bg-white hover:border-orange-200"
+                style={{ animationDelay: `${Math.min(idx, 11) * 60}ms` }}
+                className="animate-ef-fade-up h-full"
               >
-                <div className="text-[11px] font-mono font-semibold text-slate-400">
-                  0{idx + 1}
+                <div
+                  onMouseMove={handleSpotlightMove}
+                  className="ef-spotlight-card h-full p-5 rounded-2xl bg-slate-50/70 border border-slate-200/80 flex flex-col justify-between gap-4 hover:bg-white hover:border-orange-200"
+                >
+                  <div>
+                    <div className="flex items-center justify-between gap-2 text-[11px]">
+                      <span className="font-mono font-semibold text-slate-400">
+                        0{idx + 1}
+                      </span>
+                      <span className="font-medium text-indigo-700">
+                        {srv.recommendationHint}
+                      </span>
+                    </div>
+                    <h3 className="mt-1.5 text-sm font-bold text-slate-900">{srv.name}</h3>
+                    <p className="mt-1.5 text-xs text-slate-600 leading-relaxed">{srv.summary}</p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onBookOrganization({
+                        serviceKeys: [srv.key],
+                        packageTitle: srv.name,
+                      })
+                    }
+                    className="ef-btn-tactile w-full min-h-[38px] inline-flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-900 bg-white hover:bg-slate-950 hover:text-white border border-slate-200 hover:border-slate-950 rounded-full cursor-pointer"
+                  >
+                    <span>Đặt tổ chức với dịch vụ này</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
                 </div>
-                <h3 className="mt-1 text-sm font-bold text-slate-900">{srv.name}</h3>
-                <p className="mt-1.5 text-xs text-slate-600 leading-relaxed">{srv.summary}</p>
               </div>
             ))}
           </div>
         </section>
       </RevealBlock>
 
-      {/* 4-Step Process */}
+      {/* 4-Step Visual Coordination Process */}
       <RevealBlock>
-        <section className="space-y-5">
+        <section className="space-y-6">
           <div>
             <h2 className="text-xl font-bold text-slate-900 tracking-tight">
-              Quy trình 4 bước từ tiếp nhận đến vận hành thực tế
+              Quy trình phối hợp 4 bước từ tiếp nhận đến vận hành thực tế
             </h2>
             <p className="mt-1 text-sm text-slate-600">
               Mọi tiến độ duyệt yêu cầu, chuẩn bị dịch vụ và kiểm soát khách mời đều được cập nhật
-              minh bạch giữa Khách hàng và Ban quản trị.
+              minh bạch giữa Khách hàng và Ban quản trị theo thời gian thực trên Firestore.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="relative grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {ORGANIZATION_PROCESS_STEPS.map((item, idx) => (
               <RevealBlock key={item.step} delayMs={idx * 60}>
-                <div className="bg-white border border-slate-200/80 rounded-2xl p-5 h-full flex flex-col justify-between transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300">
+                <div className="relative bg-white border border-slate-200/80 rounded-2xl p-5 h-full flex flex-col justify-between transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300">
                   <div>
-                    <div className="w-9 h-9 rounded-xl bg-orange-50 text-orange-700 font-mono text-xs font-bold flex items-center justify-center">
-                      {item.step}
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-slate-950 text-white font-mono text-xs font-bold flex items-center justify-center shrink-0">
+                        {item.step}
+                      </div>
+                      {idx < ORGANIZATION_PROCESS_STEPS.length - 1 && (
+                        <div
+                          aria-hidden="true"
+                          className="hidden lg:block flex-1 h-px bg-gradient-to-r from-slate-200 to-transparent"
+                        />
+                      )}
                     </div>
                     <h3 className="mt-4 text-sm font-bold text-slate-900">{item.title}</h3>
                     <p className="mt-2 text-xs text-slate-600 leading-relaxed">
@@ -385,8 +405,8 @@ export function ServicesPage({
             <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3 shrink-0">
               <button
                 type="button"
-                onClick={onBookOrganization}
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 h-11 px-6 text-sm font-semibold text-white bg-slate-950 hover:bg-slate-800 rounded-full transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98] cursor-pointer whitespace-nowrap"
+                onClick={() => onBookOrganization()}
+                className="ef-btn-tactile w-full sm:w-auto inline-flex items-center justify-center gap-2 h-11 px-6 text-sm font-semibold text-white bg-slate-950 hover:bg-slate-800 rounded-full hover:-translate-y-0.5 cursor-pointer whitespace-nowrap"
               >
                 <span>Đặt dịch vụ / Đăng ký tổ chức</span>
                 <ArrowRight className="w-4 h-4" />

@@ -1,10 +1,13 @@
 import { useState, type FormEvent } from 'react';
 import {
   AlertCircle,
+  Check,
   CheckCircle2,
   ChevronDown,
   Clock,
+  Copy,
   HelpCircle,
+  Loader2,
   Mail,
   MapPin,
   Phone,
@@ -12,8 +15,8 @@ import {
   UserCheck,
 } from 'lucide-react';
 import { createContactInquiry } from '../services/dataService';
-import { PUBLIC_CONTACT_FAQS } from '../utils/formatters';
-import type { AppUser, PublicContactInfo } from '../types';
+import { formatDateTimeVN, PUBLIC_CONTACT_FAQS } from '../utils/formatters';
+import type { AppUser, ContactInquiry, PublicContactInfo } from '../types';
 
 interface ContactPageProps {
   currentUser: AppUser | null;
@@ -42,11 +45,25 @@ export function ContactPage({
   const [topic, setTopic] = useState(INQUIRY_TOPICS[0]);
   const [message, setMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [submittedId, setSubmittedId] = useState<string | null>(null);
+  const [submittedRecord, setSubmittedRecord] = useState<ContactInquiry | null>(null);
+  const [copiedId, setCopiedId] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  async function handleCopyInquiryId() {
+    if (!submittedRecord) return;
+    try {
+      await navigator.clipboard?.writeText(submittedRecord.id);
+      setCopiedId(true);
+      onNotify(`Đã sao chép mã yêu cầu ${submittedRecord.id}`);
+      window.setTimeout(() => setCopiedId(false), 2000);
+    } catch {
+      onNotify(`Mã yêu cầu của bạn: ${submittedRecord.id}`);
+    }
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    if (submitting) return;
     setSubmitError(null);
     const cleanName = fullName.trim();
     const cleanContact = contactInfo.trim();
@@ -78,7 +95,8 @@ export function ContactPage({
         message: cleanMessage,
         userId: currentUser?.uid,
       });
-      setSubmittedId(saved.id);
+      setSubmittedRecord(saved);
+      setCopiedId(false);
       setMessage('');
       setSubmitError(null);
       onNotify('Đã gửi yêu cầu tư vấn lên Cloud Firestore. Ban quản trị sẽ phản hồi sớm.');
@@ -230,25 +248,74 @@ export function ContactPage({
               </p>
             </div>
 
-            {submittedId ? (
-              <div className="p-6 rounded-xl bg-emerald-50/70 border border-emerald-200 space-y-4 animate-ef-fade-in">
+            {submittedRecord ? (
+              <div className="p-6 rounded-2xl bg-emerald-50/75 border border-emerald-200 space-y-4 animate-ef-fade-in">
                 <div className="flex items-start gap-3">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
-                  <div>
-                    <h3 className="text-sm font-bold text-emerald-900">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0">
+                    <CheckCircle2 className="w-5 h-5" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[11px] font-semibold uppercase tracking-wider text-emerald-700">
+                      Phiếu xác nhận tư vấn
+                    </div>
+                    <h3 className="mt-0.5 text-base font-bold text-emerald-950">
                       Đã tiếp nhận yêu cầu tư vấn thành công
                     </h3>
                     <p className="mt-1 text-xs text-emerald-800 leading-relaxed">
-                      Mã yêu cầu <span className="font-mono font-semibold">{submittedId}</span> đã
-                      được ghi nhận trên Cloud Firestore. Quản trị viên ({publicContact.adminName})
-                      sẽ liên hệ lại với bạn trong thời gian sớm nhất.
+                      Ban quản trị ({publicContact.adminName}) đã nhận được thông tin qua Cloud
+                      Firestore và sẽ phản hồi theo phương thức liên hệ của bạn.
                     </p>
                   </div>
                 </div>
+
+                <div className="p-3.5 rounded-xl bg-white border border-emerald-200/90 space-y-2 text-xs">
+                  <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-100">
+                    <span className="text-slate-500 font-medium">Mã chứng từ (Firestore ID)</span>
+                    <div className="inline-flex items-center gap-2">
+                      <code className="font-mono font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded">
+                        {submittedRecord.id}
+                      </code>
+                      <button
+                        type="button"
+                        onClick={handleCopyInquiryId}
+                        className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-indigo-700 hover:bg-indigo-50 rounded-md cursor-pointer transition-colors"
+                      >
+                        {copiedId ? (
+                          <>
+                            <Check className="w-3 h-3 text-emerald-600" />
+                            <span className="text-emerald-700">Đã chép</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3 h-3" />
+                            <span>Sao chép</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-slate-500">Chủ đề:</span>
+                    <span className="font-semibold text-slate-900">{submittedRecord.topic}</span>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-slate-500">Liên hệ nhận phản hồi:</span>
+                    <span className="font-semibold text-slate-900 tabular-nums">
+                      {submittedRecord.contactInfo}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-slate-500">Thời gian ghi nhận:</span>
+                    <span className="font-medium text-slate-700 tabular-nums">
+                      {formatDateTimeVN(submittedRecord.createdAt)}
+                    </span>
+                  </div>
+                </div>
+
                 <button
                   type="button"
-                  onClick={() => setSubmittedId(null)}
-                  className="px-4 py-2 text-xs font-semibold text-emerald-800 bg-white hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors cursor-pointer"
+                  onClick={() => setSubmittedRecord(null)}
+                  className="min-h-[40px] px-4 py-2 text-xs font-semibold text-emerald-900 bg-white hover:bg-emerald-100 border border-emerald-200 rounded-xl transition-colors cursor-pointer"
                 >
                   Gửi thêm yêu cầu khác
                 </button>
@@ -262,7 +329,9 @@ export function ContactPage({
                   >
                     <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
                     <div>
-                      <div className="font-semibold text-rose-900">Không thể ghi dữ liệu lên Cloud Firestore</div>
+                      <div className="font-semibold text-rose-900">
+                        Không thể ghi dữ liệu lên Cloud Firestore
+                      </div>
                       <p className="mt-0.5">{submitError}</p>
                     </div>
                   </div>
@@ -329,10 +398,19 @@ export function ContactPage({
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="w-full h-11 inline-flex items-center justify-center gap-2 px-5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-all duration-150 active:scale-[0.99] cursor-pointer disabled:opacity-60"
+                  className="ef-btn-tactile w-full h-11 inline-flex items-center justify-center gap-2 px-5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  <Send className="w-4 h-4" />
-                  <span>{submitting ? 'Đang gửi lên Firestore...' : 'Gửi yêu cầu tư vấn'}</span>
+                  {submitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Đang gửi lên Cloud Firestore...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-4 h-4" />
+                      <span>Gửi yêu cầu tư vấn</span>
+                    </>
+                  )}
                 </button>
               </form>
             )}

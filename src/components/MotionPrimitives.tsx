@@ -4,6 +4,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type MouseEvent,
   type ReactNode,
 } from 'react';
 import { createPortal } from 'react-dom';
@@ -11,6 +12,18 @@ import { createPortal } from 'react-dom';
 export function prefersReducedMotion(): boolean {
   if (typeof window === 'undefined' || !window.matchMedia) return false;
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Zero-rerender Pointer Spotlight Helper for Interactive Cards               */
+/* -------------------------------------------------------------------------- */
+
+export function handleSpotlightMove(e: MouseEvent<HTMLElement>): void {
+  if (prefersReducedMotion()) return;
+  const target = e.currentTarget;
+  const rect = target.getBoundingClientRect();
+  target.style.setProperty('--ef-mx', `${e.clientX - rect.left}px`);
+  target.style.setProperty('--ef-my', `${e.clientY - rect.top}px`);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -79,8 +92,8 @@ export function TopProgressBar() {
       <div
         className={`relative h-full w-full origin-left bg-gradient-to-r from-rose-500 via-orange-500 to-indigo-500 shadow-[0_0_10px_rgba(244,63,94,0.55)] transition-[transform,opacity] ${
           phase === 'sweeping'
-            ? 'duration-240 ease-[cubic-bezier(0.22,1,0.36,1)] opacity-100'
-            : 'duration-260 ease-out opacity-0'
+            ? 'duration-[240ms] ease-[cubic-bezier(0.22,1,0.36,1)] opacity-100'
+            : 'duration-[260ms] ease-out opacity-0'
         }`}
         style={{ transform: `scaleX(${scale})` }}
       >
@@ -169,7 +182,7 @@ export function useSlidingIndicator(activeKey: string, dependencySignal?: unknow
 }
 
 /* -------------------------------------------------------------------------- */
-/* Animated Modal with Smooth Scale-from-Center & Backdrop Blur Enter/Exit    */
+/* Animated Modal with 320ms Spring Scale & Backdrop Blur Enter/Exit          */
 /* -------------------------------------------------------------------------- */
 
 interface AnimatedModalProps {
@@ -189,7 +202,7 @@ export function AnimatedModal({
   children,
   maxWidthClassName = 'max-w-3xl',
   labelledBy,
-  backdropClassName = 'bg-slate-900/60 backdrop-blur-xs p-3 sm:p-6',
+  backdropClassName = 'bg-slate-900/55 backdrop-blur-sm p-3 sm:p-6',
   panelClassName = 'bg-white border border-slate-200 rounded-2xl w-full max-h-[92vh] overflow-y-auto shadow-2xl',
   closeOnBackdropClick = true,
 }: AnimatedModalProps) {
@@ -217,7 +230,7 @@ export function AnimatedModal({
 
     setVisible(false);
     if (!rendered) return;
-    const delay = prefersReducedMotion() ? 0 : 220;
+    const delay = prefersReducedMotion() ? 0 : 320;
     const timer = window.setTimeout(() => {
       setRendered(false);
     }, delay);
@@ -247,15 +260,15 @@ export function AnimatedModal({
           onClose();
         }
       }}
-      className={`fixed inset-0 z-50 flex items-center justify-center transition-[opacity,backdrop-filter] duration-240 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${backdropClassName} ${
+      className={`fixed inset-0 z-50 flex items-center justify-center transition-[opacity,backdrop-filter] duration-[320ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${backdropClassName} ${
         visible ? 'opacity-100' : 'opacity-0 pointer-events-none'
       }`}
     >
       <div
-        className={`${maxWidthClassName} ${panelClassName} transition-[opacity,transform] duration-260 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none motion-reduce:transform-none ${
+        className={`${maxWidthClassName} ${panelClassName} transition-[opacity,transform] duration-[320ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none motion-reduce:transform-none ${
           visible
             ? 'opacity-100 scale-100 translate-y-0'
-            : 'opacity-0 scale-[0.96] translate-y-2'
+            : 'opacity-0 scale-[0.95] translate-y-2.5'
         }`}
       >
         {children}
@@ -266,7 +279,7 @@ export function AnimatedModal({
 }
 
 /* -------------------------------------------------------------------------- */
-/* Animated KPI Numbers, Progress Bars & Scroll Reveals                       */
+/* Animated KPI Numbers, GPU Progress Bars & Scroll Reveals                   */
 /* -------------------------------------------------------------------------- */
 
 interface AnimatedNumberProps {
@@ -278,17 +291,20 @@ interface AnimatedNumberProps {
 export function AnimatedNumber({
   value,
   suffix = '',
-  durationMs = 520,
+  durationMs = 580,
 }: AnimatedNumberProps) {
-  const [displayValue, setDisplayValue] = useState(value);
-  const prevRef = useRef(0);
+  const safeTarget = Number.isFinite(value) ? value : 0;
+  const [displayValue, setDisplayValue] = useState<number>(() =>
+    prefersReducedMotion() ? safeTarget : 0
+  );
+  const currentValRef = useRef<number>(prefersReducedMotion() ? safeTarget : 0);
 
   useEffect(() => {
-    const startVal = prevRef.current;
-    const targetVal = Number.isFinite(value) ? value : 0;
+    const startVal = currentValRef.current;
+    const targetVal = safeTarget;
 
     if (prefersReducedMotion() || startVal === targetVal) {
-      prevRef.current = targetVal;
+      currentValRef.current = targetVal;
       setDisplayValue(targetVal);
       return;
     }
@@ -301,21 +317,21 @@ export function AnimatedNumber({
       const progress = Math.min(1, elapsed / durationMs);
       const eased = 1 - Math.pow(1 - progress, 3);
       const nextVal = Math.round(startVal + (targetVal - startVal) * eased);
+      currentValRef.current = nextVal;
       setDisplayValue(nextVal);
 
       if (progress < 1) {
         rafId = requestAnimationFrame(tick);
       } else {
-        prevRef.current = targetVal;
+        currentValRef.current = targetVal;
       }
     };
 
     rafId = requestAnimationFrame(tick);
     return () => {
       cancelAnimationFrame(rafId);
-      prevRef.current = targetVal;
     };
-  }, [value, durationMs]);
+  }, [safeTarget, durationMs]);
 
   return (
     <span className="tabular-nums">
@@ -337,26 +353,33 @@ export function AnimatedProgressBar({
   trackClassName = 'w-full h-1.5 bg-slate-100 rounded-full overflow-hidden',
 }: AnimatedProgressBarProps) {
   const clamped = Math.max(0, Math.min(100, percent));
-  const [visualWidth, setVisualWidth] = useState(() =>
-    prefersReducedMotion() ? clamped : 0
+  const targetRatio = clamped / 100;
+  const [visualRatio, setVisualRatio] = useState(() =>
+    prefersReducedMotion() ? targetRatio : 0
   );
 
   useEffect(() => {
     if (prefersReducedMotion()) {
-      setVisualWidth(clamped);
+      setVisualRatio(targetRatio);
       return;
     }
-    const raf = requestAnimationFrame(() => {
-      setVisualWidth(clamped);
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        setVisualRatio(targetRatio);
+      });
     });
-    return () => cancelAnimationFrame(raf);
-  }, [clamped]);
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+    };
+  }, [targetRatio]);
 
   return (
     <div className={trackClassName}>
       <div
-        className={`h-full rounded-full transition-[width] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] ${barClassName}`}
-        style={{ width: `${visualWidth}%` }}
+        className={`h-full w-full origin-left rounded-full transition-transform duration-[600ms] ease-[cubic-bezier(0.22,1,0.36,1)] will-change-transform motion-reduce:transition-none ${barClassName}`}
+        style={{ transform: `scaleX(${visualRatio})` }}
       />
     </div>
   );
@@ -402,7 +425,7 @@ export function RevealBlock({
     <div
       ref={ref}
       style={delayMs > 0 ? { transitionDelay: `${delayMs}ms` } : undefined}
-      className={`transition-[opacity,transform] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none motion-reduce:transform-none ${
+      className={`transition-[opacity,transform] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none motion-reduce:transform-none ${
         visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'
       } ${className}`}
     >

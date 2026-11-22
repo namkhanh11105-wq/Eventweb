@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import {
   ArrowLeft,
+  ArrowRight,
   BadgeCheck,
   Building2,
   Calendar,
@@ -15,10 +16,12 @@ import {
   HelpCircle,
   Image as ImageIcon,
   LayoutDashboard,
+  Loader2,
   Lock,
   LogOut,
   Mail,
   Menu,
+  MessageSquare,
   Phone,
   Plus,
   QrCode,
@@ -61,6 +64,7 @@ import { EventBanner } from './EventBanner';
 import {
   AnimatedModal,
   AnimatedNumber,
+  handleSpotlightMove,
   prefersReducedMotion,
   triggerPageProgress,
   useSlidingIndicator,
@@ -217,13 +221,24 @@ export function AdminLayout({
   const [workspaceEventId, setWorkspaceEventId] = useState<string | null>(null);
   const [workspaceTab, setWorkspaceTab] = useState<EventWorkspaceTab>('services');
 
-  // Workspace Tab 1: Services editing state
+  // Workspace Tab 1: Services & Event-level response editing state
   const [serviceNotesDraft, setServiceNotesDraft] = useState<Record<string, string>>({});
+  const [eventResponseDraft, setEventResponseDraft] = useState('');
+  const [savingEventResponse, setSavingEventResponse] = useState(false);
   const [newServiceKey, setNewServiceKey] = useState<string>(SYSTEM_SERVICE_CATALOG[0].key);
   const [newCustomServiceName, setNewCustomServiceName] = useState('');
   const [newServiceScope, setNewServiceScope] = useState('');
   const [newServiceAdminNote, setNewServiceAdminNote] = useState('');
   const [savingServices, setSavingServices] = useState(false);
+
+  // Granular pending locks for async mutations
+  const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [togglingPublicId, setTogglingPublicId] = useState<string | null>(null);
+  const [updatingStatusEventId, setUpdatingStatusEventId] = useState<string | null>(null);
+  const [updatingPlanningEventId, setUpdatingPlanningEventId] = useState<string | null>(null);
+  const [pendingRegIds, setPendingRegIds] = useState<Record<string, boolean>>({});
+  const [updatingInquiryId, setUpdatingInquiryId] = useState<string | null>(null);
 
   // Workspace Tab 2: Invited Guests state
   const [guestFullName, setGuestFullName] = useState('');
@@ -292,13 +307,17 @@ export function AdminLayout({
       notes[srv.id] = srv.adminNote || '';
     }
     setServiceNotesDraft(notes);
+    setEventResponseDraft(workspaceEvent.adminResponseNote || '');
   }, [workspaceEvent]);
 
   const stats = useMemo(() => {
     const totalEvents = events.length;
+    const publicEventsCount = events.filter((e) => e.isPublic !== false).length;
     const pendingReviewCount = events.filter((e) => e.planningStatus === 'pending_review').length;
+    const planningCount = events.filter((e) => e.planningStatus === 'planning').length;
     const activeRegistrations = registrations.filter((r) => r.status !== 'cancelled');
     const attendedCount = registrations.filter((r) => r.status === 'attended').length;
+    const newInquiriesCount = contactInquiries.filter((i) => i.status === 'new').length;
 
     const fillRates = events
       .filter((e) => e.maxSlots > 0 && e.status !== 'cancelled' && e.isPublic)
@@ -315,14 +334,17 @@ export function AdminLayout({
 
     return {
       totalEvents,
+      publicEventsCount,
       pendingReviewCount,
+      planningCount,
       totalRegistrations: registrations.length,
       activeRegistrationsCount: activeRegistrations.length,
       attendedCount,
+      newInquiriesCount,
       avgFillRate,
       checkInRate,
     };
-  }, [events, registrations]);
+  }, [events, registrations, contactInquiries]);
 
   const capacityChartData = useMemo(() => {
     return events.slice(0, 6).map((ev) => ({
@@ -465,6 +487,7 @@ export function AdminLayout({
 
   async function handleSaveEvent(e: FormEvent) {
     e.preventDefault();
+    if (savingEvent) return;
     setSavingEvent(true);
     try {
       if (editingEventId) {
@@ -483,15 +506,21 @@ export function AdminLayout({
   }
 
   async function handleDuplicateEvent(ev: EventItem) {
+    if (duplicatingId) return;
+    setDuplicatingId(ev.id);
     try {
       await duplicateEvent(ev);
       onNotify(`Đã nhân bản sự kiện "${ev.title}".`);
     } catch (err) {
       onNotify(err instanceof Error ? err.message : 'Không thể nhân bản sự kiện.', 'error');
+    } finally {
+      setDuplicatingId(null);
     }
   }
 
   async function handleQuickEventStatus(id: string, nextStatus: EventStatus) {
+    if (updatingStatusEventId) return;
+    setUpdatingStatusEventId(id);
     try {
       await updateEvent(id, { status: nextStatus });
       onNotify(`Đã đổi trạng thái đăng ký sang "${EVENT_STATUS_META[nextStatus].label}".`);
@@ -500,10 +529,14 @@ export function AdminLayout({
         err instanceof Error ? err.message : 'Không thể đổi trạng thái sự kiện.',
         'error'
       );
+    } finally {
+      setUpdatingStatusEventId(null);
     }
   }
 
   async function handlePlanningStatusChange(id: string, nextPlanning: PlanningStatus) {
+    if (updatingPlanningEventId) return;
+    setUpdatingPlanningEventId(id);
     try {
       await updateEvent(id, { planningStatus: nextPlanning });
       onNotify(`Đã cập nhật tiến độ duyệt sang "${PLANNING_STATUS_META[nextPlanning].label}".`);
@@ -512,10 +545,14 @@ export function AdminLayout({
         err instanceof Error ? err.message : 'Không thể cập nhật tiến độ kế hoạch.',
         'error'
       );
+    } finally {
+      setUpdatingPlanningEventId(null);
     }
   }
 
   async function handleTogglePublic(ev: EventItem) {
+    if (togglingPublicId) return;
+    setTogglingPublicId(ev.id);
     try {
       await updateEvent(ev.id, { isPublic: !ev.isPublic });
       onNotify(
@@ -528,10 +565,14 @@ export function AdminLayout({
         err instanceof Error ? err.message : 'Không thể thay đổi trạng thái công khai.',
         'error'
       );
+    } finally {
+      setTogglingPublicId(null);
     }
   }
 
   async function handleConfirmDelete(id: string) {
+    if (deletingId) return;
+    setDeletingId(id);
     try {
       await deleteEvent(id);
       setDeleteTargetId(null);
@@ -541,12 +582,32 @@ export function AdminLayout({
       onNotify('Đã xóa sự kiện khỏi hệ thống.');
     } catch (err) {
       onNotify(err instanceof Error ? err.message : 'Không thể xóa sự kiện.', 'error');
+    } finally {
+      setDeletingId(null);
     }
   }
 
-  // ---- Per-Event Workspace Tab 1: Services handlers ----
+  // ---- Per-Event Workspace Tab 1: Services & Response handlers ----
+  async function handleSaveEventResponse() {
+    if (!workspaceEvent || savingEventResponse) return;
+    setSavingEventResponse(true);
+    try {
+      await updateEvent(workspaceEvent.id, {
+        adminResponseNote: eventResponseDraft.trim(),
+      });
+      onNotify('Đã lưu phản hồi của Ban quản trị lên Firestore cho khách hàng.');
+    } catch (err) {
+      onNotify(
+        err instanceof Error ? err.message : 'Không thể lưu ghi chú phản hồi.',
+        'error'
+      );
+    } finally {
+      setSavingEventResponse(false);
+    }
+  }
+
   async function handleServiceStatusChange(srvId: string, nextStatus: ServiceRequestStatus) {
-    if (!workspaceEvent) return;
+    if (!workspaceEvent || savingServices) return;
     setSavingServices(true);
     try {
       const next = workspaceEvent.requestedServices.map((s) =>
@@ -568,7 +629,7 @@ export function AdminLayout({
   }
 
   async function handleSaveServiceNote(srvId: string) {
-    if (!workspaceEvent) return;
+    if (!workspaceEvent || savingServices) return;
     setSavingServices(true);
     try {
       const next = workspaceEvent.requestedServices.map((s) =>
@@ -711,6 +772,8 @@ export function AdminLayout({
 
   // ---- Per-Event Workspace Tab 3 & Global Participants handlers ----
   async function handleStatusChange(reg: RegistrationItem, nextStatus: RegistrationStatus) {
+    if (pendingRegIds[reg.id]) return;
+    setPendingRegIds((prev) => ({ ...prev, [reg.id]: true }));
     try {
       await updateRegistrationStatus(reg, nextStatus);
       onNotify(
@@ -720,6 +783,12 @@ export function AdminLayout({
       );
     } catch (err) {
       onNotify(err instanceof Error ? err.message : 'Không thể cập nhật trạng thái.', 'error');
+    } finally {
+      setPendingRegIds((prev) => {
+        const next = { ...prev };
+        delete next[reg.id];
+        return next;
+      });
     }
   }
 
@@ -834,7 +903,7 @@ export function AdminLayout({
     <div className="min-h-screen bg-slate-50 flex">
       <div
         aria-hidden="true"
-        className={`fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-[2px] lg:hidden transition-opacity duration-240 ${
+        className={`fixed inset-0 z-40 bg-slate-900/45 backdrop-blur-sm lg:hidden transition-opacity duration-[320ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${
           sidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
         }`}
         onClick={() => setSidebarOpen(false)}
@@ -842,7 +911,7 @@ export function AdminLayout({
 
       {/* Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-slate-200 flex flex-col justify-between transition-transform duration-260 ease-[cubic-bezier(0.22,1,0.36,1)] lg:static lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-slate-200 flex flex-col justify-between transition-transform duration-[320ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none lg:static lg:translate-x-0 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -976,7 +1045,7 @@ export function AdminLayout({
             <button
               type="button"
               onClick={openCreateModal}
-              className="min-h-[40px] inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors cursor-pointer whitespace-nowrap shrink-0"
+              className="ef-btn-tactile min-h-[40px] inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg cursor-pointer whitespace-nowrap shrink-0"
             >
               <Plus className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
               <span>Tạo sự kiện</span>
@@ -1037,51 +1106,158 @@ export function AdminLayout({
                         setWorkspaceEventId(null);
                       })
                     }
-                    className="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg cursor-pointer whitespace-nowrap shrink-0"
+                    className="ef-btn-tactile px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg cursor-pointer whitespace-nowrap shrink-0"
                   >
                     Xem yêu cầu chờ duyệt
                   </button>
                 </div>
               )}
 
-              {/* 4 KPI Cards */}
+              {/* 4 Clickable Real-time KPI Cards with Cursor Spotlight & 60ms Staggered Reveal */}
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-                <div className="bg-white border border-slate-200 rounded-xl p-5 transition-all duration-200 hover:border-indigo-200">
-                  <p className="text-xs font-medium text-slate-500">Tổng sự kiện</p>
-                  <p className="mt-2 text-3xl font-bold text-slate-900 tabular-nums">
-                    <AnimatedNumber value={stats.totalEvents} />
-                  </p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    {stats.pendingReviewCount} yêu cầu chờ duyệt
-                  </p>
+                <div style={{ animationDelay: '0ms' }} className="animate-ef-fade-up h-full">
+                  <button
+                    type="button"
+                    onMouseMove={handleSpotlightMove}
+                    onClick={() =>
+                      runAdminTransition(() => {
+                        setSection('events');
+                        setEventPlanningFilter('all');
+                        setWorkspaceEventId(null);
+                      })
+                    }
+                    className="ef-spotlight-card group w-full h-full text-left bg-white border border-slate-200 rounded-xl p-5 hover:border-indigo-300 cursor-pointer flex flex-col justify-between"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-medium text-slate-500">Tổng số sự kiện</p>
+                      <Calendar className="w-4 h-4 text-indigo-500 shrink-0" />
+                    </div>
+                    <p className="mt-2 text-3xl font-bold text-slate-900 tabular-nums">
+                      <AnimatedNumber value={stats.totalEvents} />
+                    </p>
+                    <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
+                      <span className="tabular-nums">
+                        {stats.publicEventsCount} công khai · Lấp đầy TB {stats.avgFillRate}%
+                      </span>
+                      <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition-all shrink-0" />
+                    </div>
+                  </button>
                 </div>
 
-                <div className="bg-white border border-slate-200 rounded-xl p-5 transition-all duration-200 hover:border-indigo-200">
-                  <p className="text-xs font-medium text-slate-500">Tổng lượt đăng ký tham gia</p>
-                  <p className="mt-2 text-3xl font-bold text-slate-900 tabular-nums">
-                    <AnimatedNumber value={stats.totalRegistrations} />
-                  </p>
-                  <p className="mt-1 text-xs text-slate-500 tabular-nums">
-                    <AnimatedNumber value={stats.activeRegistrationsCount} /> lượt đang hiệu lực
-                  </p>
+                <div style={{ animationDelay: '60ms' }} className="animate-ef-fade-up h-full">
+                  <button
+                    type="button"
+                    onMouseMove={handleSpotlightMove}
+                    onClick={() =>
+                      runAdminTransition(() => {
+                        setSection('events');
+                        setEventPlanningFilter('pending_review');
+                        setWorkspaceEventId(null);
+                      })
+                    }
+                    className={`ef-spotlight-card group w-full h-full text-left bg-white border rounded-xl p-5 cursor-pointer flex flex-col justify-between ${
+                      stats.pendingReviewCount > 0
+                        ? 'border-amber-200 hover:border-amber-400'
+                        : 'border-slate-200 hover:border-indigo-300'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-medium text-slate-500">
+                        Yêu cầu tổ chức chờ duyệt
+                      </p>
+                      <ClipboardList
+                        className={`w-4 h-4 shrink-0 ${
+                          stats.pendingReviewCount > 0 ? 'text-amber-500' : 'text-slate-400'
+                        }`}
+                      />
+                    </div>
+                    <p
+                      className={`mt-2 text-3xl font-bold tabular-nums ${
+                        stats.pendingReviewCount > 0 ? 'text-amber-600' : 'text-slate-900'
+                      }`}
+                    >
+                      <AnimatedNumber value={stats.pendingReviewCount} />
+                    </p>
+                    <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
+                      <span className="tabular-nums">
+                        {stats.planningCount} đang lên kế hoạch
+                      </span>
+                      <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-amber-600 group-hover:translate-x-0.5 transition-all shrink-0" />
+                    </div>
+                  </button>
                 </div>
 
-                <div className="bg-white border border-slate-200 rounded-xl p-5 transition-all duration-200 hover:border-indigo-200">
-                  <p className="text-xs font-medium text-slate-500">Tỷ lệ lấp đầy trung bình</p>
-                  <p className="mt-2 text-3xl font-bold text-indigo-600 tabular-nums">
-                    <AnimatedNumber value={stats.avgFillRate} suffix="%" />
-                  </p>
-                  <p className="mt-1 text-xs text-slate-500">Các sự kiện công khai</p>
+                <div style={{ animationDelay: '120ms' }} className="animate-ef-fade-up h-full">
+                  <button
+                    type="button"
+                    onMouseMove={handleSpotlightMove}
+                    onClick={() =>
+                      runAdminTransition(() => {
+                        setSection('registrations');
+                      })
+                    }
+                    className="ef-spotlight-card group w-full h-full text-left bg-white border border-slate-200 rounded-xl p-5 hover:border-emerald-300 cursor-pointer flex flex-col justify-between"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-medium text-slate-500">
+                        Tổng lượt đăng ký tham gia
+                      </p>
+                      <UserCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                    </div>
+                    <p className="mt-2 text-3xl font-bold text-slate-900 tabular-nums">
+                      <AnimatedNumber value={stats.activeRegistrationsCount} />
+                    </p>
+                    <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
+                      <span className="tabular-nums">
+                        {stats.attendedCount} đã Check-in ({stats.checkInRate}%)
+                      </span>
+                      <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-600 group-hover:translate-x-0.5 transition-all shrink-0" />
+                    </div>
+                  </button>
                 </div>
 
-                <div className="bg-white border border-slate-200 rounded-xl p-5 transition-all duration-200 hover:border-emerald-200">
-                  <p className="text-xs font-medium text-slate-500">Tỷ lệ Check-in thực tế</p>
-                  <p className="mt-2 text-3xl font-bold text-emerald-600 tabular-nums">
-                    <AnimatedNumber value={stats.checkInRate} suffix="%" />
-                  </p>
-                  <p className="mt-1 text-xs text-slate-500 tabular-nums">
-                    <AnimatedNumber value={stats.attendedCount} /> người đã qua cổng QR
-                  </p>
+                <div style={{ animationDelay: '180ms' }} className="animate-ef-fade-up h-full">
+                  <button
+                    type="button"
+                    onMouseMove={handleSpotlightMove}
+                    onClick={() => {
+                      runAdminTransition(() => {
+                        setSection('contact');
+                      });
+                      window.setTimeout(() => {
+                        document
+                          .getElementById('admin-contact-inquiries')
+                          ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      }, 220);
+                    }}
+                    className={`ef-spotlight-card group w-full h-full text-left bg-white border rounded-xl p-5 cursor-pointer flex flex-col justify-between ${
+                      stats.newInquiriesCount > 0
+                        ? 'border-rose-200 hover:border-rose-400'
+                        : 'border-slate-200 hover:border-indigo-300'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-medium text-slate-500">Yêu cầu tư vấn mới</p>
+                      <MessageSquare
+                        className={`w-4 h-4 shrink-0 ${
+                          stats.newInquiriesCount > 0 ? 'text-rose-500' : 'text-slate-400'
+                        }`}
+                      />
+                    </div>
+                    <p
+                      className={`mt-2 text-3xl font-bold tabular-nums ${
+                        stats.newInquiriesCount > 0 ? 'text-rose-600' : 'text-slate-900'
+                      }`}
+                    >
+                      <AnimatedNumber value={stats.newInquiriesCount} />
+                    </p>
+                    <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
+                      <span className="tabular-nums">
+                        {contactInquiries.length} tổng yêu cầu tư vấn
+                      </span>
+                      <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-rose-600 group-hover:translate-x-0.5 transition-all shrink-0" />
+                    </div>
+                  </button>
                 </div>
               </div>
 
@@ -1098,7 +1274,7 @@ export function AdminLayout({
                   <button
                     type="button"
                     onClick={openCreateModal}
-                    className="mt-5 min-h-[42px] inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg cursor-pointer"
+                    className="ef-btn-tactile mt-5 min-h-[42px] inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg cursor-pointer"
                   >
                     <Plus className="w-4 h-4" />
                     <span>Tạo sự kiện mới</span>
@@ -1363,11 +1539,12 @@ export function AdminLayout({
                           <div className="space-y-2 pt-1">
                             <select
                               aria-label={`Trạng thái sự kiện ${ev.title}`}
+                              disabled={updatingStatusEventId === ev.id}
                               value={ev.status}
                               onChange={(e) =>
                                 handleQuickEventStatus(ev.id, e.target.value as EventStatus)
                               }
-                              className={`w-full min-h-[40px] px-3 py-2 text-xs font-semibold bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-600 cursor-pointer ${
+                              className={`w-full min-h-[40px] px-3 py-2 text-xs font-semibold bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-600 cursor-pointer disabled:opacity-60 ${
                                 EVENT_STATUS_META[ev.status]?.textClass || 'text-slate-700'
                               }`}
                             >
@@ -1393,11 +1570,16 @@ export function AdminLayout({
                               </button>
                               <button
                                 type="button"
+                                disabled={duplicatingId === ev.id}
                                 onClick={() => handleDuplicateEvent(ev)}
-                                className="min-w-[40px] min-h-[40px] inline-flex items-center justify-center text-slate-600 bg-slate-50 hover:text-indigo-600 hover:bg-indigo-50 border border-slate-200 rounded-lg cursor-pointer"
+                                className="min-w-[40px] min-h-[40px] inline-flex items-center justify-center text-slate-600 bg-slate-50 hover:text-indigo-600 hover:bg-indigo-50 border border-slate-200 rounded-lg cursor-pointer disabled:opacity-60"
                                 title="Nhân bản sự kiện"
                               >
-                                <Copy className="w-4 h-4" />
+                                {duplicatingId === ev.id ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <Copy className="w-4 h-4" />
+                                )}
                               </button>
                               <button
                                 type="button"
@@ -1411,13 +1593,18 @@ export function AdminLayout({
                                 <div className="inline-flex items-center gap-1">
                                   <button
                                     type="button"
+                                    disabled={deletingId === ev.id}
                                     onClick={() => handleConfirmDelete(ev.id)}
-                                    className="min-h-[40px] px-3 py-2 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-lg cursor-pointer"
+                                    className="min-h-[40px] inline-flex items-center gap-1 px-3 py-2 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-lg cursor-pointer disabled:opacity-60"
                                   >
-                                    Xóa
+                                    {deletingId === ev.id && (
+                                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                    )}
+                                    <span>Xóa</span>
                                   </button>
                                   <button
                                     type="button"
+                                    disabled={deletingId === ev.id}
                                     onClick={() => setDeleteTargetId(null)}
                                     className="min-h-[40px] px-3 py-2 text-xs font-medium text-slate-600 bg-slate-100 rounded-lg cursor-pointer"
                                   >
@@ -1529,11 +1716,12 @@ export function AdminLayout({
                             <td className="py-3 px-4 whitespace-nowrap">
                               <select
                                 aria-label={`Trạng thái sự kiện ${ev.title}`}
+                                disabled={updatingStatusEventId === ev.id}
                                 value={ev.status}
                                 onChange={(e) =>
                                   handleQuickEventStatus(ev.id, e.target.value as EventStatus)
                                 }
-                                className={`px-2.5 py-1.5 text-xs font-semibold bg-white border border-slate-200 rounded-md focus:outline-none focus:border-indigo-600 cursor-pointer ${
+                                className={`px-2.5 py-1.5 text-xs font-semibold bg-white border border-slate-200 rounded-md focus:outline-none focus:border-indigo-600 cursor-pointer disabled:opacity-60 ${
                                   EVENT_STATUS_META[ev.status]?.textClass || 'text-slate-700'
                                 }`}
                               >
@@ -1560,11 +1748,16 @@ export function AdminLayout({
                                 </button>
                                 <button
                                   type="button"
+                                  disabled={duplicatingId === ev.id}
                                   onClick={() => handleDuplicateEvent(ev)}
-                                  className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-md cursor-pointer"
+                                  className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-md cursor-pointer disabled:opacity-60"
                                   title="Nhân bản sự kiện"
                                 >
-                                  <Copy className="w-4 h-4" />
+                                  {duplicatingId === ev.id ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                  ) : (
+                                    <Copy className="w-4 h-4" />
+                                  )}
                                 </button>
                                 <button
                                   type="button"
@@ -1578,13 +1771,18 @@ export function AdminLayout({
                                   <div className="inline-flex items-center gap-1">
                                     <button
                                       type="button"
+                                      disabled={deletingId === ev.id}
                                       onClick={() => handleConfirmDelete(ev.id)}
-                                      className="px-2 py-1 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded cursor-pointer"
+                                      className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded cursor-pointer disabled:opacity-60"
                                     >
-                                      Xóa
+                                      {deletingId === ev.id && (
+                                        <Loader2 className="w-3 h-3 animate-spin" />
+                                      )}
+                                      <span>Xóa</span>
                                     </button>
                                     <button
                                       type="button"
+                                      disabled={deletingId === ev.id}
                                       onClick={() => setDeleteTargetId(null)}
                                       className="px-2 py-1 text-xs font-medium text-slate-600 bg-slate-100 rounded cursor-pointer"
                                     >
@@ -1630,24 +1828,26 @@ export function AdminLayout({
                 <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
+                    disabled={togglingPublicId === workspaceEvent.id}
                     onClick={() => handleTogglePublic(workspaceEvent)}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border cursor-pointer ${
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border cursor-pointer disabled:opacity-60 ${
                       workspaceEvent.isPublic
                         ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
                         : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'
                     }`}
                   >
-                    {workspaceEvent.isPublic ? (
-                      <>
-                        <Globe className="w-3.5 h-3.5" />
-                        <span>Đang công khai trên trang chủ</span>
-                      </>
+                    {togglingPublicId === workspaceEvent.id ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : workspaceEvent.isPublic ? (
+                      <Globe className="w-3.5 h-3.5" />
                     ) : (
-                      <>
-                        <Lock className="w-3.5 h-3.5" />
-                        <span>Đang ẩn · Bấm để công khai</span>
-                      </>
+                      <Lock className="w-3.5 h-3.5" />
                     )}
+                    <span>
+                      {workspaceEvent.isPublic
+                        ? 'Đang công khai trên trang chủ'
+                        : 'Đang ẩn · Bấm để công khai'}
+                    </span>
                   </button>
 
                   <button
@@ -1699,6 +1899,7 @@ export function AdminLayout({
                       Tiến độ duyệt &amp; kế hoạch
                     </label>
                     <select
+                      disabled={updatingPlanningEventId === workspaceEvent.id}
                       value={workspaceEvent.planningStatus}
                       onChange={(e) =>
                         handlePlanningStatusChange(
@@ -1706,7 +1907,7 @@ export function AdminLayout({
                           e.target.value as PlanningStatus
                         )
                       }
-                      className={`w-full px-3 py-1.5 text-xs font-semibold bg-white border border-slate-200 rounded-lg cursor-pointer ${
+                      className={`w-full px-3 py-1.5 text-xs font-semibold bg-white border border-slate-200 rounded-lg cursor-pointer disabled:opacity-60 ${
                         PLANNING_STATUS_META[workspaceEvent.planningStatus]?.textClass
                       }`}
                     >
@@ -1722,11 +1923,12 @@ export function AdminLayout({
                       Trạng thái mở đăng ký
                     </label>
                     <select
+                      disabled={updatingStatusEventId === workspaceEvent.id}
                       value={workspaceEvent.status}
                       onChange={(e) =>
                         handleQuickEventStatus(workspaceEvent.id, e.target.value as EventStatus)
                       }
-                      className={`w-full px-3 py-1.5 text-xs font-semibold bg-white border border-slate-200 rounded-lg cursor-pointer ${
+                      className={`w-full px-3 py-1.5 text-xs font-semibold bg-white border border-slate-200 rounded-lg cursor-pointer disabled:opacity-60 ${
                         EVENT_STATUS_META[workspaceEvent.status]?.textClass
                       }`}
                     >
@@ -1817,6 +2019,50 @@ export function AdminLayout({
                 {/* TAB 1: REQUESTED SERVICES FOR THIS EVENT */}
                 {workspaceTab === 'services' && (
                   <div key="ws-services" className="p-5 sm:p-6 space-y-6 animate-ef-page-enter">
+                    {/* Overall Event Response Note for Client */}
+                    <div className="p-4 sm:p-5 rounded-xl bg-indigo-50/60 border border-indigo-200 space-y-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <MessageSquare className="w-4 h-4 text-indigo-600 shrink-0" />
+                          <h3 className="text-sm font-bold text-slate-900">
+                            Ghi chú phản hồi cho khách hàng
+                          </h3>
+                        </div>
+                        <span className="text-[11px] text-indigo-700 font-medium">
+                          Hiển thị trực tiếp tại mục &ldquo;Sự kiện của tôi → Yêu cầu tổ chức&rdquo;
+                        </span>
+                      </div>
+
+                      <textarea
+                        rows={2}
+                        value={eventResponseDraft}
+                        onChange={(e) => setEventResponseDraft(e.target.value)}
+                        placeholder="Nhập phản hồi phê duyệt, lịch khảo sát địa điểm hoặc lưu ý điều phối gửi tới người yêu cầu tổ chức..."
+                        className="w-full px-3.5 py-2.5 text-xs sm:text-sm bg-white border border-indigo-200/80 rounded-xl focus:outline-none focus:border-indigo-600"
+                      />
+
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-[11px] text-slate-500">
+                          Đồng bộ trường <code className="font-mono">adminResponseNote</code> lên Cloud Firestore.
+                        </span>
+                        <button
+                          type="button"
+                          disabled={savingEventResponse}
+                          onClick={handleSaveEventResponse}
+                          className="ef-btn-tactile min-h-[38px] inline-flex items-center justify-center gap-1.5 px-4 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg cursor-pointer disabled:opacity-60"
+                        >
+                          {savingEventResponse ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Save className="w-3.5 h-3.5" />
+                          )}
+                          <span>
+                            {savingEventResponse ? 'Đang lưu...' : 'Lưu phản hồi cho khách'}
+                          </span>
+                        </button>
+                      </div>
+                    </div>
+
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                       <div>
                         <h3 className="text-sm font-bold text-slate-900">
@@ -1824,7 +2070,7 @@ export function AdminLayout({
                         </h3>
                         <p className="text-xs text-slate-500">
                           Duyệt yêu cầu từ khách hàng tổ chức, cập nhật tiến độ chuẩn bị và phản hồi
-                          ghi chú trực tiếp.
+                          ghi chú trực tiếp cho từng dịch vụ.
                         </p>
                       </div>
                     </div>
@@ -1880,7 +2126,7 @@ export function AdminLayout({
                                         e.target.value as ServiceRequestStatus
                                       )
                                     }
-                                    className="px-2.5 py-1.5 text-xs font-semibold bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-600 cursor-pointer"
+                                    className="px-2.5 py-1.5 text-xs font-semibold bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-600 cursor-pointer disabled:opacity-60"
                                   >
                                     <option value="pending">Chờ duyệt</option>
                                     <option value="approved">Đã duyệt</option>
@@ -1892,7 +2138,7 @@ export function AdminLayout({
                                     type="button"
                                     disabled={savingServices}
                                     onClick={() => handleRemoveService(srv.id)}
-                                    className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md cursor-pointer"
+                                    className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md cursor-pointer disabled:opacity-60"
                                     title="Xóa dịch vụ"
                                   >
                                     <Trash2 className="w-4 h-4" />
@@ -1917,9 +2163,13 @@ export function AdminLayout({
                                   type="button"
                                   disabled={savingServices}
                                   onClick={() => handleSaveServiceNote(srv.id)}
-                                  className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-indigo-700 bg-white border border-indigo-200 hover:bg-indigo-50 rounded-lg cursor-pointer shrink-0"
+                                  className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-indigo-700 bg-white border border-indigo-200 hover:bg-indigo-50 rounded-lg cursor-pointer shrink-0 disabled:opacity-60"
                                 >
-                                  <Save className="w-3.5 h-3.5" />
+                                  {savingServices ? (
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                  ) : (
+                                    <Save className="w-3.5 h-3.5" />
+                                  )}
                                   <span>Lưu ghi chú</span>
                                 </button>
                               </div>
@@ -1980,9 +2230,13 @@ export function AdminLayout({
                         <button
                           type="submit"
                           disabled={savingServices}
-                          className="sm:col-span-1 px-3 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg cursor-pointer"
+                          className="sm:col-span-1 inline-flex items-center justify-center gap-1 px-3 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg cursor-pointer disabled:opacity-60"
                         >
-                          Thêm
+                          {savingServices ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <span>Thêm</span>
+                          )}
                         </button>
                       </div>
                     </form>
@@ -2085,7 +2339,7 @@ export function AdminLayout({
                         <button
                           type="submit"
                           disabled={savingGuests}
-                          className="sm:col-span-2 px-3 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg cursor-pointer"
+                          className="ef-btn-tactile sm:col-span-2 px-3 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg cursor-pointer disabled:opacity-60"
                         >
                           {savingGuests ? 'Đang lưu...' : 'Thêm khách mời'}
                         </button>
@@ -2269,7 +2523,7 @@ export function AdminLayout({
                         <button
                           type="submit"
                           disabled={wsCheckingIn || !wsQrInput.trim()}
-                          className="min-h-[40px] px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg cursor-pointer disabled:opacity-50 whitespace-nowrap"
+                          className="ef-btn-tactile min-h-[40px] px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg cursor-pointer disabled:opacity-50 whitespace-nowrap"
                         >
                           {wsCheckingIn ? 'Đang xử lý...' : 'Check-in'}
                         </button>
@@ -2360,14 +2614,20 @@ export function AdminLayout({
                                   {(reg.status === 'confirmed' || reg.status === 'pending') && (
                                     <button
                                       type="button"
+                                      disabled={Boolean(pendingRegIds[reg.id])}
                                       onClick={() => handleStatusChange(reg, 'attended')}
-                                      className="min-h-[40px] inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg cursor-pointer"
+                                      className="min-h-[40px] inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg cursor-pointer disabled:opacity-60"
                                     >
-                                      <CheckCircle2 className="w-3.5 h-3.5" />
+                                      {pendingRegIds[reg.id] ? (
+                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                      ) : (
+                                        <CheckCircle2 className="w-3.5 h-3.5" />
+                                      )}
                                       <span>Check-in</span>
                                     </button>
                                   )}
                                   <select
+                                    disabled={Boolean(pendingRegIds[reg.id])}
                                     value={reg.status}
                                     onChange={(e) =>
                                       handleStatusChange(
@@ -2375,7 +2635,7 @@ export function AdminLayout({
                                         e.target.value as RegistrationStatus
                                       )
                                     }
-                                    className="flex-1 min-h-[40px] px-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg cursor-pointer"
+                                    className="flex-1 min-h-[40px] px-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg cursor-pointer disabled:opacity-60"
                                   >
                                     <option value="pending">Chờ duyệt</option>
                                     <option value="confirmed">Đã xác nhận</option>
@@ -2434,14 +2694,20 @@ export function AdminLayout({
                                       {(reg.status === 'confirmed' || reg.status === 'pending') && (
                                         <button
                                           type="button"
+                                          disabled={Boolean(pendingRegIds[reg.id])}
                                           onClick={() => handleStatusChange(reg, 'attended')}
-                                          className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-md cursor-pointer"
+                                          className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-md cursor-pointer disabled:opacity-60"
                                         >
-                                          <CheckCircle2 className="w-3.5 h-3.5" />
+                                          {pendingRegIds[reg.id] ? (
+                                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                          ) : (
+                                            <CheckCircle2 className="w-3.5 h-3.5" />
+                                          )}
                                           <span>Check-in</span>
                                         </button>
                                       )}
                                       <select
+                                        disabled={Boolean(pendingRegIds[reg.id])}
                                         value={reg.status}
                                         onChange={(e) =>
                                           handleStatusChange(
@@ -2449,7 +2715,7 @@ export function AdminLayout({
                                             e.target.value as RegistrationStatus
                                           )
                                         }
-                                        className="px-2 py-1 text-xs bg-white border border-slate-200 rounded-md cursor-pointer"
+                                        className="px-2 py-1 text-xs bg-white border border-slate-200 rounded-md cursor-pointer disabled:opacity-60"
                                       >
                                         <option value="pending">Chờ duyệt</option>
                                         <option value="confirmed">Đã xác nhận</option>
@@ -2503,9 +2769,13 @@ export function AdminLayout({
                     <button
                       type="submit"
                       disabled={checkingInQr || !qrInput.trim()}
-                      className="min-h-[42px] inline-flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg cursor-pointer disabled:opacity-50 whitespace-nowrap shrink-0"
+                      className="ef-btn-tactile min-h-[42px] inline-flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg cursor-pointer disabled:opacity-50 whitespace-nowrap shrink-0"
                     >
-                      <CheckCircle2 className="w-4 h-4" />
+                      {checkingInQr ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="w-4 h-4" />
+                      )}
                       <span>{checkingInQr ? 'Đang xử lý...' : 'Check-in QR'}</span>
                     </button>
                   </form>
@@ -2627,20 +2897,26 @@ export function AdminLayout({
                               {(reg.status === 'confirmed' || reg.status === 'pending') && (
                                 <button
                                   type="button"
+                                  disabled={Boolean(pendingRegIds[reg.id])}
                                   onClick={() => handleStatusChange(reg, 'attended')}
-                                  className="min-h-[40px] inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg cursor-pointer"
+                                  className="min-h-[40px] inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg cursor-pointer disabled:opacity-60"
                                 >
-                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  {pendingRegIds[reg.id] ? (
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                  ) : (
+                                    <CheckCircle2 className="w-3.5 h-3.5" />
+                                  )}
                                   <span>Check-in</span>
                                 </button>
                               )}
                               <select
                                 aria-label={`Trạng thái mã ${reg.ticketCode}`}
+                                disabled={Boolean(pendingRegIds[reg.id])}
                                 value={reg.status}
                                 onChange={(e) =>
                                   handleStatusChange(reg, e.target.value as RegistrationStatus)
                                 }
-                                className="flex-1 min-h-[40px] px-3 py-1.5 text-xs font-medium bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-600 cursor-pointer"
+                                className="flex-1 min-h-[40px] px-3 py-1.5 text-xs font-medium bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-600 cursor-pointer disabled:opacity-60"
                               >
                                 <option value="pending">Chờ duyệt</option>
                                 <option value="confirmed">Đã xác nhận</option>
@@ -2704,20 +2980,26 @@ export function AdminLayout({
                                   {(reg.status === 'confirmed' || reg.status === 'pending') && (
                                     <button
                                       type="button"
+                                      disabled={Boolean(pendingRegIds[reg.id])}
                                       onClick={() => handleStatusChange(reg, 'attended')}
-                                      className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-md cursor-pointer"
+                                      className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-md cursor-pointer disabled:opacity-60"
                                     >
-                                      <CheckCircle2 className="w-3.5 h-3.5" />
+                                      {pendingRegIds[reg.id] ? (
+                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                      ) : (
+                                        <CheckCircle2 className="w-3.5 h-3.5" />
+                                      )}
                                       <span>Check-in</span>
                                     </button>
                                   )}
                                   <select
                                     aria-label={`Trạng thái mã ${reg.ticketCode}`}
+                                    disabled={Boolean(pendingRegIds[reg.id])}
                                     value={reg.status}
                                     onChange={(e) =>
                                       handleStatusChange(reg, e.target.value as RegistrationStatus)
                                     }
-                                    className="px-2 py-1.5 text-xs font-medium bg-white border border-slate-200 rounded-md focus:outline-none focus:border-indigo-600 cursor-pointer"
+                                    className="px-2 py-1.5 text-xs font-medium bg-white border border-slate-200 rounded-md focus:outline-none focus:border-indigo-600 cursor-pointer disabled:opacity-60"
                                   >
                                     <option value="pending">Chờ duyệt</option>
                                     <option value="confirmed">Đã xác nhận</option>
@@ -2963,9 +3245,13 @@ export function AdminLayout({
                     <button
                       type="submit"
                       disabled={savingContact}
-                      className="w-full sm:w-auto min-h-[42px] inline-flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg cursor-pointer disabled:opacity-60"
+                      className="ef-btn-tactile w-full sm:w-auto min-h-[42px] inline-flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg cursor-pointer disabled:opacity-60"
                     >
-                      <Save className="w-4 h-4" />
+                      {savingContact ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Save className="w-4 h-4" />
+                      )}
                       <span>{savingContact ? 'Đang lưu...' : 'Lưu thông tin liên hệ'}</span>
                     </button>
                   </div>
@@ -2973,7 +3259,10 @@ export function AdminLayout({
               </div>
 
               {/* Incoming Consultation Inquiries from /lien-he */}
-              <div className="max-w-3xl bg-white border border-slate-200 rounded-2xl p-4 sm:p-8 space-y-4">
+              <div
+                id="admin-contact-inquiries"
+                className="max-w-3xl bg-white border border-slate-200 rounded-2xl p-4 sm:p-8 space-y-4 scroll-mt-20"
+              >
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <h2 className="text-base font-bold text-slate-900">
@@ -3003,27 +3292,36 @@ export function AdminLayout({
                               · {inq.contactInfo}
                             </span>
                           </div>
-                          <select
-                            aria-label={`Trạng thái yêu cầu ${inq.fullName}`}
-                            value={inq.status}
-                            onChange={async (e) => {
-                              const next = e.target.value as ContactInquiryStatus;
-                              try {
-                                await updateContactInquiryStatus(inq.id, next);
-                                onNotify('Đã cập nhật trạng thái yêu cầu tư vấn.');
-                              } catch (err) {
-                                onNotify(
-                                  err instanceof Error ? err.message : 'Lỗi cập nhật.',
-                                  'error'
-                                );
-                              }
-                            }}
-                            className="h-8 px-2.5 text-xs font-semibold bg-white border border-slate-200 rounded-lg cursor-pointer"
-                          >
-                            <option value="new">Mới tiếp nhận</option>
-                            <option value="reviewed">Đã liên hệ</option>
-                            <option value="resolved">Đã xử lý</option>
-                          </select>
+                          <div className="inline-flex items-center gap-1.5">
+                            {updatingInquiryId === inq.id && (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-600" />
+                            )}
+                            <select
+                              aria-label={`Trạng thái yêu cầu ${inq.fullName}`}
+                              disabled={updatingInquiryId === inq.id}
+                              value={inq.status}
+                              onChange={async (e) => {
+                                const next = e.target.value as ContactInquiryStatus;
+                                setUpdatingInquiryId(inq.id);
+                                try {
+                                  await updateContactInquiryStatus(inq.id, next);
+                                  onNotify('Đã cập nhật trạng thái yêu cầu tư vấn.');
+                                } catch (err) {
+                                  onNotify(
+                                    err instanceof Error ? err.message : 'Lỗi cập nhật.',
+                                    'error'
+                                  );
+                                } finally {
+                                  setUpdatingInquiryId(null);
+                                }
+                              }}
+                              className="h-8 px-2.5 text-xs font-semibold bg-white border border-slate-200 rounded-lg cursor-pointer disabled:opacity-60"
+                            >
+                              <option value="new">Mới tiếp nhận</option>
+                              <option value="reviewed">Đã liên hệ</option>
+                              <option value="resolved">Đã xử lý</option>
+                            </select>
+                          </div>
                         </div>
                         <div className="text-xs font-semibold text-indigo-600">{inq.topic}</div>
                         <p className="text-xs sm:text-sm text-slate-700 leading-relaxed">
@@ -3538,9 +3836,12 @@ export function AdminLayout({
                 <button
                   type="submit"
                   disabled={savingEvent}
-                  className="w-full sm:w-auto min-h-[42px] px-5 py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg cursor-pointer disabled:opacity-60"
+                  className="ef-btn-tactile w-full sm:w-auto min-h-[42px] inline-flex items-center justify-center gap-2 px-5 py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg cursor-pointer disabled:opacity-60"
                 >
-                  {savingEvent ? 'Đang lưu...' : editingEventId ? 'Lưu thay đổi' : 'Tạo sự kiện'}
+                  {savingEvent && <Loader2 className="w-4 h-4 animate-spin" />}
+                  <span>
+                    {savingEvent ? 'Đang lưu...' : editingEventId ? 'Lưu thay đổi' : 'Tạo sự kiện'}
+                  </span>
                 </button>
               </div>
             </form>

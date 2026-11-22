@@ -57,6 +57,19 @@ export const EVENT_CATEGORIES: EventCategory[] = [
   'Seminar',
 ];
 
+export type ServiceFilterType =
+  | 'all'
+  | 'workshop'
+  | 'gala'
+  | 'internal';
+
+export const SERVICE_FILTER_TABS: { key: ServiceFilterType; label: string }[] = [
+  { key: 'all', label: 'Tất cả loại hình' },
+  { key: 'workshop', label: 'Hội thảo / Workshop' },
+  { key: 'gala', label: 'Ra mắt / Gala' },
+  { key: 'internal', label: 'Sự kiện nội bộ' },
+];
+
 export interface SystemServiceOption {
   key: string;
   name: string;
@@ -67,6 +80,7 @@ export interface SystemServiceOption {
   notePlaceholder: string;
   quantityChips: string[];
   noteChips: string[];
+  eventTypes: Exclude<ServiceFilterType, 'all'>[];
 }
 
 export const SYSTEM_SERVICE_CATALOG: SystemServiceOption[] = [
@@ -80,6 +94,7 @@ export const SYSTEM_SERVICE_CATALOG: SystemServiceOption[] = [
     notePlaceholder: 'Yêu cầu micro cài áo, ánh sáng sân khấu, test kỹ thuật...',
     quantityChips: ['Gói 100 khách + 2 mic', '1 LED P3 + 4 micro', 'Hội trường 300+ khách'],
     noteChips: ['Có 2 micro cài áo', 'Chạy thử trước 1 ngày', 'Hỗ trợ livestream'],
+    eventTypes: ['workshop', 'gala', 'internal'],
   },
   {
     key: 'mc_coordinator',
@@ -91,6 +106,7 @@ export const SYSTEM_SERVICE_CATALOG: SystemServiceOption[] = [
     notePlaceholder: 'Ngôn ngữ dẫn (Việt / Song ngữ), phong cách trang trọng hay trẻ trung...',
     quantityChips: ['1 MC chuyên nghiệp', '1 MC song ngữ Anh–Việt', '1 MC + 2 điều phối'],
     noteChips: ['Dẫn song ngữ Anh–Việt', 'Phong cách trang trọng', 'Kèm duyệt kịch bản trước'],
+    eventTypes: ['workshop', 'gala'],
   },
   {
     key: 'teabreak_catering',
@@ -102,6 +118,7 @@ export const SYSTEM_SERVICE_CATALOG: SystemServiceOption[] = [
     notePlaceholder: 'Ghi chú khẩu vị, món chay, menu ít ngọt hoặc giờ phục vụ...',
     quantityChips: ['50 suất', '100 suất', '200 suất'],
     noteChips: ['Menu ít ngọt', 'Cà phê máy & nước ép', 'Có lựa chọn món chay'],
+    eventTypes: ['workshop', 'gala', 'internal'],
   },
   {
     key: 'checkin_staff',
@@ -113,6 +130,7 @@ export const SYSTEM_SERVICE_CATALOG: SystemServiceOption[] = [
     notePlaceholder: 'Yêu cầu trang phục, quầy VIP riêng, cấp phát thẻ đeo hoặc quà...',
     quantityChips: ['2 Lễ tân + 2 Check-in QR', '4 nhân sự', '6 nhân sự + làn VIP'],
     noteChips: ['Có máy quét QR', 'Cấp thẻ đeo & bộ kit', 'Đón khách VIP riêng'],
+    eventTypes: ['workshop', 'gala', 'internal'],
   },
   {
     key: 'media_pr',
@@ -124,6 +142,7 @@ export const SYSTEM_SERVICE_CATALOG: SystemServiceOption[] = [
     notePlaceholder: 'Yêu cầu video recap, thời hạn trả ảnh nhanh, phỏng vấn khách mời...',
     quantityChips: ['Chụp ảnh + Video Recap', '2 máy ảnh + 1 quay 4K', '1 thợ ảnh toàn buổi'],
     noteChips: ['Trả ảnh chọn lọc trong 24h', 'Video recap 60–90 giây', 'Phỏng vấn diễn giả / VIP'],
+    eventTypes: ['gala', 'workshop'],
   },
   {
     key: 'backdrop_booth',
@@ -135,6 +154,7 @@ export const SYSTEM_SERVICE_CATALOG: SystemServiceOption[] = [
     notePlaceholder: 'Kích thước sảnh, bục chụp ảnh, màu sắc nhận diện thương hiệu...',
     quantityChips: ['Backdrop 4x2.5m + 2 Standee', 'Backdrop 6x3m + Photo Booth', '2 Standee + Bàn đón khách'],
     noteChips: ['Thi công hoàn thiện từ tối hôm trước', 'Theo bộ nhận diện thương hiệu', 'Kèm thảm đỏ & bục chụp ảnh'],
+    eventTypes: ['gala', 'internal'],
   },
 ];
 
@@ -229,9 +249,26 @@ export const SERVICE_COMBO_PRESETS: ServiceComboPreset[] = [
   },
 ];
 
-export const SERVICE_PACKAGE_HIGHLIGHTS = [
+export interface ServicePackageHighlight {
+  code: string;
+  tag: string;
+  eventType: Exclude<ServiceFilterType, 'all'>;
+  suggestedCategory: EventCategory;
+  serviceKeys: string[];
+  title: string;
+  scale: string;
+  idealFor: string;
+  description: string;
+  included: string[];
+}
+
+export const SERVICE_PACKAGE_HIGHLIGHTS: ServicePackageHighlight[] = [
   {
     code: '01',
+    tag: 'Gói chủ lực',
+    eventType: 'workshop',
+    suggestedCategory: 'Hội nghị công nghệ',
+    serviceKeys: ['av_stage', 'mc_coordinator', 'checkin_staff', 'teabreak_catering'],
     title: 'Hội nghị & Seminar Chuyên đề',
     scale: '80 – 500+ đại biểu',
     idealFor: 'Hội thảo công nghệ, ra mắt sản phẩm, diễn đàn ngành',
@@ -246,6 +283,10 @@ export const SERVICE_PACKAGE_HIGHLIGHTS = [
   },
   {
     code: '02',
+    tag: 'Tương tác chuyên sâu',
+    eventType: 'internal',
+    suggestedCategory: 'Workshop chuyên đề',
+    serviceKeys: ['av_stage', 'teabreak_catering', 'checkin_staff'],
     title: 'Workshop & Đào tạo Nội bộ',
     scale: '20 – 150 học viên',
     idealFor: 'Đào tạo doanh nghiệp, workshop thực hành, bootcamp',
@@ -260,6 +301,10 @@ export const SERVICE_PACKAGE_HIGHLIGHTS = [
   },
   {
     code: '03',
+    tag: 'Sự kiện trang trọng',
+    eventType: 'gala',
+    suggestedCategory: 'Gala doanh nghiệp',
+    serviceKeys: ['av_stage', 'mc_coordinator', 'backdrop_booth', 'media_pr', 'teabreak_catering'],
     title: 'Gala Doanh nghiệp & Vinh danh',
     scale: '100 – 1.000+ khách mời',
     idealFor: 'Year End Party, lễ kỷ niệm, tri ân đối tác',
@@ -398,7 +443,7 @@ export const EVENT_STATUS_META: Record<
   { label: string; textClass: string; bgClass: string }
 > = {
   ongoing: {
-    label: 'Mở đăng ký',
+    label: 'Đang mở đăng ký',
     textClass: 'text-emerald-700',
     bgClass: 'bg-emerald-50 border-emerald-200',
   },

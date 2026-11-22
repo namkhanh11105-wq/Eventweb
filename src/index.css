@@ -58,6 +58,17 @@
   }
 }
 
+@keyframes ef-form-spring {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 14px, 0) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 @keyframes ef-top-progress-shimmer {
   0% {
     transform: translate3d(-100%, 0, 0);
@@ -132,7 +143,7 @@
 }
 
 .animate-ef-fade-up {
-  animation: ef-fade-up 440ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: ef-fade-up 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .animate-ef-page-enter {
@@ -148,7 +159,11 @@
 }
 
 .animate-ef-modal-in {
-  animation: ef-modal-in 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: ef-modal-in 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.animate-ef-form-spring {
+  animation: ef-form-spring 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .animate-ef-toast-in {
@@ -191,7 +206,7 @@
     rgba(255, 255, 255, 0.55) 50%,
     transparent 75%
   );
-  transform: translateX(-130%);
+  transform: translate3d(-130%, 0, 0);
   transition: transform 650ms cubic-bezier(0.22, 1, 0.36, 1);
   pointer-events: none;
 }
@@ -204,7 +219,7 @@
 }
 
 .ef-floating-card:hover::after {
-  transform: translateX(130%);
+  transform: translate3d(130%, 0, 0);
 }
 
 .ef-card-sheen {
@@ -222,13 +237,137 @@
     rgba(255, 255, 255, 0.42) 50%,
     transparent 70%
   );
-  transform: translateX(-140%);
+  transform: translate3d(-140%, 0, 0);
   transition: transform 680ms cubic-bezier(0.22, 1, 0.36, 1);
   pointer-events: none;
 }
 
 .ef-card-sheen:hover::after {
-  transform: translateX(140%);
+  transform: translate3d(140%, 0, 0);
+}
+
+/* Linear & Luma Cursor-Tracking Spotlight Cards */
+.ef-spotlight-card,
+.ef-spotlight-card-dark {
+  position: relative;
+  transition:
+    transform 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 220ms ease,
+    background-color 220ms ease;
+}
+
+.ef-spotlight-card::before,
+.ef-spotlight-card-dark::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: radial-gradient(
+    240px circle at var(--ef-mx, 50%) var(--ef-my, 50%),
+    rgba(244, 63, 94, 0.48),
+    rgba(99, 102, 241, 0.32) 45%,
+    transparent 75%
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity 240ms cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.ef-spotlight-card-dark::before {
+  background: radial-gradient(
+    260px circle at var(--ef-mx, 50%) var(--ef-my, 50%),
+    rgba(251, 146, 60, 0.55),
+    rgba(244, 63, 94, 0.35) 45%,
+    transparent 75%
+  );
+}
+
+.ef-spotlight-card::after,
+.ef-spotlight-card-dark::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    300px circle at var(--ef-mx, 50%) var(--ef-my, 50%),
+    rgba(251, 146, 60, 0.065),
+    rgba(99, 102, 241, 0.035) 45%,
+    transparent 72%
+  );
+  opacity: 0;
+  transition: opacity 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.ef-spotlight-card-dark::after {
+  background: radial-gradient(
+    320px circle at var(--ef-mx, 50%) var(--ef-my, 50%),
+    rgba(255, 255, 255, 0.085),
+    rgba(244, 63, 94, 0.045) 45%,
+    transparent 72%
+  );
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .ef-spotlight-card:hover {
+    transform: translate3d(0, -3px, 0);
+    box-shadow: 0 16px 34px -14px rgba(15, 23, 42, 0.14);
+  }
+
+  .ef-spotlight-card-dark:hover {
+    transform: translate3d(0, -3px, 0);
+    box-shadow: 0 22px 42px -14px rgba(15, 23, 42, 0.36);
+  }
+
+  .ef-spotlight-card:hover::before,
+  .ef-spotlight-card:hover::after,
+  .ef-spotlight-card-dark:hover::before,
+  .ef-spotlight-card-dark:hover::after {
+    opacity: 1;
+  }
+}
+
+/* Tactile Press & Subtle Hover Light Sheen for Primary Action Buttons */
+.ef-btn-tactile {
+  position: relative;
+  overflow: hidden;
+  transition:
+    transform 200ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 180ms ease,
+    border-color 180ms ease;
+}
+
+.ef-btn-tactile::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    112deg,
+    transparent 24%,
+    rgba(255, 255, 255, 0.24) 50%,
+    transparent 76%
+  );
+  transform: translate3d(-135%, 0, 0);
+  transition: transform 620ms cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .ef-btn-tactile:not(:disabled):hover::after {
+    transform: translate3d(135%, 0, 0);
+  }
+}
+
+.ef-btn-tactile:not(:disabled):active {
+  transform: scale(0.97);
 }
 
 .ef-skeleton-shimmer {
@@ -275,8 +414,8 @@
   grid-template-rows: 0fr;
   opacity: 0;
   transition:
-    grid-template-rows 260ms cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 200ms ease;
+    grid-template-rows 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 220ms ease;
 }
 
 .ef-expand-grid[data-expanded="true"] {
@@ -289,6 +428,51 @@
   min-height: 0;
 }
 
+/* Reduced motion amplitude on compact mobile viewports for crisp responsiveness */
+@media (max-width: 639px) {
+  @keyframes ef-fade-up {
+    from {
+      opacity: 0;
+      transform: translate3d(0, 8px, 0);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @keyframes ef-page-enter {
+    from {
+      opacity: 0;
+      transform: translate3d(0, 7px, 0) scale(0.995);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @keyframes ef-form-spring {
+    from {
+      opacity: 0;
+      transform: translate3d(0, 8px, 0) scale(0.992);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  .animate-ef-fade-up {
+    animation-duration: 340ms;
+  }
+
+  .animate-ef-page-enter,
+  .animate-ef-form-spring {
+    animation-duration: 280ms;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
@@ -299,6 +483,7 @@
   .animate-ef-detail-enter,
   .animate-ef-fade-in,
   .animate-ef-modal-in,
+  .animate-ef-form-spring,
   .animate-ef-toast-in,
   .ef-top-progress-sheen,
   .ef-float-a,
@@ -313,6 +498,14 @@
   .ef-floating-card,
   .ef-floating-card::after,
   .ef-card-sheen::after,
+  .ef-spotlight-card,
+  .ef-spotlight-card::before,
+  .ef-spotlight-card::after,
+  .ef-spotlight-card-dark,
+  .ef-spotlight-card-dark::before,
+  .ef-spotlight-card-dark::after,
+  .ef-btn-tactile,
+  .ef-btn-tactile::after,
   .ef-sliding-pill,
   .ef-expand-grid {
     transition: none !important;

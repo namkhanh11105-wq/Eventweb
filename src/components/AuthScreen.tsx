@@ -361,7 +361,7 @@ export function AuthScreen({
               <button
                 type="submit"
                 disabled={submitting}
-                className="w-full h-11 inline-flex items-center justify-center gap-2 px-5 text-sm font-semibold text-white bg-slate-950 hover:bg-slate-800 disabled:opacity-60 rounded-full shadow-sm transition-all duration-200 ease-[cubic-bezier(0.34,1.32,0.64,1)] hover:-translate-y-0.5 active:scale-[0.98] cursor-pointer"
+                className="ef-btn-tactile w-full h-11 inline-flex items-center justify-center gap-2 px-5 text-sm font-semibold text-white bg-slate-950 hover:bg-slate-800 disabled:opacity-60 rounded-full shadow-sm transition-all duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 cursor-pointer"
               >
                 <span>
                   {submitting

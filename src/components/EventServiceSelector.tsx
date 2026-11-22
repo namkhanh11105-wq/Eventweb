@@ -15,6 +15,7 @@ import {
   X,
   Zap,
 } from 'lucide-react';
+import { handleSpotlightMove } from './MotionPrimitives';
 import {
   SERVICE_COMBO_PRESETS,
   SYSTEM_SERVICE_CATALOG,
@@ -247,54 +248,60 @@ export function EventServiceSelector({
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
-          {SERVICE_COMBO_PRESETS.map((preset) => {
+          {SERVICE_COMBO_PRESETS.map((preset, idx) => {
             const ComboIcon = getComboIcon(preset.id);
             const isActive = activeComboId === preset.id;
             return (
-              <button
+              <div
                 key={preset.id}
-                type="button"
-                onClick={() => applyComboPreset(preset)}
-                className={`group text-left p-3 rounded-xl border transition-all cursor-pointer flex flex-col justify-between gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 ${
-                  isActive
-                    ? 'bg-slate-950 border-slate-950 text-white shadow-sm'
-                    : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/70 text-slate-900'
-                }`}
+                style={{ animationDelay: `${idx * 60}ms` }}
+                className="animate-ef-fade-up h-full"
               >
-                <div className="flex items-start justify-between gap-2">
-                  <span
-                    className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
-                      isActive
-                        ? 'bg-white/15 text-amber-300'
-                        : 'bg-indigo-50 text-indigo-600 group-hover:bg-indigo-100'
-                    }`}
-                  >
-                    <ComboIcon className="w-3.5 h-3.5" />
-                  </span>
-                  <span
-                    className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md tabular-nums whitespace-nowrap shrink-0 ${
-                      isActive
-                        ? 'bg-white/15 text-slate-100'
-                        : 'bg-slate-100 text-slate-600'
-                    }`}
-                  >
-                    {preset.badge}
-                  </span>
-                </div>
+                <button
+                  type="button"
+                  onMouseMove={handleSpotlightMove}
+                  onClick={() => applyComboPreset(preset)}
+                  className={`group w-full h-full text-left p-3 rounded-xl border cursor-pointer flex flex-col justify-between gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 active:scale-[0.98] ${
+                    isActive
+                      ? 'ef-spotlight-card-dark bg-slate-950 border-slate-950 text-white shadow-sm'
+                      : 'ef-spotlight-card bg-white border-slate-200 hover:border-indigo-200 text-slate-900'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <span
+                      className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
+                        isActive
+                          ? 'bg-white/15 text-amber-300'
+                          : 'bg-indigo-50 text-indigo-600 group-hover:bg-indigo-100'
+                      }`}
+                    >
+                      <ComboIcon className="w-3.5 h-3.5" />
+                    </span>
+                    <span
+                      className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md tabular-nums whitespace-nowrap shrink-0 ${
+                        isActive
+                          ? 'bg-white/15 text-slate-100'
+                          : 'bg-slate-100 text-slate-600'
+                      }`}
+                    >
+                      {preset.badge}
+                    </span>
+                  </div>
 
-                <div>
-                  <div className="text-xs font-bold leading-snug">
-                    {preset.label}
+                  <div>
+                    <div className="text-xs font-bold leading-snug">
+                      {preset.label}
+                    </div>
+                    <div
+                      className={`text-[11px] mt-0.5 leading-snug line-clamp-2 ${
+                        isActive ? 'text-slate-300' : 'text-slate-500'
+                      }`}
+                    >
+                      {preset.subtitle}
+                    </div>
                   </div>
-                  <div
-                    className={`text-[11px] mt-0.5 leading-snug line-clamp-2 ${
-                      isActive ? 'text-slate-300' : 'text-slate-500'
-                    }`}
-                  >
-                    {preset.subtitle}
-                  </div>
-                </div>
-              </button>
+                </button>
+              </div>
             );
           })}
         </div>

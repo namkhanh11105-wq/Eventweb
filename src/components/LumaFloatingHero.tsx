@@ -197,7 +197,7 @@ export function LumaFloatingHero({
           <button
             type="button"
             onClick={onCreateFirstEvent}
-            className="w-full sm:w-auto inline-flex h-11 sm:h-12 items-center justify-center gap-2 rounded-full bg-slate-950 px-6 sm:px-7 text-sm font-semibold text-white shadow-[0_14px_30px_-10px_rgba(15,23,42,0.45)] transition-all duration-200 ease-[cubic-bezier(0.34,1.32,0.64,1)] hover:-translate-y-0.5 hover:bg-slate-800 active:scale-[0.97] cursor-pointer whitespace-nowrap"
+            className="ef-btn-tactile w-full sm:w-auto inline-flex h-11 sm:h-12 items-center justify-center gap-2 rounded-full bg-slate-950 px-6 sm:px-7 text-sm font-semibold text-white shadow-[0_14px_30px_-10px_rgba(15,23,42,0.45)] hover:-translate-y-0.5 hover:bg-slate-800 cursor-pointer whitespace-nowrap"
           >
             <span>Tạo sự kiện đầu tiên của bạn</span>
           </button>

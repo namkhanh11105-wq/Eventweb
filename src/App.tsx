@@ -8,6 +8,7 @@ import {
   logoutAccount,
   subscribeAuthUser,
   subscribeContactInquiries,
+  subscribeEventRegistrationCounts,
   subscribeEvents,
   subscribeFeedbacks,
   subscribePublicContact,
@@ -25,6 +26,7 @@ import type {
   ContactInquiry,
   EventItem,
   FeedbackItem,
+  PreselectedServiceBooking,
   PublicContactInfo,
   PublicPage,
   RegistrationItem,
@@ -71,6 +73,8 @@ export default function App() {
   const [events, setEvents] = useState<EventItem[]>([]);
   const [eventsLoading, setEventsLoading] = useState(true);
   const [registrations, setRegistrations] = useState<RegistrationItem[]>([]);
+  const [regCountsByEvent, setRegCountsByEvent] = useState<Record<string, number>>({});
+  const [regCountsAvailable, setRegCountsAvailable] = useState(false);
   const [users, setUsers] = useState<AppUser[]>([]);
   const [contactInquiries, setContactInquiries] = useState<ContactInquiry[]>([]);
   const [feedbacks, setFeedbacks] = useState<FeedbackItem[]>([]);
@@ -79,6 +83,15 @@ export default function App() {
   const [toast, setToast] = useState<ToastState | null>(null);
   const [isRootTransitioningOut, setIsRootTransitioningOut] = useState(false);
   const rootTransitionTimerRef = useRef<number | null>(null);
+
+  const [pendingServiceBooking, setPendingServiceBooking] =
+    useState<PreselectedServiceBooking | null>(null);
+  const pendingServiceBookingRef = useRef<PreselectedServiceBooking | null>(null);
+  const [openCreateRequestSignal, setOpenCreateRequestSignal] = useState(0);
+
+  useEffect(() => {
+    pendingServiceBookingRef.current = pendingServiceBooking;
+  }, [pendingServiceBooking]);
 
   useEffect(() => {
     return () => {
@@ -170,6 +183,15 @@ export default function App() {
     }
   }
 
+  function handleRequestServiceBooking(preset?: PreselectedServiceBooking) {
+    const normalized: PreselectedServiceBooking = preset || {
+      serviceKeys: ['av_stage', 'checkin_staff'],
+    };
+    setPendingServiceBooking(normalized);
+    pendingServiceBookingRef.current = normalized;
+    openAuthScreen('register');
+  }
+
   function switchToAdminPortal() {
     runRootTransition(() => {
       setAuthView(null);
@@ -219,11 +241,19 @@ export default function App() {
       if (user) {
         setAuthView(null);
         if (user.role === 'admin') {
+          setPendingServiceBooking(null);
+          pendingServiceBookingRef.current = null;
           setPortalView('admin');
           pushBrowserPath('/quan-tri');
         } else {
           setPortalView('public');
-          if (currentRoute.view === 'public') {
+          if (pendingServiceBookingRef.current) {
+            setPublicPage('tickets');
+            setMyEventsTab('requests');
+            setSelectedEventId(null);
+            setOpenCreateRequestSignal((prev) => prev + 1);
+            pushBrowserPath(getPathForPublicPage('tickets', undefined, 'requests'));
+          } else if (currentRoute.view === 'public') {
             setPublicPage(currentRoute.page);
             if (currentRoute.page === 'tickets' && currentRoute.tab) {
               setMyEventsTab(currentRoute.tab);
@@ -270,6 +300,10 @@ export default function App() {
     }, handlePermissionError);
 
     const unsubFeedbacks = subscribeFeedbacks(setFeedbacks);
+    const unsubRegCounts = subscribeEventRegistrationCounts((counts, available) => {
+      setRegCountsByEvent(counts);
+      setRegCountsAvailable(available);
+    });
 
     let unsubRegs: (() => void) | undefined;
     let unsubUsers: (() => void) | undefined;
@@ -297,6 +331,7 @@ export default function App() {
     return () => {
       unsubEvents();
       unsubFeedbacks();
+      unsubRegCounts();
       unsubRegs?.();
       unsubUsers?.();
       unsubInquiries?.();
@@ -312,6 +347,8 @@ export default function App() {
         setPublicPage('discover');
         setMyEventsTab('registered');
         setSelectedEventId(null);
+        setPendingServiceBooking(null);
+        pendingServiceBookingRef.current = null;
         setPermissionWarning(null);
         pushBrowserPath('/');
       });
@@ -374,15 +411,24 @@ export default function App() {
           currentUser={currentUser}
           activePage={publicPage}
           activeMyEventsTab={myEventsTab}
+          openCreateRequestSignal={openCreateRequestSignal}
           selectedEventId={selectedEventId}
           events={events}
           eventsLoading={eventsLoading}
           registrations={registrations}
+          regCountsByEvent={regCountsByEvent}
+          regCountsAvailable={regCountsAvailable}
+          pendingServiceBooking={pendingServiceBooking}
           feedbacks={feedbacks}
           publicContact={publicContact}
           permissionWarning={permissionWarning}
           onNavigatePage={navigatePublicPage}
           onOpenEventDetail={navigateToEventDetail}
+          onRequestServiceBooking={handleRequestServiceBooking}
+          onConsumePendingBooking={() => {
+            setPendingServiceBooking(null);
+            pendingServiceBookingRef.current = null;
+          }}
           onSwitchToAdmin={
             currentUser?.role === 'admin' ? switchToAdminPortal : undefined
           }

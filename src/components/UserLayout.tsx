@@ -11,12 +11,15 @@ import {
   Check,
   CheckCircle2,
   ClipboardList,
+  Copy,
   Image as ImageIcon,
   Layers,
+  Loader2,
   LogIn,
   LogOut,
   MapPin,
   Menu,
+  MessageSquare,
   Plus,
   Search,
   Send,
@@ -68,6 +71,7 @@ import type {
   EventServiceRequest,
   EventStatus,
   FeedbackItem,
+  PreselectedServiceBooking,
   PublicContactInfo,
   PublicPage,
   RegistrationItem,
@@ -89,6 +93,9 @@ interface UserLayoutProps {
   events: EventItem[];
   eventsLoading: boolean;
   registrations: RegistrationItem[];
+  regCountsByEvent?: Record<string, number>;
+  regCountsAvailable?: boolean;
+  pendingServiceBooking?: PreselectedServiceBooking | null;
   feedbacks: FeedbackItem[];
   publicContact: PublicContactInfo;
   permissionWarning?: string | null;
@@ -97,6 +104,8 @@ interface UserLayoutProps {
     tab?: 'registered' | 'requests'
   ) => void;
   onOpenEventDetail: (eventId: string) => void;
+  onRequestServiceBooking?: (preset?: PreselectedServiceBooking) => void;
+  onConsumePendingBooking?: () => void;
   onSwitchToAdmin?: () => void;
   onOpenAuth: (mode?: 'login' | 'register') => void;
   onLogout: () => void;
@@ -112,11 +121,16 @@ export function UserLayout({
   events,
   eventsLoading,
   registrations,
+  regCountsByEvent,
+  regCountsAvailable = false,
+  pendingServiceBooking,
   feedbacks,
   publicContact,
   permissionWarning,
   onNavigatePage,
   onOpenEventDetail,
+  onRequestServiceBooking,
+  onConsumePendingBooking,
   onSwitchToAdmin,
   onOpenAuth,
   onLogout,
@@ -131,6 +145,8 @@ export function UserLayout({
   const transitionTimerRef = useRef<number | null>(null);
 
   const [savedEventIds, setSavedEventIds] = useState<string[]>([]);
+  const [cancellingRegId, setCancellingRegId] = useState<string | null>(null);
+  const [copiedRegId, setCopiedRegId] = useState<string | null>(null);
   const [feedbackReg, setFeedbackReg] = useState<RegistrationItem | null>(null);
   const lastFeedbackRegRef = useRef<RegistrationItem | null>(null);
   if (feedbackReg) {
@@ -144,6 +160,7 @@ export function UserLayout({
 
   const [myEventsTab, setMyEventsTab] = useState<'registered' | 'requests'>(activeMyEventsTab);
   const [showCreateRequestForm, setShowCreateRequestForm] = useState(false);
+  const [bookingPackageLabel, setBookingPackageLabel] = useState<string | null>(null);
 
   // Create event organization request state (Tab 2 of Sự kiện của tôi)
   const [reqTitle, setReqTitle] = useState('');
@@ -187,6 +204,31 @@ export function UserLayout({
     return initial;
   }
 
+  function applyServiceBookingPreset(preset?: PreselectedServiceBooking | null) {
+    if (!preset) {
+      setBookingPackageLabel(null);
+      return;
+    }
+    if (preset.serviceKeys && preset.serviceKeys.length > 0) {
+      const next: Record<string, ServiceSelectionItem> = {};
+      for (const s of SYSTEM_SERVICE_CATALOG) {
+        next[s.key] = {
+          enabled: preset.serviceKeys.includes(s.key),
+          quantityOrScope: '',
+          clientNote: '',
+        };
+      }
+      setReqSelectedServices(next);
+    }
+    if (
+      preset.suggestedCategory &&
+      (EVENT_CATEGORIES as readonly string[]).includes(preset.suggestedCategory)
+    ) {
+      setReqCategory(preset.suggestedCategory);
+    }
+    setBookingPackageLabel(preset.packageTitle || null);
+  }
+
   useEffect(() => {
     setMyEventsTab(activeMyEventsTab);
   }, [activeMyEventsTab]);
@@ -195,8 +237,15 @@ export function UserLayout({
     if (openCreateRequestSignal > 0) {
       setMyEventsTab('requests');
       setShowCreateRequestForm(true);
+      if (pendingServiceBooking) {
+        applyServiceBookingPreset(pendingServiceBooking);
+        onConsumePendingBooking?.();
+      }
+      window.setTimeout(() => {
+        reqFormContainerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 180);
     }
-  }, [openCreateRequestSignal]);
+  }, [openCreateRequestSignal, pendingServiceBooking, onConsumePendingBooking]);
 
   useEffect(() => {
     if (currentUser) {
@@ -312,10 +361,21 @@ export function UserLayout({
     return map;
   }, [myRegistrations]);
 
+  function getLiveRegisteredCount(ev: EventItem): number {
+    if (regCountsAvailable && regCountsByEvent) {
+      return regCountsByEvent[ev.id] ?? 0;
+    }
+    return ev.registeredCount || 0;
+  }
+
   const heroMetrics = useMemo(() => {
     const totalEvents = publicEvents.length;
     const totalRegistrations = publicEvents.reduce(
-      (acc, ev) => acc + (ev.registeredCount || 0),
+      (acc, ev) =>
+        acc +
+        (regCountsAvailable && regCountsByEvent
+          ? regCountsByEvent[ev.id] ?? 0
+          : ev.registeredCount || 0),
       0
     );
     const activeEvents = publicEvents.filter(
@@ -324,10 +384,13 @@ export function UserLayout({
     const avgFillRate =
       activeEvents.length > 0
         ? Math.round(
-            activeEvents.reduce(
-              (acc, ev) => acc + Math.min(100, (ev.registeredCount / ev.maxSlots) * 100),
-              0
-            ) / activeEvents.length
+            activeEvents.reduce((acc, ev) => {
+              const count =
+                regCountsAvailable && regCountsByEvent
+                  ? regCountsByEvent[ev.id] ?? 0
+                  : ev.registeredCount || 0;
+              return acc + Math.min(100, (count / ev.maxSlots) * 100);
+            }, 0) / activeEvents.length
           )
         : 0;
 
@@ -336,7 +399,7 @@ export function UserLayout({
       totalRegistrations,
       avgFillRate,
     };
-  }, [publicEvents]);
+  }, [publicEvents, regCountsAvailable, regCountsByEvent]);
 
   const featuredEvent = useMemo(() => {
     if (
@@ -398,16 +461,30 @@ export function UserLayout({
     scrollToOpenEvents();
   }
 
-  function handleBookOrganization() {
+  function handleBookOrganization(preset?: PreselectedServiceBooking) {
+    const validPreset =
+      preset && Array.isArray(preset.serviceKeys) ? preset : undefined;
     if (!currentUser) {
-      onOpenAuth('register');
+      if (onRequestServiceBooking) {
+        onRequestServiceBooking(validPreset);
+      } else {
+        onOpenAuth('register');
+      }
       return;
     }
     if (currentUser.role === 'admin' && onSwitchToAdmin) {
       onSwitchToAdmin();
       return;
     }
+    if (validPreset) {
+      applyServiceBookingPreset(validPreset);
+    } else {
+      setBookingPackageLabel(null);
+    }
     smoothNavigatePage('tickets', 'requests', true);
+    window.setTimeout(() => {
+      reqFormContainerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 220);
   }
 
   function failRequestValidation(message: string) {
@@ -418,6 +495,7 @@ export function UserLayout({
 
   async function handleSubmitEventRequest(e: FormEvent) {
     e.preventDefault();
+    if (reqSubmitting) return;
     setReqFormError(null);
 
     if (!currentUser) {
@@ -515,6 +593,7 @@ export function UserLayout({
       setReqLocation('');
       setReqDescription('');
       setReqCustomServiceName('');
+      setBookingPackageLabel(null);
       setReqSelectedServices(createDefaultSelectedServices());
       setShowCreateRequestForm(false);
       setMyEventsTab('requests');
@@ -533,17 +612,34 @@ export function UserLayout({
   }
 
   async function handleCancelTicket(reg: RegistrationItem) {
+    if (cancellingRegId) return;
+    setCancellingRegId(reg.id);
     try {
       await updateRegistrationStatus(reg, 'cancelled');
       onNotify(`Đã hủy đăng ký ${reg.ticketCode} và hoàn trả chỗ trống lên Firestore.`);
     } catch (err) {
       onNotify(err instanceof Error ? err.message : 'Không thể hủy đăng ký.', 'error');
+    } finally {
+      setCancellingRegId(null);
+    }
+  }
+
+  async function handleCopyRegId(regId: string) {
+    try {
+      await navigator.clipboard.writeText(regId);
+      setCopiedRegId(regId);
+      onNotify(`Đã sao chép mã đăng ký ${regId}.`);
+      window.setTimeout(() => {
+        setCopiedRegId((prev) => (prev === regId ? null : prev));
+      }, 2000);
+    } catch {
+      onNotify('Không thể sao chép tự động, vui lòng bôi đen mã.', 'error');
     }
   }
 
   async function handleSubmitTicketFeedback(e: FormEvent) {
     e.preventDefault();
-    if (!currentUser || !feedbackReg || !ratingComment.trim()) return;
+    if (sendingFeedback || !currentUser || !feedbackReg || !ratingComment.trim()) return;
     setSendingFeedback(true);
     try {
       await submitFeedback({
@@ -716,7 +812,7 @@ export function UserLayout({
                 <button
                   type="button"
                   onClick={() => onOpenAuth('register')}
-                  className="inline-flex items-center gap-1.5 h-8 px-4 text-xs font-semibold text-white bg-slate-950 hover:bg-slate-800 rounded-full transition-all duration-150 active:scale-[0.98] whitespace-nowrap shrink-0 cursor-pointer"
+                  className="ef-btn-tactile inline-flex items-center gap-1.5 h-8 px-4 text-xs font-semibold text-white bg-slate-950 hover:bg-slate-800 rounded-full whitespace-nowrap shrink-0 cursor-pointer"
                 >
                   <LogIn className="w-3.5 h-3.5" />
                   <span>Đăng ký</span>
@@ -739,20 +835,20 @@ export function UserLayout({
 
       {/* Slide-out Mobile Navigation Drawer */}
       <div
-        className={`fixed inset-0 z-50 md:hidden transition-opacity duration-250 ${
+        className={`fixed inset-0 z-50 md:hidden transition-opacity duration-[320ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${
           mobileMenuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
         }`}
         aria-hidden={!mobileMenuOpen}
       >
         <div
-          className="absolute inset-0 bg-slate-900/45 backdrop-blur-[2px]"
+          className="absolute inset-0 bg-slate-900/45 backdrop-blur-sm"
           onClick={() => setMobileMenuOpen(false)}
         />
         <aside
           role="dialog"
           aria-modal="true"
           aria-label="Menu điều hướng di động"
-          className={`absolute inset-y-0 right-0 w-[84vw] max-w-xs bg-white border-l border-slate-200 shadow-2xl flex flex-col justify-between transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+          className={`absolute inset-y-0 right-0 w-[84vw] max-w-xs bg-white border-l border-slate-200 shadow-2xl flex flex-col justify-between transition-transform duration-[320ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${
             mobileMenuOpen ? 'translate-x-0' : 'translate-x-full'
           }`}
         >
@@ -985,6 +1081,7 @@ export function UserLayout({
               ) : activeDetailEvent ? (
                 <EventDetailPage
                   event={activeDetailEvent}
+                  liveRegisteredCount={getLiveRegisteredCount(activeDetailEvent)}
                   currentUser={currentUser}
                   existingRegistration={activeRegistrationMap.get(activeDetailEvent.id)}
                   feedbacks={feedbacks}
@@ -1020,7 +1117,7 @@ export function UserLayout({
                 {/* Luma-Style Infinity Floating Hero */}
                 <LumaFloatingHero
                   publicEvents={publicEvents}
-                  onCreateFirstEvent={handleBookOrganization}
+                  onCreateFirstEvent={() => handleBookOrganization()}
                   onExploreEvents={scrollToOpenEvents}
                   onSelectCard={handleHeroCardSelect}
                 />
@@ -1124,7 +1221,20 @@ export function UserLayout({
                 </section>
 
                 {/* Featured Event Spotlight */}
-                {!eventsLoading && featuredEvent && (
+                {!eventsLoading && featuredEvent && (() => {
+                  const featuredRegistered = getLiveRegisteredCount(featuredEvent);
+                  const featuredRemaining = Math.max(0, featuredEvent.maxSlots - featuredRegistered);
+                  const featuredIsFull =
+                    featuredRemaining === 0 &&
+                    (featuredEvent.status === 'ongoing' || featuredEvent.status === 'upcoming');
+                  const featuredFillPercent = Math.min(
+                    100,
+                    Math.round((featuredRegistered / Math.max(1, featuredEvent.maxSlots)) * 100)
+                  );
+                  const featuredMeta =
+                    EVENT_STATUS_META[featuredEvent.status] || EVENT_STATUS_META.upcoming;
+
+                  return (
                   <RevealBlock>
                     <section className="space-y-3">
                       <h2 className="text-base font-bold text-slate-900">
@@ -1143,17 +1253,18 @@ export function UserLayout({
                         </div>
                         <div className="lg:col-span-6 p-6 sm:p-8 flex flex-col justify-between gap-5">
                           <div>
-                            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                            <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
                               <span className="font-semibold text-rose-600">
                                 {featuredEvent.category}
                               </span>
-                              <span aria-hidden="true">·</span>
                               <span
-                                className={`font-semibold ${
-                                  EVENT_STATUS_META[featuredEvent.status].textClass
+                                className={`inline-flex items-center px-2.5 py-0.5 rounded-full border font-semibold ${
+                                  featuredIsFull
+                                    ? 'bg-rose-50 border-rose-200 text-rose-700'
+                                    : `${featuredMeta.bgClass} ${featuredMeta.textClass}`
                                 }`}
                               >
-                                {EVENT_STATUS_META[featuredEvent.status].label}
+                                {featuredIsFull ? 'Đã đủ chỗ' : featuredMeta.label}
                               </span>
                             </div>
 
@@ -1177,29 +1288,55 @@ export function UserLayout({
                             </div>
                           </div>
 
-                          <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
-                            <div className="text-xs text-slate-500 tabular-nums">
-                              Đã giữ chỗ:{' '}
-                              <strong className="text-slate-900">
-                                {featuredEvent.registeredCount}/{featuredEvent.maxSlots}
-                              </strong>
+                          <div className="pt-4 border-t border-slate-100 space-y-3">
+                            <div className="space-y-1.5">
+                              <div className="flex items-center justify-between text-xs tabular-nums">
+                                <span className="text-slate-500">
+                                  Đã đăng ký:{' '}
+                                  <strong className="text-slate-900">
+                                    {featuredRegistered}/{featuredEvent.maxSlots}
+                                  </strong>
+                                </span>
+                                <span
+                                  className={`font-semibold ${
+                                    featuredIsFull ? 'text-rose-600' : 'text-emerald-700'
+                                  }`}
+                                >
+                                  {featuredIsFull
+                                    ? 'Hết chỗ trống'
+                                    : `Còn ${featuredRemaining} chỗ`}
+                                </span>
+                              </div>
+                              <AnimatedProgressBar
+                                percent={featuredFillPercent}
+                                barClassName={
+                                  featuredIsFull
+                                    ? 'bg-rose-500'
+                                    : featuredFillPercent >= 85
+                                    ? 'bg-amber-500'
+                                    : 'bg-gradient-to-r from-rose-500 to-orange-500'
+                                }
+                              />
                             </div>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                smoothOpenEventDetail(featuredEvent.id);
-                              }}
-                              className="w-full sm:w-auto h-11 sm:h-10 px-5 text-sm font-semibold text-white bg-slate-950 hover:bg-slate-800 rounded-full transition-all duration-150 active:scale-[0.98] cursor-pointer whitespace-nowrap"
-                            >
-                              Xem chi tiết &amp; Đăng ký
-                            </button>
+                            <div className="flex justify-end">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  smoothOpenEventDetail(featuredEvent.id);
+                                }}
+                                className="ef-btn-tactile w-full sm:w-auto h-11 sm:h-10 px-5 text-sm font-semibold text-white bg-slate-950 hover:bg-slate-800 rounded-full cursor-pointer whitespace-nowrap"
+                              >
+                                Xem chi tiết &amp; Đăng ký
+                              </button>
+                            </div>
                           </div>
                         </div>
                       </article>
                     </section>
                   </RevealBlock>
-                )}
+                  );
+                })()}
 
                 {/* Public Open Events Grid */}
                 <section id="su-kien-dang-mo" className="space-y-6 scroll-mt-20">
@@ -1323,118 +1460,153 @@ export function UserLayout({
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      {filteredEvents.map((ev) => {
+                      {filteredEvents.map((ev, idx) => {
                         const statusMeta =
                           EVENT_STATUS_META[ev.status] || EVENT_STATUS_META.upcoming;
-                        const remaining = Math.max(0, ev.maxSlots - ev.registeredCount);
+                        const actualRegistered = getLiveRegisteredCount(ev);
+                        const remaining = Math.max(0, ev.maxSlots - actualRegistered);
+                        const isFull =
+                          remaining === 0 &&
+                          (ev.status === 'ongoing' || ev.status === 'upcoming');
                         const fillPercent = Math.min(
                           100,
-                          Math.round((ev.registeredCount / Math.max(1, ev.maxSlots)) * 100)
+                          Math.round((actualRegistered / Math.max(1, ev.maxSlots)) * 100)
                         );
                         const myReg = activeRegistrationMap.get(ev.id);
                         const isSaved = savedEventIds.includes(ev.id);
 
                         return (
-                          <article
+                          <div
                             key={ev.id}
-                            onClick={() => smoothOpenEventDetail(ev.id)}
-                            className="group ef-card-sheen bg-white border border-slate-200/80 rounded-2xl overflow-hidden flex flex-col justify-between transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-1.5 hover:border-orange-200 hover:shadow-[0_18px_36px_-14px_rgba(15,23,42,0.16)] active:scale-[0.985] cursor-pointer"
+                            style={{ animationDelay: `${Math.min(idx, 11) * 60}ms` }}
+                            className="animate-ef-fade-up h-full"
                           >
-                            <div>
-                              <div className="relative aspect-video w-full overflow-hidden bg-slate-100">
-                                <EventBanner
-                                  src={ev.bannerUrl}
-                                  alt={ev.title}
-                                  className="w-full h-full transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:scale-[1.05]"
-                                />
-                                <div className="absolute top-3 right-3 flex items-center gap-1.5">
-                                  {myReg && (
-                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold bg-emerald-600 text-white rounded-full shadow-xs">
-                                      <CheckCircle2 className="w-3 h-3" />
-                                      Đã đăng ký
+                            <article
+                              onClick={() => smoothOpenEventDetail(ev.id)}
+                              className="group h-full ef-card-sheen bg-white border border-slate-200/80 rounded-2xl overflow-hidden flex flex-col justify-between transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-1.5 hover:border-orange-200 hover:shadow-[0_18px_36px_-14px_rgba(15,23,42,0.16)] active:scale-[0.985] cursor-pointer"
+                            >
+                              <div>
+                                <div className="relative aspect-video w-full overflow-hidden bg-slate-100">
+                                  <EventBanner
+                                    src={ev.bannerUrl}
+                                    alt={ev.title}
+                                    className="w-full h-full transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:scale-[1.05]"
+                                  />
+                                  <div className="absolute top-3 left-3">
+                                    <span
+                                      className={`inline-flex items-center px-2.5 py-1 text-[11px] font-semibold border rounded-full shadow-xs backdrop-blur-xs ${
+                                        isFull
+                                          ? 'bg-rose-50/95 border-rose-200 text-rose-700'
+                                          : `${statusMeta.bgClass} ${statusMeta.textClass}`
+                                      }`}
+                                    >
+                                      {isFull ? 'Đã đủ chỗ' : statusMeta.label}
                                     </span>
-                                  )}
-                                  <button
-                                    type="button"
-                                    aria-label="Lưu sự kiện"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      toggleSaveEvent(ev.id);
-                                    }}
-                                    className={`p-1.5 rounded-full shadow-xs cursor-pointer transition-all duration-200 hover:scale-110 ${
-                                      isSaved
-                                        ? 'bg-rose-500 text-white'
-                                        : 'bg-white/95 text-slate-600 hover:text-rose-600'
-                                    }`}
-                                  >
-                                    <Bookmark
-                                      className={`w-3.5 h-3.5 ${isSaved ? 'fill-current' : ''}`}
-                                    />
-                                  </button>
+                                  </div>
+                                  <div className="absolute top-3 right-3 flex items-center gap-1.5">
+                                    {myReg && (
+                                      <span className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold bg-emerald-600 text-white rounded-full shadow-xs">
+                                        <CheckCircle2 className="w-3 h-3" />
+                                        Đã đăng ký
+                                      </span>
+                                    )}
+                                    <button
+                                      type="button"
+                                      aria-label="Lưu sự kiện"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        toggleSaveEvent(ev.id);
+                                      }}
+                                      className={`p-1.5 rounded-full shadow-xs cursor-pointer transition-all duration-200 hover:scale-110 ${
+                                        isSaved
+                                          ? 'bg-rose-500 text-white'
+                                          : 'bg-white/95 text-slate-600 hover:text-rose-600'
+                                      }`}
+                                    >
+                                      <Bookmark
+                                        className={`w-3.5 h-3.5 ${isSaved ? 'fill-current' : ''}`}
+                                      />
+                                    </button>
+                                  </div>
                                 </div>
-                              </div>
 
-                              <div className="p-5">
-                                <div className="flex items-center justify-between gap-2 text-xs">
-                                  <div className="flex items-center gap-1.5 tabular-nums text-slate-500 truncate">
+                                <div className="p-5">
+                                  <div className="flex items-center justify-between gap-2 text-xs">
                                     <span className="font-semibold text-rose-600 truncate">
                                       {ev.category}
                                     </span>
-                                    <span aria-hidden="true">·</span>
-                                    <span className={`font-medium ${statusMeta.textClass}`}>
-                                      {statusMeta.label}
+                                    <span className="text-slate-500 tabular-nums shrink-0">
+                                      {formatShortDateVN(ev.startTime)}
                                     </span>
-                                    <span aria-hidden="true">·</span>
-                                    <span>{formatShortDateVN(ev.startTime)}</span>
                                   </div>
-                                  <span className="font-semibold text-slate-700 tabular-nums shrink-0">
-                                    Còn {remaining}
+
+                                  <h3 className="mt-2 text-base font-bold text-slate-900 leading-snug line-clamp-2 group-hover:text-rose-600 transition-colors">
+                                    {ev.title}
+                                  </h3>
+
+                                  <div className="mt-3 space-y-1.5 text-xs text-slate-500">
+                                    <div className="flex items-center gap-2 tabular-nums">
+                                      <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                      <span className="truncate">
+                                        {formatDateTimeVN(ev.startTime)}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                      <span className="truncate">{ev.location}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="px-5 pb-5 pt-1">
+                                <div className="mb-3.5 space-y-1.5">
+                                  <div className="flex items-center justify-between text-xs tabular-nums">
+                                    <span className="inline-flex items-center gap-1.5 text-slate-600">
+                                      <Users className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                      <span>
+                                        {actualRegistered}/{ev.maxSlots} đã đăng ký
+                                      </span>
+                                    </span>
+                                    <span
+                                      className={`font-semibold ${
+                                        isFull ? 'text-rose-600' : 'text-slate-700'
+                                      }`}
+                                    >
+                                      {isFull ? 'Hết chỗ' : `Còn ${remaining} chỗ`}
+                                    </span>
+                                  </div>
+                                  <AnimatedProgressBar
+                                    percent={fillPercent}
+                                    barClassName={
+                                      isFull
+                                        ? 'bg-rose-500'
+                                        : fillPercent >= 85
+                                        ? 'bg-amber-500'
+                                        : 'bg-gradient-to-r from-rose-500 to-orange-500'
+                                    }
+                                  />
+                                </div>
+
+                                <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                                  <span className="text-xs text-slate-500 truncate inline-flex items-center gap-1">
+                                    {ev.organizer}
+                                    {ev.organizerVerified !== false && (
+                                      <BadgeCheck className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                                    )}
+                                  </span>
+                                  <span className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-full bg-slate-950 text-white group-hover:bg-rose-600 whitespace-nowrap shrink-0 transition-colors duration-200">
+                                    {myReg
+                                      ? 'Xem vé của tôi'
+                                      : isFull || ev.status === 'paused' || ev.status === 'completed' || ev.status === 'cancelled'
+                                      ? 'Xem chi tiết'
+                                      : 'Đăng ký ngay'}
+                                    <ArrowRight className="w-3 h-3" />
                                   </span>
                                 </div>
-
-                                <h3 className="mt-2.5 text-base font-bold text-slate-900 leading-snug line-clamp-2 group-hover:text-rose-600 transition-colors">
-                                  {ev.title}
-                                </h3>
-
-                                <div className="mt-3 space-y-1.5 text-xs text-slate-500">
-                                  <div className="flex items-center gap-2">
-                                    <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                                    <span className="truncate">{ev.location}</span>
-                                  </div>
-                                  <div className="flex items-center gap-2 tabular-nums">
-                                    <Users className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                                    <span>
-                                      {ev.registeredCount}/{ev.maxSlots} người đã đăng ký
-                                    </span>
-                                  </div>
-                                </div>
                               </div>
-                            </div>
-
-                            <div className="px-5 pb-5 pt-1">
-                              <div className="mb-3.5">
-                                <AnimatedProgressBar
-                                  percent={fillPercent}
-                                  barClassName={
-                                    fillPercent >= 90
-                                      ? 'bg-amber-500'
-                                      : 'bg-gradient-to-r from-rose-500 to-orange-500'
-                                  }
-                                />
-                              </div>
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="text-xs text-slate-500 truncate inline-flex items-center gap-1">
-                                  {ev.organizer}
-                                  {ev.organizerVerified !== false && (
-                                    <BadgeCheck className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                                  )}
-                                </span>
-                                <span className="text-xs font-semibold text-slate-900 group-hover:text-rose-600 whitespace-nowrap shrink-0 inline-flex items-center gap-1 transition-all duration-200 group-hover:translate-x-0.5">
-                                  {myReg ? 'Xem chi tiết →' : 'Đăng ký ngay →'}
-                                </span>
-                              </div>
-                            </div>
-                          </article>
+                            </article>
+                          </div>
                         );
                       })}
                     </div>
@@ -1457,7 +1629,7 @@ export function UserLayout({
                     <button
                       type="button"
                       onClick={() => smoothNavigatePage('services')}
-                      className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 h-10 sm:h-9 px-4 text-xs font-semibold text-white bg-slate-950 hover:bg-slate-800 rounded-full transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                      className="ef-btn-tactile w-full sm:w-auto inline-flex items-center justify-center gap-1.5 h-10 sm:h-9 px-4 text-xs font-semibold text-white bg-slate-950 hover:bg-slate-800 rounded-full whitespace-nowrap shrink-0 cursor-pointer"
                     >
                       <span>Khám phá gói dịch vụ tổ chức</span>
                       <ArrowRight className="w-3.5 h-3.5" />
@@ -1487,7 +1659,7 @@ export function UserLayout({
                         setShowCreateRequestForm(true);
                         onNavigatePage('tickets', 'requests');
                       }}
-                      className="w-full sm:w-auto min-h-[44px] inline-flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-slate-950 hover:bg-slate-800 rounded-full shadow-xs transition-all duration-150 active:scale-[0.98] cursor-pointer whitespace-nowrap shrink-0"
+                      className="ef-btn-tactile w-full sm:w-auto min-h-[44px] inline-flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-slate-950 hover:bg-slate-800 rounded-full shadow-xs cursor-pointer whitespace-nowrap shrink-0"
                     >
                       <Plus className="w-4 h-4" />
                       <span>Tạo yêu cầu tổ chức sự kiện</span>
@@ -1592,7 +1764,7 @@ export function UserLayout({
                           </div>
                         ) : (
                           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            {myRegistrations.map((reg) => {
+                            {myRegistrations.map((reg, idx) => {
                               const statusMeta = REGISTRATION_STATUS_META[reg.status];
                               const linkedEvent = events.find((e) => e.id === reg.eventId);
                               const canCancel =
@@ -1609,10 +1781,14 @@ export function UserLayout({
                               });
 
                               return (
-                                <article
+                                <div
                                   key={reg.id}
-                                  className="bg-white border border-slate-200 rounded-2xl overflow-hidden flex flex-col sm:flex-row transition-all duration-200 hover:-translate-y-0.5 hover:border-orange-200 hover:shadow-md"
+                                  style={{ animationDelay: `${Math.min(idx, 8) * 60}ms` }}
+                                  className="animate-ef-fade-up h-full"
                                 >
+                                  <article
+                                    className="h-full bg-white border border-slate-200 rounded-2xl overflow-hidden flex flex-col sm:flex-row transition-all duration-200 hover:-translate-y-0.5 hover:border-orange-200 hover:shadow-md"
+                                  >
                                   <div className="flex-1 p-5 sm:p-6 flex flex-col justify-between gap-4">
                                     <div>
                                       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1650,18 +1826,46 @@ export function UserLayout({
                                           </div>
                                         )}
                                       </div>
+
+                                      <div className="mt-3 p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-wrap items-center justify-between gap-2 text-xs">
+                                        <div className="min-w-0">
+                                          <span className="text-[11px] text-slate-500 block">
+                                            Mã đăng ký (Firestore ID)
+                                          </span>
+                                          <span className="font-mono text-[11px] font-semibold text-slate-800 break-all">
+                                            {reg.id}
+                                          </span>
+                                        </div>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleCopyRegId(reg.id)}
+                                          className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-slate-700 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg cursor-pointer shrink-0"
+                                        >
+                                          {copiedRegId === reg.id ? (
+                                            <>
+                                              <Check className="w-3 h-3 text-emerald-600" />
+                                              <span>Đã chép</span>
+                                            </>
+                                          ) : (
+                                            <>
+                                              <Copy className="w-3 h-3" />
+                                              <span>Sao chép</span>
+                                            </>
+                                          )}
+                                        </button>
+                                      </div>
                                     </div>
 
                                     <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2.5">
                                       <span className="font-mono text-xs font-semibold text-slate-700">
-                                        Mã: {reg.ticketCode}
+                                        Vé QR: {reg.ticketCode}
                                       </span>
                                       <div className="flex flex-wrap items-center gap-2">
                                         {linkedEvent && (
                                           <button
                                             type="button"
                                             onClick={() => smoothOpenEventDetail(linkedEvent.id)}
-                                            className="min-h-[36px] px-3.5 py-1.5 text-xs font-semibold text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-full cursor-pointer transition-colors"
+                                            className="min-h-[38px] px-3.5 py-1.5 text-xs font-semibold text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-full cursor-pointer transition-colors"
                                           >
                                             Chi tiết
                                           </button>
@@ -1674,7 +1878,7 @@ export function UserLayout({
                                               setRatingValue(5);
                                               setRatingComment('');
                                             }}
-                                            className="min-h-[36px] inline-flex items-center gap-1 px-3.5 py-1.5 text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-full cursor-pointer transition-colors"
+                                            className="min-h-[38px] inline-flex items-center gap-1 px-3.5 py-1.5 text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-full cursor-pointer transition-colors"
                                           >
                                             <Star className="w-3.5 h-3.5" />
                                             <span>Đánh giá</span>
@@ -1683,10 +1887,18 @@ export function UserLayout({
                                         {canCancel && (
                                           <button
                                             type="button"
+                                            disabled={cancellingRegId === reg.id}
                                             onClick={() => handleCancelTicket(reg)}
-                                            className="min-h-[36px] px-3.5 py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-full cursor-pointer transition-colors"
+                                            className="min-h-[38px] inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-full cursor-pointer transition-colors disabled:opacity-60"
                                           >
-                                            Hủy tham gia
+                                            {cancellingRegId === reg.id && (
+                                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                            )}
+                                            <span>
+                                              {cancellingRegId === reg.id
+                                                ? 'Đang hủy...'
+                                                : 'Hủy tham gia'}
+                                            </span>
                                           </button>
                                         )}
                                       </div>
@@ -1710,6 +1922,7 @@ export function UserLayout({
                                     </span>
                                   </div>
                                 </article>
+                                </div>
                               );
                             })}
                           </div>
@@ -1723,7 +1936,7 @@ export function UserLayout({
                         {showCreateRequestForm ? (
                           <div
                             ref={reqFormContainerRef}
-                            className="max-w-4xl mx-auto bg-white border border-slate-200 rounded-2xl p-4 sm:p-8 space-y-6 animate-ef-fade-in"
+                            className="max-w-4xl mx-auto bg-white border border-slate-200 rounded-2xl p-4 sm:p-8 space-y-6 animate-ef-form-spring"
                           >
                             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-4">
                               <div>
@@ -1747,6 +1960,17 @@ export function UserLayout({
                                 </p>
                               </div>
                             </div>
+
+                            {bookingPackageLabel && (
+                              <div className="flex items-start gap-2.5 p-3.5 rounded-xl bg-indigo-50/80 border border-indigo-200 text-indigo-900 text-xs sm:text-sm animate-ef-fade-in">
+                                <Layers className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
+                                <div className="flex-1">
+                                  Đã chọn sẵn cấu hình từ trang Dịch vụ:{' '}
+                                  <strong className="font-semibold">{bookingPackageLabel}</strong>.
+                                  Bạn có thể tùy chỉnh thêm hạng mục bên dưới trước khi gửi.
+                                </div>
+                              </div>
+                            )}
 
                             {reqFormError && (
                               <div
@@ -1955,9 +2179,13 @@ export function UserLayout({
                                 <button
                                   type="submit"
                                   disabled={reqSubmitting}
-                                  className="w-full sm:w-auto min-h-[44px] inline-flex items-center justify-center gap-2 px-6 py-2.5 text-sm font-semibold text-white bg-slate-950 hover:bg-slate-800 rounded-full cursor-pointer disabled:opacity-60"
+                                  className="ef-btn-tactile w-full sm:w-auto min-h-[44px] inline-flex items-center justify-center gap-2 px-6 py-2.5 text-sm font-semibold text-white bg-slate-950 hover:bg-slate-800 rounded-full cursor-pointer disabled:opacity-60"
                                 >
-                                  <Send className="w-4 h-4" />
+                                  {reqSubmitting ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                  ) : (
+                                    <Send className="w-4 h-4" />
+                                  )}
                                   <span>
                                     {reqSubmitting
                                       ? 'Đang gửi lên Firestore...'
@@ -2018,7 +2246,7 @@ export function UserLayout({
                                 <button
                                   type="button"
                                   onClick={() => setShowCreateRequestForm(true)}
-                                  className="mt-4 inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-slate-950 hover:bg-slate-800 rounded-full cursor-pointer"
+                                  className="ef-btn-tactile mt-4 inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-slate-950 hover:bg-slate-800 rounded-full cursor-pointer"
                                 >
                                   <Plus className="w-4 h-4" />
                                   <span>+ Tạo yêu cầu tổ chức sự kiện</span>
@@ -2032,6 +2260,26 @@ export function UserLayout({
                                     PLANNING_STATUS_META.pending_review;
                                   const statusMeta =
                                     EVENT_STATUS_META[ev.status] || EVENT_STATUS_META.upcoming;
+                                  const isRejected = ev.planningStatus === 'rejected';
+                                  const currentStepIndex =
+                                    ev.planningStatus === 'confirmed'
+                                      ? 2
+                                      : ev.planningStatus === 'planning'
+                                      ? 1
+                                      : ev.planningStatus === 'rejected'
+                                      ? 2
+                                      : 0;
+                                  const stepItems = [
+                                    { key: 'pending_review', label: 'Chờ duyệt' },
+                                    { key: 'planning', label: 'Đang xử lý / Triển khai' },
+                                    {
+                                      key: isRejected ? 'rejected' : 'confirmed',
+                                      label: isRejected ? 'Từ chối' : 'Đã duyệt',
+                                    },
+                                  ];
+                                  const serviceFeedbacks = ev.requestedServices.filter(
+                                    (s) => s.adminNote && s.adminNote.trim().length > 0
+                                  );
 
                                   return (
                                     <article
@@ -2082,9 +2330,74 @@ export function UserLayout({
                                               <div>Quy mô dự kiến: {ev.maxSlots} khách</div>
                                               {ev.isPublic && (
                                                 <div className="mt-0.5 font-semibold text-indigo-700">
-                                                  Đã đăng ký: {ev.registeredCount}/{ev.maxSlots}
+                                                  Đã đăng ký: {getLiveRegisteredCount(ev)}/{ev.maxSlots}
                                                 </div>
                                               )}
+                                            </div>
+                                          </div>
+
+                                          {/* Visual 3-Step Approval Timeline */}
+                                          <div className="p-3.5 sm:p-4 rounded-xl bg-slate-50/90 border border-slate-200/80 space-y-2.5">
+                                            <div className="flex items-center justify-between text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                                              <span>Tiến trình phê duyệt yêu cầu</span>
+                                              <span className={planMeta.textClass}>{planMeta.label}</span>
+                                            </div>
+                                            <div className="grid grid-cols-3 gap-2">
+                                              {stepItems.map((step, stepIdx) => {
+                                                const isReached = stepIdx <= currentStepIndex;
+                                                const isFinalReject = isRejected && stepIdx === 2;
+                                                const isCurrent = stepIdx === currentStepIndex;
+
+                                                return (
+                                                  <div key={step.key} className="space-y-1.5">
+                                                    <div
+                                                      className={`h-1.5 rounded-full transition-colors ${
+                                                        isFinalReject
+                                                          ? 'bg-rose-500'
+                                                          : isReached
+                                                          ? isCurrent && ev.planningStatus === 'confirmed'
+                                                            ? 'bg-emerald-500'
+                                                            : 'bg-indigo-600'
+                                                          : 'bg-slate-200'
+                                                      }`}
+                                                    />
+                                                    <div className="flex items-center gap-1.5 text-[11px] leading-tight">
+                                                      <span
+                                                        className={`w-4 h-4 rounded-full text-[10px] font-bold flex items-center justify-center shrink-0 tabular-nums ${
+                                                          isFinalReject
+                                                            ? 'bg-rose-600 text-white'
+                                                            : isReached
+                                                            ? isCurrent && ev.planningStatus === 'confirmed'
+                                                              ? 'bg-emerald-600 text-white'
+                                                              : 'bg-indigo-600 text-white'
+                                                            : 'bg-slate-200 text-slate-500'
+                                                        }`}
+                                                      >
+                                                        {isFinalReject ? (
+                                                          <X className="w-2.5 h-2.5" />
+                                                        ) : isReached && stepIdx < currentStepIndex ? (
+                                                          <Check className="w-2.5 h-2.5" />
+                                                        ) : (
+                                                          stepIdx + 1
+                                                        )}
+                                                      </span>
+                                                      <span
+                                                        className={`truncate ${
+                                                          isFinalReject
+                                                            ? 'font-bold text-rose-700'
+                                                            : isCurrent
+                                                            ? 'font-bold text-slate-900'
+                                                            : isReached
+                                                            ? 'font-medium text-slate-700'
+                                                            : 'text-slate-400'
+                                                        }`}
+                                                      >
+                                                        {step.label}
+                                                      </span>
+                                                    </div>
+                                                  </div>
+                                                );
+                                              })}
                                             </div>
                                           </div>
 
@@ -2162,6 +2475,11 @@ export function UserLayout({
                                                           Quy mô: {srv.quantityOrScope}
                                                         </div>
                                                       )}
+                                                      {srv.clientNote && (
+                                                        <div className="text-[11px] text-slate-500">
+                                                          Ghi chú của bạn: {srv.clientNote}
+                                                        </div>
+                                                      )}
                                                       {srv.adminNote && (
                                                         <div className="text-[11px] text-indigo-700 font-medium">
                                                           Phản hồi Admin: {srv.adminNote}
@@ -2171,6 +2489,48 @@ export function UserLayout({
                                                   );
                                                 })}
                                               </div>
+                                            )}
+                                          </div>
+
+                                          {/* Prominent Admin Response Panel */}
+                                          <div
+                                            className={`p-3.5 rounded-xl border space-y-1.5 ${
+                                              isRejected
+                                                ? 'bg-rose-50/70 border-rose-200'
+                                                : ev.adminResponseNote || serviceFeedbacks.length > 0
+                                                ? 'bg-indigo-50/70 border-indigo-200'
+                                                : 'bg-slate-50 border-slate-200/80'
+                                            }`}
+                                          >
+                                            <div className="flex items-center gap-1.5 text-xs font-bold text-slate-900">
+                                              <MessageSquare
+                                                className={`w-3.5 h-3.5 shrink-0 ${
+                                                  isRejected ? 'text-rose-600' : 'text-indigo-600'
+                                                }`}
+                                              />
+                                              <span>Phản hồi từ Ban quản trị</span>
+                                            </div>
+                                            {ev.adminResponseNote ? (
+                                              <p className="text-xs sm:text-sm text-slate-800 leading-relaxed whitespace-pre-line">
+                                                {ev.adminResponseNote}
+                                              </p>
+                                            ) : serviceFeedbacks.length > 0 ? (
+                                              <ul className="space-y-1 text-xs text-slate-700">
+                                                {serviceFeedbacks.map((sf) => (
+                                                  <li key={sf.id}>
+                                                    <strong className="text-slate-900">
+                                                      {sf.serviceName}:
+                                                    </strong>{' '}
+                                                    {sf.adminNote}
+                                                  </li>
+                                                ))}
+                                              </ul>
+                                            ) : (
+                                              <p className="text-xs text-slate-500 leading-relaxed">
+                                                Yêu cầu của bạn đã được lưu trên Cloud Firestore.
+                                                Ban quản trị sẽ cập nhật ghi chú điều phối và phản
+                                                hồi chi tiết tại đây.
+                                              </p>
                                             )}
                                           </div>
                                         </div>
@@ -2197,7 +2557,7 @@ export function UserLayout({
         publicContact={publicContact}
         activePage={activePage}
         onNavigatePage={smoothNavigatePage}
-        onBookOrganization={handleBookOrganization}
+        onBookOrganization={() => handleBookOrganization()}
       />
 
       {/* Feedback Modal with smooth scale + backdrop-blur enter/exit */}
@@ -2272,9 +2632,10 @@ export function UserLayout({
                 <button
                   type="submit"
                   disabled={sendingFeedback}
-                  className="px-5 py-2 text-sm font-semibold text-white bg-slate-950 hover:bg-slate-800 rounded-full cursor-pointer disabled:opacity-60"
+                  className="ef-btn-tactile inline-flex items-center gap-2 px-5 py-2 text-sm font-semibold text-white bg-slate-950 hover:bg-slate-800 rounded-full cursor-pointer disabled:opacity-60"
                 >
-                  {sendingFeedback ? 'Đang gửi...' : 'Gửi đánh giá'}
+                  {sendingFeedback && <Loader2 className="w-4 h-4 animate-spin" />}
+                  <span>{sendingFeedback ? 'Đang gửi...' : 'Gửi đánh giá'}</span>
                 </button>
               </div>
             </form>

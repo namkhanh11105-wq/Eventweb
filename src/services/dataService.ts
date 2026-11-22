@@ -177,6 +177,7 @@ function normalizeEventDoc(id: string, raw: Record<string, unknown>): EventItem 
     agenda: Array.isArray(raw.agenda) ? (raw.agenda as EventItem['agenda']) : [],
     faqs: Array.isArray(raw.faqs) ? (raw.faqs as EventItem['faqs']) : [],
     rules: String(raw.rules ?? 'Vui lòng mang theo mã QR xác nhận khi tham dự.'),
+    adminResponseNote: String(raw.adminResponseNote ?? '').trim(),
     createdAt: String(raw.createdAt ?? new Date().toISOString()),
   };
 }
@@ -256,8 +257,7 @@ export function subscribeAuthUser(callback: (user: AppUser | null) => void): () 
           role: resolvedRole,
         });
       } else {
-        const role = resolveUserRole(email);
-        const profile: AppUser = { ...fallbackProfile, role };
+        const profile: AppUser = sanitizeForFirestore({ ...fallbackProfile, role: fallbackRole });
         try {
           await setDoc(userRef, profile);
         } catch {
@@ -347,7 +347,7 @@ export async function loginAccount(emailInput: string, password: string): Promis
           role: resolvedRole,
         };
       }
-      const profile: AppUser = { ...fallbackProfile, role: fallbackRole };
+      const profile: AppUser = sanitizeForFirestore({ ...fallbackProfile, role: fallbackRole });
       try {
         await setDoc(userRef, profile);
       } catch {
@@ -471,6 +471,35 @@ export function subscribeRegistrations(
   );
 }
 
+/**
+ * Counts active (non-cancelled) registrations per event directly from Cloud Firestore `registrations`.
+ * If Firestore Security Rules restrict cross-user reads on `registrations`, gracefully reports
+ * `available = false` so the UI falls back to `event.registeredCount`.
+ */
+export function subscribeEventRegistrationCounts(
+  callback: (counts: Record<string, number>, available: boolean) => void
+): () => void {
+  const { db: firestore } = requireFirebase();
+  return onSnapshot(
+    collection(firestore, 'registrations'),
+    (snapshot) => {
+      const counts: Record<string, number> = {};
+      snapshot.docs.forEach((d) => {
+        const data = d.data() as Partial<RegistrationItem>;
+        const eventId = String(data.eventId ?? '');
+        if (!eventId) return;
+        if (data.status !== 'cancelled') {
+          counts[eventId] = (counts[eventId] ?? 0) + 1;
+        }
+      });
+      callback(counts, true);
+    },
+    () => {
+      callback({}, false);
+    }
+  );
+}
+
 export function subscribeUsers(
   callback: (users: AppUser[]) => void,
   onPermissionError?: (msg: string) => void
@@ -563,11 +592,12 @@ export async function createEvent(input: EventFormInput): Promise<EventItem> {
         answer: f.answer.trim(),
       })),
     rules: String(input.rules ?? '').trim(),
+    adminResponseNote: String(input.adminResponseNote ?? '').trim(),
     createdAt: nowIso,
   });
 
   try {
-    await setDoc(doc(firestore, 'events', newId), eventDoc);
+    await setDoc(doc(firestore, 'events', newId), sanitizeForFirestore(eventDoc));
     return eventDoc;
   } catch (err) {
     handleFirestoreError(err, OperationType.CREATE, `events/${newId}`);
@@ -615,11 +645,12 @@ export async function createOrganizerEventRequest(
     ],
     faqs: [],
     rules: 'Vui lòng mang theo mã QR xác nhận khi tham dự sự kiện.',
+    adminResponseNote: '',
     createdAt: nowIso,
   });
 
   try {
-    await setDoc(doc(firestore, 'events', newId), eventDoc);
+    await setDoc(doc(firestore, 'events', newId), sanitizeForFirestore(eventDoc));
     return eventDoc;
   } catch (err) {
     handleFirestoreError(err, OperationType.CREATE, `events/${newId}`);
@@ -714,10 +745,13 @@ export async function updateEvent(id: string, input: Partial<EventFormInput>): P
         }
       : {}),
     ...(input.rules !== undefined ? { rules: input.rules.trim() } : {}),
+    ...(input.adminResponseNote !== undefined
+      ? { adminResponseNote: input.adminResponseNote.trim() }
+      : {}),
   });
 
   try {
-    await updateDoc(doc(firestore, 'events', id), updates);
+    await updateDoc(doc(firestore, 'events', id), sanitizeForFirestore(updates));
   } catch (err) {
     handleFirestoreError(err, OperationType.UPDATE, `events/${id}`);
   }
@@ -870,13 +904,16 @@ export async function updateRegistrationStatus(
         }
       }
 
-      transaction.update(regRef, {
-        status: nextStatus,
-        checkedInAt,
-      });
+      transaction.update(
+        regRef,
+        sanitizeForFirestore({
+          status: nextStatus,
+          checkedInAt,
+        })
+      );
 
       if (Object.keys(eventUpdates).length > 0) {
-        transaction.update(eventRef, eventUpdates);
+        transaction.update(eventRef, sanitizeForFirestore(eventUpdates));
       }
     });
   } catch (err) {
@@ -995,7 +1032,10 @@ export async function updateContactInquiryStatus(
 ): Promise<void> {
   const { db: firestore } = requireFirebase();
   try {
-    await updateDoc(doc(firestore, 'contact_inquiries', id), { status });
+    await updateDoc(
+      doc(firestore, 'contact_inquiries', id),
+      sanitizeForFirestore({ status })
+    );
   } catch (err) {
     handleFirestoreError(err, OperationType.UPDATE, `contact_inquiries/${id}`);
   }

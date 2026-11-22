@@ -5,11 +5,14 @@ import {
   Bookmark,
   Building2,
   Calendar,
+  Check,
   CheckCircle2,
   ChevronDown,
   Clock,
+  Copy,
   ExternalLink,
   HelpCircle,
+  Loader2,
   MapPin,
   MessageSquare,
   Share2,
@@ -19,13 +22,18 @@ import {
   User,
   Users,
 } from 'lucide-react';
-import { createRegistration, submitFeedback } from '../services/dataService';
+import {
+  createRegistration,
+  submitFeedback,
+  updateRegistrationStatus,
+} from '../services/dataService';
 import { EventBanner } from './EventBanner';
 import { AnimatedProgressBar } from './MotionPrimitives';
 import {
   EVENT_STATUS_META,
   formatDateTimeVN,
   formatShortDateVN,
+  REGISTRATION_STATUS_META,
 } from '../utils/formatters';
 import type {
   AppUser,
@@ -36,6 +44,7 @@ import type {
 
 interface EventDetailPageProps {
   event: EventItem;
+  liveRegisteredCount?: number;
   currentUser: AppUser | null;
   existingRegistration?: RegistrationItem;
   feedbacks: FeedbackItem[];
@@ -49,6 +58,7 @@ interface EventDetailPageProps {
 
 export function EventDetailPage({
   event,
+  liveRegisteredCount,
   currentUser,
   existingRegistration,
   feedbacks,
@@ -64,6 +74,10 @@ export function EventDetailPage({
   const [guestPhone, setGuestPhone] = useState(currentUser?.phone || '');
   const [note, setNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [copiedRegId, setCopiedRegId] = useState(false);
 
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(0);
   const [rating, setRating] = useState(5);
@@ -81,17 +95,34 @@ export function EventDetailPage({
     return (sum / eventFeedbacks.length).toFixed(1);
   }, [eventFeedbacks]);
 
-  const statusMeta = EVENT_STATUS_META[event.status] || EVENT_STATUS_META.upcoming;
-  const remaining = Math.max(0, event.maxSlots - event.registeredCount);
+  const actualRegisteredCount =
+    liveRegisteredCount !== undefined ? liveRegisteredCount : event.registeredCount;
+  const remaining = Math.max(0, event.maxSlots - actualRegisteredCount);
+  const isFull = remaining === 0;
+  const statusMeta =
+    isFull && event.status !== 'cancelled' && event.status !== 'completed' && event.status !== 'paused'
+      ? {
+          label: 'Đã đủ chỗ',
+          textClass: 'text-amber-300',
+          bgClass: 'bg-amber-50 border-amber-200',
+        }
+      : EVENT_STATUS_META[event.status] || EVENT_STATUS_META.upcoming;
+
   const fillPercent = Math.min(
     100,
-    Math.round((event.registeredCount / Math.max(1, event.maxSlots)) * 100)
+    Math.round((actualRegisteredCount / Math.max(1, event.maxSlots)) * 100)
   );
   const canBook =
     event.status !== 'cancelled' &&
     event.status !== 'completed' &&
     event.status !== 'paused' &&
     remaining > 0;
+
+  const canCancelExisting =
+    Boolean(existingRegistration) &&
+    existingRegistration?.status !== 'cancelled' &&
+    existingRegistration?.status !== 'attended' &&
+    event.status !== 'completed';
 
   const canLeaveFeedback =
     Boolean(currentUser) &&
@@ -153,9 +184,37 @@ export function EventDetailPage({
     }
   }
 
+  async function handleCancelRegistration() {
+    if (!existingRegistration || cancelling) return;
+    setCancelling(true);
+    try {
+      await updateRegistrationStatus(existingRegistration, 'cancelled');
+      setConfirmCancelOpen(false);
+      onNotify(
+        `Đã hủy đăng ký ${existingRegistration.ticketCode} và hoàn trả chỗ trống lên Firestore.`
+      );
+    } catch (err) {
+      onNotify(err instanceof Error ? err.message : 'Không thể hủy đăng ký.', 'error');
+    } finally {
+      setCancelling(false);
+    }
+  }
+
+  async function handleCopyRegId() {
+    if (!existingRegistration) return;
+    try {
+      await navigator.clipboard?.writeText(existingRegistration.id);
+      setCopiedRegId(true);
+      onNotify(`Đã sao chép mã đăng ký ${existingRegistration.id}`);
+      window.setTimeout(() => setCopiedRegId(false), 2000);
+    } catch {
+      onNotify(`Mã đăng ký của bạn: ${existingRegistration.id}`);
+    }
+  }
+
   async function handleSendFeedback(e: FormEvent) {
     e.preventDefault();
-    if (!currentUser || !comment.trim()) return;
+    if (!currentUser || !comment.trim() || submittingFeedback) return;
     setSubmittingFeedback(true);
     try {
       await submitFeedback({
@@ -284,6 +343,25 @@ export function EventDetailPage({
                     <span>Chỉ đường trên Google Maps</span>
                     <ExternalLink className="w-3 h-3" />
                   </a>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3 sm:col-span-2 pt-3 border-t border-slate-200/70">
+                <Users className="w-4 h-4 text-indigo-600 mt-0.5 shrink-0" />
+                <div className="flex flex-wrap items-center justify-between gap-2 flex-1 text-xs">
+                  <div>
+                    <span className="font-medium text-slate-500">Quy mô &amp; chỗ trống thực tế: </span>
+                    <strong className="text-slate-900 tabular-nums">
+                      {actualRegisteredCount}/{event.maxSlots} người đã đăng ký
+                    </strong>
+                  </div>
+                  <span
+                    className={`font-semibold tabular-nums ${
+                      remaining === 0 ? 'text-amber-700' : 'text-emerald-700'
+                    }`}
+                  >
+                    {remaining > 0 ? `Còn ${remaining} chỗ trống` : 'Đã đủ chỗ'}
+                  </span>
                 </div>
               </div>
             </div>
@@ -510,9 +588,10 @@ export function EventDetailPage({
                     <button
                       type="submit"
                       disabled={submittingFeedback}
-                      className="min-h-[42px] px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg cursor-pointer shrink-0 disabled:opacity-60"
+                      className="min-h-[42px] inline-flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg cursor-pointer shrink-0 disabled:opacity-60 disabled:cursor-not-allowed"
                     >
-                      {submittingFeedback ? 'Đang gửi...' : 'Gửi'}
+                      {submittingFeedback && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                      <span>{submittingFeedback ? 'Đang gửi...' : 'Gửi'}</span>
                     </button>
                   </div>
                 </form>
@@ -569,7 +648,7 @@ export function EventDetailPage({
                   Còn {remaining}/{event.maxSlots} chỗ
                 </div>
                 <div className="text-[11px] text-slate-500 tabular-nums">
-                  {event.registeredCount} người đã đăng ký
+                  {actualRegisteredCount} người đã đăng ký
                 </div>
               </div>
             </div>
@@ -581,23 +660,95 @@ export function EventDetailPage({
             />
 
             {existingRegistration && existingRegistration.status !== 'cancelled' ? (
-              <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 space-y-3">
-                <div className="flex items-center gap-2 text-sm font-bold text-emerald-800">
-                  <CheckCircle2 className="w-4 h-4 shrink-0" />
-                  <span>Bạn đã đăng ký tham gia sự kiện này</span>
+              <div className="p-4 sm:p-5 rounded-xl bg-emerald-50/80 border border-emerald-200 space-y-3.5">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2 text-sm font-bold text-emerald-900">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>Trạng thái đăng ký hiện tại</span>
+                  </div>
+                  <span className="text-[11px] font-semibold text-emerald-800 bg-white border border-emerald-200 px-2 py-0.5 rounded-md whitespace-nowrap">
+                    {REGISTRATION_STATUS_META[existingRegistration.status]?.label || 'Đã xác nhận'}
+                  </span>
                 </div>
-                <p className="text-xs text-emerald-700 leading-relaxed">
-                  Mã xác nhận check-in:{' '}
-                  <strong className="font-mono">{existingRegistration.ticketCode}</strong>.
-                </p>
-                <button
-                  type="button"
-                  onClick={onViewMyTickets}
-                  className="w-full inline-flex items-center justify-center gap-2 py-2.5 px-4 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded-xl cursor-pointer transition-colors"
-                >
-                  <Ticket className="w-4 h-4" />
-                  <span>Xem mã QR &amp; Trạng thái tham gia</span>
-                </button>
+
+                <div className="p-3 rounded-lg bg-white border border-emerald-200/80 space-y-2 text-xs">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-slate-500">Mã vé check-in QR:</span>
+                    <strong className="font-mono text-slate-900">
+                      {existingRegistration.ticketCode}
+                    </strong>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-slate-500">Mã đăng ký Firestore:</span>
+                    <button
+                      type="button"
+                      onClick={handleCopyRegId}
+                      className="inline-flex items-center gap-1 font-mono font-semibold text-indigo-700 hover:text-indigo-900 cursor-pointer"
+                      title="Sao chép mã đăng ký"
+                    >
+                      <span>{existingRegistration.id}</span>
+                      {copiedRegId ? (
+                        <Check className="w-3 h-3 text-emerald-600" />
+                      ) : (
+                        <Copy className="w-3 h-3" />
+                      )}
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-slate-500">Người tham dự:</span>
+                    <span className="font-semibold text-slate-800 truncate">
+                      {existingRegistration.guestName}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={onViewMyTickets}
+                    className="ef-btn-tactile w-full min-h-[42px] inline-flex items-center justify-center gap-2 py-2.5 px-4 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded-xl cursor-pointer"
+                  >
+                    <Ticket className="w-4 h-4" />
+                    <span>Xem mã QR &amp; Trạng thái tham gia</span>
+                  </button>
+
+                  {canCancelExisting && (
+                    confirmCancelOpen ? (
+                      <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 space-y-2.5 animate-ef-fade-in">
+                        <p className="text-xs font-medium text-rose-900">
+                          Bạn chắc chắn muốn hủy đăng ký và hoàn trả chỗ trống?
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            disabled={cancelling}
+                            onClick={handleCancelRegistration}
+                            className="flex-1 min-h-[36px] inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-lg cursor-pointer disabled:opacity-60"
+                          >
+                            {cancelling && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                            <span>{cancelling ? 'Đang hủy...' : 'Xác nhận hủy'}</span>
+                          </button>
+                          <button
+                            type="button"
+                            disabled={cancelling}
+                            onClick={() => setConfirmCancelOpen(false)}
+                            className="min-h-[36px] px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg cursor-pointer"
+                          >
+                            Giữ lại
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmCancelOpen(true)}
+                        className="w-full min-h-[38px] py-2 px-4 text-xs font-semibold text-rose-700 bg-white hover:bg-rose-50 border border-rose-200 rounded-xl cursor-pointer transition-colors"
+                      >
+                        Hủy đăng ký tham gia
+                      </button>
+                    )
+                  )}
+                </div>
               </div>
             ) : !canBook ? (
               <div className="p-4 rounded-xl bg-slate-100 border border-slate-200 text-sm text-slate-600">
@@ -621,7 +772,7 @@ export function EventDetailPage({
                 <button
                   type="button"
                   onClick={onRequireAuth}
-                  className="w-full inline-flex items-center justify-center gap-2 py-2.5 px-4 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors cursor-pointer"
+                  className="ef-btn-tactile w-full inline-flex items-center justify-center gap-2 py-2.5 px-4 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl cursor-pointer"
                 >
                   <Users className="w-4 h-4" />
                   <span>Đăng nhập / Đăng ký để tham gia</span>
@@ -686,14 +837,19 @@ export function EventDetailPage({
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="w-full inline-flex items-center justify-center gap-2 py-3 px-5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors cursor-pointer disabled:opacity-60"
+                  className="ef-btn-tactile w-full min-h-[44px] inline-flex items-center justify-center gap-2 py-3 px-5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  <Users className="w-4 h-4" />
-                  <span>
-                    {submitting
-                      ? 'Đang ghi nhận lên Firestore...'
-                      : 'Xác nhận đăng ký tham gia'}
-                  </span>
+                  {submitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Đang ghi nhận lên Firestore...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Users className="w-4 h-4" />
+                      <span>Xác nhận đăng ký tham gia</span>
+                    </>
+                  )}
                 </button>
               </form>
             )}
